@@ -188,7 +188,8 @@ void Manager::sync() {
     } while (!flag); //wait until all other ranks queues have been processed
 }
 
-void Manager::registerRemoteObject(int rank, TypeId type, ObjectId id) {
+void Manager::registerRemoteObject(int rank, TypeId type, ObjectId id)
+{
     ObjectWrapper<void> *a = new ObjectWrapper<void>();
     a->m_id = id;
     a->m_type = type;
@@ -196,7 +197,7 @@ void Manager::registerRemoteObject(int rank, TypeId type, ObjectId id) {
     m_registeredObjects.push_back(a);
 }
 
-void Manager::shutdown() {
+void Manager::shutdownAll() {
     int buf = 0;
     for (int i = 0; i < m_numProcs; ++i)
     {
@@ -204,8 +205,14 @@ void Manager::shutdown() {
             MPI_Bsend((void*) &buf, 1, MPI_INT, i, MPIRPC_TAG_SHUTDOWN, m_comm);
         }
     }
+    sync();
     m_shutdown = true;
-    checkSends();
+}
+
+void Manager::shutdown()
+{
+    sync();
+    m_shutdown = true;
 }
 
 void Manager::handleShutdown()
@@ -213,6 +220,7 @@ void Manager::handleShutdown()
     int buf;
     MPI_Status status;
     MPI_Recv(&buf, 1, MPI_INT, MPI_ANY_SOURCE, MPIRPC_TAG_SHUTDOWN, m_comm, &status);
+    sync();
     m_shutdown = true;
 }
 

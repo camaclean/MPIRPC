@@ -20,6 +20,8 @@
 #include "parameterstream.hpp"
 #include <cstring>
 
+namespace mpirpc {
+
 ParameterStream::ParameterStream(std::vector<char>* buffer)
     : m_data(buffer), m_pos(0)
 {
@@ -36,10 +38,10 @@ void ParameterStream::seek(std::size_t pos)
     m_pos = pos;
 }
 
-char* ParameterStream::data() 
+char* ParameterStream::data()
 {
     return m_data->data();
-}    
+}
 
 const char* ParameterStream::constData() const
 {
@@ -271,6 +273,29 @@ ParameterStream& ParameterStream::operator>>(std::string& val)
     return *this;
 }
 
+ParameterStream& ParameterStream::operator<<(const char* sa[])
+{
+    size_t elems = sizeof(sa)/sizeof(const char*);
+    *this << elems;
+    for(size_t i = 0; i < elems; ++i)
+    {
+        *this << sa[i];
+    }
+    return *this;
+}
+
+ParameterStream& ParameterStream::operator>>(char **& sa)
+{
+    size_t elems;
+    *this >> elems;
+    sa = new char*[elems];
+    for (size_t i = 0; i < elems; ++i)
+    {
+        *this >> sa[i];
+    }
+    return *this;
+}
+
 void ParameterStream::writeBytes(const char* b, size_t length)
 {
     m_data->insert(m_data->end(), b, b+length);
@@ -280,5 +305,7 @@ void ParameterStream::readBytes(char *& b, size_t length)
 {
     std::copy(&(*m_data)[m_pos], &(*m_data)[m_pos+length], b);
     m_pos += length;
+}
+
 }
 

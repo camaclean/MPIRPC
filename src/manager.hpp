@@ -41,6 +41,7 @@
 #include <exception>
 #include <algorithm>
 #include <thread>
+
 #include <mpi.h>
 
 #include "objectwrapper.hpp"
@@ -81,16 +82,6 @@ struct UnregisteredObjectException : std::exception
     }
 };
 
-static std::map<std::type_index, std::string> names_map;
-
-#define UniqueID(G)  std::type_index(typeid(G))
-
-#define BIND(fp, cxx_target) \
-    { \
-        using G = FunctionId< decltype(&cxx_target), &cxx_target >; \
-        fp = &G::call; \
-        names_map[ UniqueID(G) ] = std::string(#cxx_target); \
-    }
 
 /**
  * @brief The Manager class
@@ -135,7 +126,7 @@ class Manager
         /*using GenericFunctionPointer = void(*)();*/
         typedef void(*GenericFunctionPointer)();
 
-        FunctionBase() : m_id(makeId()), m_pointer(0), m_type_index(std::type_index(typeid(int))) {}
+        FunctionBase() : m_id(makeId()), m_pointer(0) {}
 
         /**
          * @brief execute Execute the function
@@ -162,7 +153,6 @@ class Manager
     protected:
         GenericFunctionPointer m_pointer;
         std::function<void()> m_function;
-        std::type_index m_type_index;
     };
 
     template<typename Functor, Functor f> struct FunctionId;
@@ -202,7 +192,7 @@ class Manager
              * but the commas cannot be used as comma operators.
              */
             assert(manager);
-            OrderedCall<FunctionType> call{func, unmarshal<Args>(params)...};
+            OrderedCall<FunctionType> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
             if (getReturn)
                 manager->functionReturn(senderRank, call());
             else
@@ -226,7 +216,7 @@ class Manager
 
         virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
         {
-            OrderedCall<FunctionType> call{func, unmarshal<Args>(params)...};
+            OrderedCall<FunctionType> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
             call();
         }
 
@@ -249,7 +239,7 @@ class Manager
         {
             assert(object);
             assert(manager);
-            OrderedCall<FunctionType> call{func, static_cast<Class*>(object), unmarshal<Args>(params)...};
+            OrderedCall<FunctionType> call{func, static_cast<Class*>(object), unmarshal<typename remove_all_const<Args>::type>(params)...};
             if (getReturn)
                 manager->functionReturn(senderRank, call());
             else
@@ -273,7 +263,7 @@ class Manager
         virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
         {
             assert(object);
-            OrderedCall<FunctionType> call{func, static_cast<Class*>(object), unmarshal<Args>(params)...};
+            OrderedCall<FunctionType> call{func, static_cast<Class*>(object), unmarshal<typename remove_all_const<Args>::type>(params)...};
             call();
         }
 
@@ -295,7 +285,7 @@ class Manager
         virtual void execute(ParameterStream &params, int senderRank, Manager *manager, bool getReturn, void *object = 0) override
         {
             assert(manager);
-            OrderedCall<FunctionType> call{func, unmarshal<Args>(params)...};
+            OrderedCall<FunctionType> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
 
             if (getReturn)
                 manager->functionReturn(senderRank, call());
@@ -320,7 +310,7 @@ class Manager
 
         virtual void execute(ParameterStream &params, int senderRank, Manager *manager, bool getReturn, void *object = 0) override
         {
-            OrderedCall<FunctionType> call{func, unmarshal<Args>(params)...};
+            OrderedCall<FunctionType> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
             call();
         }
 
@@ -457,6 +447,26 @@ public:
         return wrapper;
     }
 
+    template<class Class, typename... Args>
+    ObjectWrapperBase* constructGlobalObject(int rank, Args&&... args)
+    {
+        ObjectWrapperBase *wrapper;
+        if (rank == m_rank)
+        {
+            Class *object = new Class(std::forward<Args>(args)...);
+            wrapper = new ObjectWrapper<Class>(object);
+            wrapper->m_rank = m_rank;
+            wrapper->m_type = getTypeId<Class>();
+        }
+        else
+        {
+            wrapper = new ObjectWrapperBase();
+            wrapper->m_rank = rank;
+            wrapper->m_type = getTypeId<Class>();
+        }
+        m_registeredObjects.push_back(wrapper);
+        return wrapper;
+    }
 
     /**
      * @brief invoke a function on rank #rank
@@ -488,20 +498,20 @@ public:
         -> typename std::enable_if<!std::is_same<R, void>::value, R>::type
     {
         if (rank == m_rank) {
-            return f(std::forward<FArgs>(args)...);
+            return f(forward_parameter_type_local<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0)
             {
                 for (const auto &i : m_registeredFunctions) {
                     if (i.second->pointer() == reinterpret_cast<void(*)()>(f)) {
-                        sendFunctionInvocation<FArgs...>(rank, i.first, true, std::forward<FArgs>(args)...);
+                        sendFunctionInvocation(rank, i.first, true, forward_parameter_type<FArgs,Args>(args)...);
                         return processReturn<R>(rank);
                     }
                 }
             }
             else
             {
-                sendFunctionInvocation<FArgs...>(rank, functionHandle, true, std::forward<FArgs>(args)...);
+                sendFunctionInvocation(rank, functionHandle, true, forward_parameter_type<FArgs,Args>(args)...);
                 return processReturn<R>(rank);
             }
             throw UnregisteredFunctionException();
@@ -517,12 +527,12 @@ public:
     void invokeFunction(int rank, R(*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
     {
         if (rank == m_rank) {
-            f(std::forward<FArgs>(args)...);
+            f(forward_parameter_type_local<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0) {
                 for (const auto &i : m_registeredFunctions) {
                     if (i.second->pointer() == reinterpret_cast<void(*)()> (f)) {
-                        sendFunctionInvocation<FArgs...>(rank, i.first, false, std::forward<FArgs>(args)...);
+                        sendFunctionInvocation(rank, i.first, false, forward_parameter_type<FArgs,Args>(args)...);
                         return;
                     }
                 }
@@ -530,7 +540,7 @@ public:
             }
             else
             {
-                sendFunctionInvocation<FArgs...>(rank, functionHandle, false, std::forward<FArgs>(args)...);
+                sendFunctionInvocation(rank, functionHandle, false, forward_parameter_type<FArgs,Args>(args)...);
             }
         }
     }
@@ -580,7 +590,7 @@ public:
         if (a->rank() == m_rank)
         {
             ObjectWrapper<Class> *o = static_cast<ObjectWrapper<Class>*>(a);
-            return CALL_MEMBER_FN(*o->object(),f)(std::forward<FArgs>(args)...);
+            return CALL_MEMBER_FN(*o->object(),f)(forward_parameter_type_local<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0)
             {
@@ -590,7 +600,7 @@ public:
                     if (func) {
                         if (func->func == f)
                         {
-                            sendMemberFunctionInvocation<FArgs...>(a, func->id(), true, std::forward<FArgs>(args)...);
+                            sendMemberFunctionInvocation(a, func->id(), true, forward_parameter_type<FArgs,Args>(args)...);
                             return processReturn<R>(a->rank());
                         }
                     }
@@ -599,7 +609,7 @@ public:
             }
             else
             {
-                sendMemberFunctionInvocation<FArgs...>(a, functionHandle, true, std::forward<FArgs>(args)...);
+                sendMemberFunctionInvocation(a, functionHandle, true, forward_parameter_type<FArgs,Args>(args)...);
                 return processReturn<R>(a->rank());
             }
         }
@@ -616,7 +626,7 @@ public:
         if (a->rank() == m_rank)
         {
             ObjectWrapper<Class> *o = static_cast<ObjectWrapper<Class>*>(a);
-            CALL_MEMBER_FN(*o->object(),f)(std::forward<FArgs>(args)...);
+            CALL_MEMBER_FN(*o->object(),f)(forward_parameter_type_local<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0)
             {
@@ -626,7 +636,7 @@ public:
                     if (func) {
                         if (func->func == f)
                         {
-                            sendMemberFunctionInvocation<FArgs...>(a, func->id(), false, std::forward<FArgs>(args)...);
+                            sendMemberFunctionInvocation(a, func->id(), false, forward_parameter_type<FArgs,Args>(args)...);
                             return;
                         }
                     }
@@ -635,7 +645,7 @@ public:
             }
             else
             {
-                sendMemberFunctionInvocation<FArgs...>(a, functionHandle, false, std::forward<FArgs>(args)...);
+                sendMemberFunctionInvocation(a, functionHandle, false, forward_parameter_type<FArgs,Args>(args)...);
             }
         }
     }
@@ -846,7 +856,12 @@ public:
     void sync();
 
     /**
-     * @brief Shut down all Managers on all processes.
+     * @brief Shut down all Managers on all processes. This must be called on only one rank.
+     */
+    void shutdownAll();
+
+    /**
+     * @brief Shut down this Manager. This must be called on all ranks.
      */
     void shutdown();
 

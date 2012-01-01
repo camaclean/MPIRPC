@@ -33,7 +33,7 @@ namespace mpirpc {
 class ObjectWrapperBase {
     friend class Manager;
 public:
-    ObjectWrapperBase(void* object) : m_object(object), m_type(0) {
+    ObjectWrapperBase(void* object = nullptr) : m_object(object), m_type(0) {
         m_id = ++objectIdCounter;
     }
 
@@ -62,7 +62,7 @@ class ObjectWrapper : public ObjectWrapperBase
 {
     friend class Manager;
 public:
-    ObjectWrapper(T* object = 0) :  ObjectWrapperBase(object) {}
+    ObjectWrapper(T* object = nullptr) :  ObjectWrapperBase(object) {}
 
     T* object() const { return m_object; }
 

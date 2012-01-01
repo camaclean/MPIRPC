@@ -7,6 +7,7 @@ set(streamtest_SRCS mpirpctest.cpp ../manager.cpp ../manager.hpp ../common.hpp .
 add_executable(streamTest ${streamtest_SRCS})
 add_test(streamTest streamTest)
 
+
 add_executable(example example.cpp)
 target_link_libraries(example mpirpc)
 target_link_libraries(streamTest ${Qt5Core_LIBRARIES} ${Qt5Test_LIBRARIES} ${MPI_CXX_LIBRARIES})

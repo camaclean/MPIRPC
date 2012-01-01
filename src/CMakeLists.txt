@@ -5,13 +5,13 @@ set(mpirpc_VERSION_MINOR 1)
 set(mpirpc_VERSION_PATCH 0)
 option(USE_LTO "Build with Link Time Optimizations" OFF)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3 -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -O3 -march=native")
 
 include(FindMPI REQUIRED)
 
 if(USE_LTO)
     if(CMAKE_COMPILER_IS_GNUCXX)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto -fuse-linker-plugin -fuse-ld=gold")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto -fuse-linker-plugin -fuse-ld=gold -fvisibility=hidden")
         set(CMAKE_AR "gcc-ar")
         set(CMAKE_NM "gcc-nm")
         set(CMAKE_RANLIB "gcc-ranlib")

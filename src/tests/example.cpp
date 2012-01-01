@@ -4,12 +4,18 @@
 #include <map>
 #include <iostream>
 #include <string>
+#include <unistd.h>
+#include <sys/types.h>
 
 void f1() { std::cout << "Running function f1()" << std::endl; }
 
 int f2() { std::cout << "Running function f2()" << std::endl; return 2; }
 
 double f3(double p) { std::cout << "Running function f3(double)" << std::endl; return p; }
+
+void f4(const char* s) { std::cout << "f4(const char*): " << s << std::endl; }
+
+void f5(int* p, int t1, int& t2, int&& t3) { std::cout << "basic pointer type: " << *p << " , int: " << t1 << " int&: " << t2 << " int&&: " << t3 << std::endl; }
 
 struct Foo
 {
@@ -19,7 +25,14 @@ struct Foo
     template <typename T1, typename T2>
     void bar4(const std::map<T1,T2>& m) {
         std::cout << "Ran Foo::bar4(std::map)" << std::endl;
-        for (auto i : m) {
+        for (auto& i : m) {
+            std::cout << i.first << " " << i.second << std::endl;
+        }
+    }
+    template <typename T1, typename T2>
+    void bar5(const std::map<T1,T2>* m) {
+        std::cout << "Ran Foo::bar5(std::map*)" << std::endl;
+        for (auto& i : *m) {
             std::cout << i.first << " " << i.second << std::endl;
         }
     }
@@ -35,34 +48,47 @@ int main(int argc, char** argv)
     std::cout << "Running example main. Rank: " << manager->rank() << std::endl;
 
     bool test = false;
-    int test2;
+    int test2 = 5;
     int procsToGo = manager->numProcs();
 
     manager->registerType<Foo>();
 
-    mpirpc::FunctionHandle simple_lambda = manager->registerLambda([]() { std::cout << "Running simple lambda" << std::endl; });
+    mpirpc::FunctionHandle simple_lambda = manager->registerLambda([]() {
+        std::cout << "Running simple lambda" << std::endl;
+    });
 
-    mpirpc::FunctionHandle reply = manager->registerLambda([](int r, const std::string& s) { std::cout << "Rank " << r << " replied with a message: " << s << std::endl; });
+    mpirpc::FunctionHandle reply = manager->registerLambda([](int r, const std::string& s) {
+        std::cout << "Rank " << r << " replied with a message: " << s << std::endl;
+    });
 
-    mpirpc::FunctionHandle set_test = manager->registerLambda([&]() { std::cout << "Setting test to true" << std::endl; test = true; return 2.0f; });
+    mpirpc::FunctionHandle set_test = manager->registerLambda([&]() {
+        std::cout << "Setting test to true" << std::endl;
+        test = true;
+        return 2.0f;
+    });
 
-    mpirpc::FunctionHandle set_test2 = manager->registerLambda([&](int p) { std::cout << "Setting test2 to " << p << std::endl; test2 = p; manager->invokeFunction(p, reply, manager->rank(), std::string("Hello there!")); });
+    mpirpc::FunctionHandle set_test2 = manager->registerLambda([&](int p) {
+        std::cout << "Setting test2 to " << p << std::endl; test2 = p;
+        manager->invokeFunction(p, reply, manager->rank(), std::string("Hello there!"));
+    });
 
-    mpirpc::FunctionHandle done = manager->registerLambda([&](int r) { --procsToGo; std::cout << "Done on rank " << r << ". Left: " << procsToGo << std::endl; });
+    mpirpc::FunctionHandle done = manager->registerLambda([&](int r) {
+        --procsToGo;
+        std::cout << "Done on rank " << r << ". Left: " << procsToGo << std::endl;
+    });
 
-    mpirpc::FunctionHandle hf1 = manager->registerFunction<decltype(&f1),&f1>();
-
-    mpirpc::FunctionHandle hf2 = manager->registerFunction<decltype(&f2),&f2>();
-
-    mpirpc::FunctionHandle hf3 = manager->registerFunction<decltype(&f3),&f3>();
-    
-    mpirpc::FunctionHandle fooBar = manager->registerFunction<decltype(&Foo::bar1),&Foo::bar1>();
-
-    mpirpc::FunctionHandle fooBar2 = manager->registerFunction<decltype(&Foo::bar2),&Foo::bar2>();
-
-    mpirpc::FunctionHandle fooBar3 = manager->registerFunction<decltype(&Foo::bar3),&Foo::bar3>();
-
-    mpirpc::FunctionHandle fooBar4 = manager->registerFunction<decltype(&Foo::bar4<double,std::string>),&Foo::bar4<double,std::string>>();
+    //mpirpc::FunctionHandle hf1 = manager->registerFunction<decltype(&f1),&f1>();
+    //mpirpc::FunctionHandle hf2 = manager->registerFunction<decltype(&f2),&f2>();
+    //mpirpc::FunctionHandle hf3 = manager->registerFunction<decltype(&f3),&f3>();
+    //mpirpc::FunctionHandle hf4 = manager->registerFunction<decltype(&f4),&f4>();
+    mpirpc::FunctionHandle hf5 = manager->registerFunction<decltype(&f5),&f5>();
+    //mpirpc::FunctionHandle fooBar1 = manager->registerFunction<decltype(&Foo::bar1),&Foo::bar1>();
+    //mpirpc::FunctionHandle fooBar2 = manager->registerFunction<decltype(&Foo::bar2),&Foo::bar2>();
+    //mpirpc::FunctionHandle fooBar3 = manager->registerFunction<decltype(&Foo::bar3),&Foo::bar3>();
+    //mpirpc::FunctionHandle fooBar4 = manager->registerFunction<decltype(&Foo::bar4<double,std::string>),&Foo::bar4<double,std::string>>();
+    mpirpc::FunctionHandle fooBar5 = manager->registerFunction<decltype(&Foo::bar5<double,std::string>),&Foo::bar5<double,std::string>>();
+    //mpirpc::FunctionHandle fooBar5 = manager->registerFunction<void(Foo::*)(PointerParameter<std::map<double,std::string>>&),&Foo::bar5<double,std::string>>();
+    //mpirpc::FunctionHandle syscall = manager->registerFunction<decltype(&getuid),&getuid>();
 
     Foo *foo = nullptr;
     if (manager->rank() == 0) {
@@ -81,35 +107,39 @@ int main(int argc, char** argv)
     testmap[3.14] = "3 digit pi";
 
     if (manager->rank() == 0) {
-        manager->invokeFunction(1, simple_lambda);
+        //manager->invokeFunction(1, simple_lambda);
     }
     else if (manager->rank() == 1)
     {
-        manager->invokeFunction(0, simple_lambda);
-        float ret1 = manager->invokeFunctionR<float>(0, set_test);
-        std::cout << "Rank 1 got " << ret1 << " as a return from set_test lambda" << std::endl;
+        //manager->invokeFunction(0, simple_lambda);
+        //float ret1 = manager->invokeFunctionR<float>(0, set_test);
+        //std::cout << "Rank 1 got " << ret1 << " as a return from set_test lambda" << std::endl;
         manager->invokeFunction(0, set_test2, 1);
-        manager->invokeFunction(0, &f1, hf1);
-        manager->invokeFunction(0, &f1, 0); //handle lookup
-        int ret2 = manager->invokeFunctionR<int>(0, &f2, manager->getFunctionHandle<decltype(&f2),&f2>());
-        std::cout << "Rank 1 got " << ret2 << " as a return from f2()" << std::endl;
-        double ret3 = manager->invokeFunctionR<double>(0, &f3, 0, 5.3f); // 5.3f should convert to a double
-        std::cout << "Rank 1 got " << ret3 << " as a return from f3()" << std::endl;
-        manager->invokeFunction(foo_w, &Foo::bar1, fooBar);
-        std::string ret4 = manager->invokeFunctionR<std::string>(foo_w, &Foo::bar2, 0);
-        std::cout << "Rank 1 got \"" << ret4 << "\" as a return from Foo::bar2()" << std::endl;
-        manager->invokeFunction(foo_w, &Foo::bar3, manager->getFunctionHandle<decltype(&Foo::bar3),&Foo::bar3>(), 1024, 64.23); //function with a return, but not grabbing return value
-        manager->invokeFunction(foo_w, &Foo::bar4<double,std::string>, fooBar4, testmap);
+        //manager->invokeFunction(0, &f1, hf1);
+        //manager->invokeFunction(0, &f1, 0); //handle lookup
+        //int ret2 = manager->invokeFunctionR<int>(0, &f2, manager->getFunctionHandle<decltype(&f2),&f2>());
+        //std::cout << "Rank 1 got " << ret2 << " as a return from f2()" << std::endl;
+        //double ret3 = manager->invokeFunctionR<double>(0, &f3, 0, 5.3f); // 5.3f should convert to a double
+        //std::cout << "Rank 1 got " << ret3 << " as a return from f3()" << std::endl;
+        //manager->invokeFunction(0, &f4, 0, "C string");
+        manager->invokeFunction(0, &f5, 0, mpirpc::PointerParameter<int>(&test2), 6, 7, 8);
+        //manager->invokeFunction(foo_w, &Foo::bar1, fooBar1);
+        //std::string ret4 = manager->invokeFunctionR<std::string>(foo_w, &Foo::bar2, 0);
+        //std::cout << "Rank 1 got \"" << ret4 << "\" as a return from Foo::bar2()" << std::endl;
+        //manager->invokeFunction(foo_w, &Foo::bar3, manager->getFunctionHandle<decltype(&Foo::bar3),&Foo::bar3>(), 1024, 64.23); //function with a return, but not grabbing return value
+        //manager->invokeFunction(foo_w, &Foo::bar4<double,std::string>, fooBar4, testmap);
+        //manager->invokeFunction(foo_w, &Foo::bar5<double,std::string>, fooBar5, mpirpc::PointerParameter<std::map<double,std::string>>(&testmap));
+        //std::cout << "Rank 0 is running with UID: " << manager->invokeFunctionR<uid_t>(0, &getuid, syscall) << std::endl;
     }
 
     manager->invokeFunction(0, done, manager->rank());
-    
+
     while (manager->checkMessages() && procsToGo > 0) {}
 
-    manager->shutdown();
 
     if (manager->rank() == 0)
     {
+        manager->shutdownAll();
         std::cout << "Foo::val is now " << foo->val << std::endl;
     }
 

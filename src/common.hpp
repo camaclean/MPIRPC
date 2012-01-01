@@ -20,6 +20,11 @@
 #ifndef COMMON_HPP
 #define COMMON_HPP
 
+#include<cstddef>
+#include<type_traits>
+#include<utility>
+#include<iostream>
+
 #ifndef NDEBUG
 #   define ASSERT(condition, message) \
     do { \
@@ -65,6 +70,161 @@ struct FunctionParts<R(*)(Args...)>
 using FunctionHandle = unsigned long long;
 using TypeId = unsigned long long;
 using ObjectId = unsigned long long;
+
+template<typename T> struct remove_all_const : std::remove_const<T> {};
+
+template<typename T> struct remove_all_const<T*> {
+    typedef typename remove_all_const<T>::type *type;
+};
+
+template<typename T> struct remove_all_const<T * const> {
+    typedef typename remove_all_const<T>::type *type;
+};
+
+template<typename T>
+struct PointerParameter
+{
+    PointerParameter(T* p = nullptr) { pointer = p; }
+    operator T*() { return pointer; }
+    operator T*&() { return pointer; }
+    operator T*&&() { return std::move(pointer); }
+    T* pointer;
+};
+
+template<typename T, std::size_t N = 0>
+struct CArrayWrapper
+{
+public:
+    CArrayWrapper(T* data = nullptr, std::size_t size = N) { m_data = data; m_size = size; }
+    std::size_t size() const { if (N > 0) return N; else return m_size; }
+    T& operator[](std::size_t n) { return m_data[n]; }
+    T const& operator[](std::size_t n) const { return m_data[n]; }
+    T* data() const { return m_data; }
+    void setSize(std::size_t size) { m_size = size; }
+    void setData(T* data) { m_data = data; }
+    void del() { delete[] m_data; }
+
+    operator T*() { return m_data; }
+    operator T*&() { return m_data; }
+    operator T*&&() { std::cout << "moved pointer" << std::endl; return std::move(m_data); }
+protected:
+    T* m_data;
+    std::size_t m_size;
+};
+
+/*template<typename T, std::size_t N>
+struct CArrayWrapper
+{
+public:
+    CArrayWrapper(T* data = nullptr, std::size_t size = N) { m_data = data; m_size = size; }
+    std::size_t size() const { if (N > 0) return N; else return m_size; }
+    T& operator[](std::size_t n) { return m_data[n]; }
+    T const& operator[](std::size_t n) const { return m_data[n]; }
+    T* data() const { return m_data; }
+    void setSize(std::size_t size) { m_size = size; }
+    void setData(T* data) { m_data = data; }
+    void del() { delete[] m_data; }
+
+    operator T*() { return m_data; }
+    operator T*&() { return m_data; }
+    operator T*&&() { return std::move(m_data); }
+protected:
+    T* m_data;
+    std::size_t m_size;
+};*/
+
+template<typename FArg, typename Arg>
+struct forward_parameter_type_helper
+{
+    using base_type = typename std::remove_reference<FArg>::type;
+    using type = typename std::conditional<std::is_same<base_type, FArg>::value,base_type,typename std::conditional<std::is_same<base_type&,FArg>::value,base_type&,base_type&&>::type>::type;
+};
+
+template<typename FArg, typename T>
+struct forward_parameter_type_helper<FArg, PointerParameter<T>>
+{
+    using base_type = PointerParameter<T>;
+    using type = typename std::conditional<std::is_same<base_type, FArg>::value,base_type,typename std::conditional<std::is_same<base_type&,FArg>::value,base_type&,base_type&&>::type>::type;
+};
+
+template<typename FArg, typename T>
+struct forward_parameter_type_helper<FArg, CArrayWrapper<T>>
+{
+    using base_type = CArrayWrapper<T>;
+    using type = typename std::conditional<std::is_same<base_type, FArg>::value,base_type,typename std::conditional<std::is_same<base_type&,FArg>::value,base_type&,base_type&&>::type>::type;
+};
+
+template<typename FT, typename T>
+inline constexpr auto forward_parameter_type(typename std::remove_reference<T>::type& t) noexcept
+    -> typename forward_parameter_type_helper<FT, T>::type&&
+{
+    return static_cast<typename forward_parameter_type_helper<FT, T>::type&&>(t);
+}
+
+template<typename FT, typename T>
+inline constexpr auto forward_parameter_type(typename std::remove_reference<T>::type&& t) noexcept
+    -> typename forward_parameter_type_helper<FT, T>::type&&
+{
+    return static_cast<typename forward_parameter_type_helper<FT, T>::type&&>(t);
+}
+
+/*template<typename FArg, typename Arg, typename T = typename std::remove_reference<FArg>::type>
+struct forward_parameter_cleanup_helper
+{
+    using type = typename std::conditional<std::is_same<T, FArg>::value,T,typename std::conditional<std::is_same<T&,FArg>::value,T&,T&&>::type>::type;
+};*/
+
+template<typename FArg, typename Arg>
+struct forward_parameter_cleanup_helper
+{
+    using farg_type = typename std::remove_reference<FArg>::type;
+    using arg_type = typename std::remove_reference<Arg>::type;
+    using type = typename std::conditional<std::is_same<farg_type, FArg>::value,arg_type,typename std::conditional<std::is_same<farg_type&,FArg>::value,arg_type&,arg_type&&>::type>::type;
+};
+
+template<typename FArg, typename T>
+struct forward_parameter_cleanup_helper<FArg, PointerParameter<T>>
+{
+    using farg_type = typename std::remove_reference<FArg>::type;
+    using arg_type = PointerParameter<T>;
+    using type = typename std::conditional<std::is_same<farg_type&, FArg>::value,arg_type,typename std::conditional<std::is_same<farg_type&,FArg>::value,arg_type&,arg_type&&>::type>::type;
+    //using type = PointerParameter<T>&;
+};
+
+template<typename FArg, typename T>
+struct forward_parameter_cleanup_helper<FArg, CArrayWrapper<T>>
+{
+    using farg_type = typename std::remove_reference<FArg>::type;
+    using arg_type = CArrayWrapper<T>;
+    using type = typename std::conditional<std::is_same<farg_type&, FArg>::value,arg_type,typename std::conditional<std::is_same<farg_type&,FArg>::value,arg_type&,arg_type&&>::type>::type;
+    //using type = CArrayWrapper<T>&;
+};
+
+template<typename FT, typename T>
+inline constexpr auto forward_parameter_cleanup(typename std::remove_reference<T>::type& t) noexcept
+    -> typename forward_parameter_cleanup_helper<FT, T>::type
+{
+    return static_cast<typename forward_parameter_cleanup_helper<FT, T>::type>(t);
+}
+
+template<typename FT, typename T>
+inline constexpr auto forward_parameter_cleanup(typename std::remove_reference<T>::type&& t) noexcept
+    -> typename forward_parameter_cleanup_helper<FT, T>::type&&
+{
+    return static_cast<typename forward_parameter_type_helper<FT, T>::type>(t);
+}
+
+template<typename FT, typename T, typename R = typename remove_all_const<FT>::type>
+inline constexpr R&& forward_parameter_type_local(typename std::remove_reference<T>::type& t) noexcept
+{
+    return static_cast<R&&>(t);
+}
+
+template<typename FT, typename T, typename R = typename remove_all_const<FT>::type>
+inline constexpr R&& forward_parameter_type_local(typename std::remove_reference<T>::type&& t) noexcept
+{
+    return static_cast<R&&>(t);
+}
 
 }
 
