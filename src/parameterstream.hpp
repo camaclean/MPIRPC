@@ -82,12 +82,12 @@ protected:
 };
 
 template<typename T>
-inline void unmarshal(ParameterStream& s, T val) {
+inline void marshal(ParameterStream& s, T val) {
     s << val;
 }
 
 template<typename T>
-inline typename std::decay<T>::type marshal(ParameterStream& s) {
+inline typename std::decay<T>::type unmarshal(ParameterStream& s) {
     typename std::decay<T>::type ret;
     s >> ret;
     return ret;
