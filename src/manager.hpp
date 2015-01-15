@@ -699,14 +699,14 @@ public:
     /**
      * @brief Send a QByteArray to rank #rank with tag #tag
      */
-    void sendRawMessage(int rank, const std::vector<char> &data, int tag = 0);
+    void sendRawMessage(int rank, const std::vector<char> *data, int tag = 0);
 
     /**
      * @brief Send a QByteArray to every other rank with tag #tag
      *
      * Does not send to self.
      */
-    void sendRawMessageToAll(const std::vector<char> &data, int tag = 0);
+    void sendRawMessageToAll(const std::vector< char >* data, int tag = 0);
 
     /**
      * @brief Executes an MPI_Barrier, then checks messages to ensure the state of all Managers are in a valid state.
@@ -774,10 +774,11 @@ protected:
     void sendFunctionInvocation(int rank, FunctionHandle functionHandle, bool getReturn, Args... args) {
         //QByteArray *data = new QByteArray();
         //QDataStream stream(data, QIODevice::WriteOnly);
-        ParameterStream stream;
+        std::vector<char>* buffer = new std::vector<char>();
+        ParameterStream stream(buffer);
         stream << functionHandle << getReturn;
         Passer p{(stream << args, 0)...};
-        sendRawMessage(rank, stream.constDataVector(), MPIRPC_TAG_INVOKE);
+        sendRawMessage(rank, stream.dataVector(), MPIRPC_TAG_INVOKE);
     }
 
     /**
@@ -788,13 +789,14 @@ protected:
     template<typename... Args>
     void sendMemberFunctionInvocation(ObjectWrapperBase *a, FunctionHandle functionHandle, bool getReturn, Args... args)
     {
-        ParameterStream stream;
+        std::vector<char>* buffer = new std::vector<char>();
+        ParameterStream stream(buffer);
         //QByteArray *data = new QByteArray();
         //QDataStream stream(data, QIODevice::ReadWrite);
         stream << a->type() << a->id();
         stream << functionHandle << getReturn;
         Passer p{(stream << args, 0)...};
-        sendRawMessage(a->rank(), stream.constDataVector(), MPIRPC_TAG_INVOKE_MEMBER);
+        sendRawMessage(a->rank(), stream.dataVector(), MPIRPC_TAG_INVOKE_MEMBER);
     }
 
     /**

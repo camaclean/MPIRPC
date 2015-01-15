@@ -30,9 +30,9 @@
 class ParameterStream
 {
 public:
-    ParameterStream();
-    ParameterStream(size_t initialSize);
-    ParameterStream(const char* data, size_t length);
+    ParameterStream() = delete;
+    ParameterStream(std::vector<char>* buffer);
+    //ParameterStream(const char* data, size_t length);
     
     void seek(std::size_t pos);
 
@@ -40,8 +40,7 @@ public:
     void readBytes(char*& b, size_t length);
     char* data();
     const char* constData() const;
-    std::vector<char>& dataVector();
-    std::vector<char> constDataVector() const;
+    std::vector<char>* dataVector() const;
     size_t size() const;
     
     ParameterStream& operator<<(int8_t val);
@@ -77,7 +76,7 @@ public:
     ParameterStream& operator>>(std::string& val);
     
 protected:
-    std::vector<char> m_data;
+    std::vector<char> *m_data;
     std::size_t  m_pos;
 };
 

@@ -59,16 +59,16 @@ void Manager::notifyNewObject(uint64_t type, uint64_t id)
     }
 }
 
-void Manager::sendRawMessage(int rank, const std::vector<char> &data, int tag)
+void Manager::sendRawMessage(int rank, const std::vector<char> *data, int tag)
 {
     if (checkSends() && !m_shutdown) {
         MPI_Request req;
-        MPI_Issend((void*) data.data(), data.size(), MPI_CHAR, rank, tag, m_comm, &req);
-        m_mpiMessages[req] = &data;
+        MPI_Issend((void*) data->data(), data->size(), MPI_CHAR, rank, tag, m_comm, &req);
+        m_mpiMessages[req] = data;
     }
 }
 
-void Manager::sendRawMessageToAll(const std::vector<char>& data, int tag)
+void Manager::sendRawMessageToAll(const std::vector<char>* data, int tag)
 {
     for (int i = 0; i < m_numProcs; ++i) {
 #ifndef USE_MPI_LOCALLY
@@ -217,7 +217,8 @@ void Manager::receivedInvocationCommand(MPI_Status&& status)
     //char *rawData;
     if (len != MPI_UNDEFINED) {
         //rawData = static_cast<char*>(malloc(len));
-        ParameterStream stream(len);
+        std::vector<char>* buffer = new std::vector<char>(len);
+        ParameterStream stream(buffer);
         MPI_Status recvStatus;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
         //QByteArray b = QByteArray::fromRawData(rawData, len);
@@ -227,6 +228,7 @@ void Manager::receivedInvocationCommand(MPI_Status&& status)
         stream >> functionHandle >> getReturn;
         FunctionBase *f = m_registeredFunctions[functionHandle];
         f->execute(stream, recvStatus.MPI_SOURCE, this, getReturn);
+        delete buffer;
         //free(rawData);
     }
 }
@@ -238,7 +240,8 @@ void Manager::receivedMemberInvocationCommand(MPI_Status&& status) {
     //char *rawData;
     if (len != MPI_UNDEFINED) {
         //rawData = static_cast<char*>(malloc(len));
-        ParameterStream stream(len);
+        std::vector<char>* buffer = new std::vector<char>(len);
+        ParameterStream stream(buffer);
         MPI_Status recvStatus;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
         //QByteArray b = QByteArray::fromRawData(rawData, len);
@@ -250,6 +253,7 @@ void Manager::receivedMemberInvocationCommand(MPI_Status&& status) {
         stream >> typeId >> objectId >> functionHandle >> getReturn;
         FunctionBase *f = m_registeredFunctions[functionHandle];
         f->execute(stream, recvStatus.MPI_SOURCE, this, getReturn, getObjectWrapper(m_rank, typeId, objectId)->object());
+        delete buffer;
         //free(rawData);
     }
 }
