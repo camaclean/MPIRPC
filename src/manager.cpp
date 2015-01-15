@@ -173,8 +173,14 @@ void Manager::registerRemoteObject()
 }
 
 void Manager::barrier() {
+#ifdef __GNUG__
+    __sync_synchronize();
+#endif
     asm volatile("" ::: "memory");
     MPI_Barrier(m_comm);
+#ifdef __GNUG__
+    __sync_synchronize();
+#endif
     asm volatile("" ::: "memory");
     checkMessages();
 }
