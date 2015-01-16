@@ -706,7 +706,7 @@ public:
      *
      * Does not send to self.
      */
-    void sendRawMessageToAll(const std::vector< char >* data, int tag = 0);
+    void sendRawMessageToAll(const std::vector<char> *data, int tag = 0);
 
     /**
      * @brief Executes an MPI_Barrier, then checks messages to ensure the state of all Managers are in a valid state.

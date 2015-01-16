@@ -122,6 +122,8 @@ bool Manager::checkSends() {
         int queue_size = m_mpiObjectMessages.size() + m_mpiMessages.size();
         if (queue_size <= MAX_MPI_QUEUE && !m_shutdown)
             break;
+        if (queue_size == 0)
+            break;
         if (m_shutdown) {
             return false;
         }
