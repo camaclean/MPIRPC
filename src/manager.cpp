@@ -85,48 +85,31 @@ void Manager::registerUserMessageHandler(int tag, UserMessageHandler callback) {
     m_userMessageHandlers[tag] = callback;
 }
 
-size_t Manager::queueSize() const
-{
-    size_t ret = 0ULL;
-    ret += m_mpiObjectMessages.size();
-    ret += m_mpiMessages.size();
-    return ret;
-}
-
 bool Manager::checkSends() {
-    while (true) {
-        for (auto i = m_mpiObjectMessages.begin(); i != m_mpiObjectMessages.end();) {
-            MPI_Request req = i->first;
-            MPI_Status s;
-            int flag;
-            MPI_Test(&req, &flag, &s);
-            if (flag) {
-                i->second.reset();
-                m_mpiObjectMessages.erase(i++);
-            } else {
-                ++i;
-            }
+    for (auto i = m_mpiObjectMessages.begin(); i != m_mpiObjectMessages.end();) {
+        MPI_Request req = i->first;
+        int flag = true;
+        MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
+        if (flag) {
+            i->second.reset();
+            m_mpiObjectMessages.erase(i++);
+        } else {
+            ++i;
         }
-        for (auto i = m_mpiMessages.begin(); i != m_mpiMessages.end();) {
-            MPI_Request req = i->first;
-            MPI_Status s;
-            int flag;
-            MPI_Test(&req, &flag, &s);
-            if (flag) {
-                delete i->second;
-                m_mpiMessages.erase(i++);
-            } else {
-                ++i;
-            }
+    }
+    for (auto i = m_mpiMessages.begin(); i != m_mpiMessages.end();) {
+        MPI_Request req = i->first;
+        int flag;
+        MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
+        if (flag) {
+            delete i->second;
+            m_mpiMessages.erase(i++);
+        } else {
+            ++i;
         }
-        int queue_size = m_mpiObjectMessages.size() + m_mpiMessages.size();
-        if (queue_size <= MAX_MPI_QUEUE && !m_shutdown)
-            break;
-        if (queue_size == 0)
-            break;
-        if (m_shutdown) {
-            return false;
-        }
+    }
+    if (m_shutdown) {
+        return false;
     }
     return true;
 }
@@ -300,6 +283,11 @@ unsigned long long Manager::stats() const
 int Manager::numProcs() const
 {
     return m_numProcs;
+}
+
+size_t Manager::queueSize() const
+{
+    return m_mpiObjectMessages.size() + m_mpiMessages.size();
 }
 
 ObjectWrapperBase* Manager::getObjectWrapper(int rank, TypeId tid, ObjectId oid) const {
