@@ -20,9 +20,9 @@ set(SRC_LIST manager.cpp manager.hpp common.hpp lambda.hpp
 add_library(mpirpc STATIC ${SRC_LIST})
 target_link_libraries(mpirpc ${MPI_CXX_LIBRARIES})
 
-install(TARGETS mpirpc DESTINATION lib)
+install(TARGETS mpirpc DESTINATION lib EXPORT MPIRPCConfig)
 install(FILES common.hpp lambda.hpp manager.hpp objectwrapper.hpp orderedcall.hpp parameterstream.hpp reduce.hpp DESTINATION include/mpirpc)
-install(FILES MPIRPCConfig.cmake DESTINATION lib/cmake/mpirpc)
+install(EXPORT MPIRPCConfig DESTINATION lib/cmake/mpirpc)
 
 set(CMAKE_AUTOMOC ON)
 find_package(Qt5 COMPONENTS Core Test)
