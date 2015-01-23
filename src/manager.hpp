@@ -90,9 +90,9 @@ class Manager
 {
     struct ObjectInfo {
         ObjectInfo() {}
-        ObjectInfo(uint64_t t, uint64_t i) : type(t), id(i) {}
-        uint64_t type;
-        uint64_t id;
+        ObjectInfo(TypeId t, ObjectId i) : type(t), id(i) {}
+        TypeId type;
+        TypeId id;
     };
 
     /**
@@ -832,7 +832,7 @@ protected:
     /**
      * @brief Notify other processes of an object registered on this Manager.
      */
-    void notifyNewObject(uint64_t type, uint64_t id);
+    void notifyNewObject(mpirpc::TypeId type, mpirpc::ObjectId id);
 
     /**
      * @brief Handle a message to execute a function
@@ -852,7 +852,7 @@ protected:
     /**
      * @brief Record a remote object with this Manager
      */
-    void registerRemoteObject(int rank, uint64_t type, uint64_t id);
+    void registerRemoteObject(int rank, mpirpc::TypeId type, mpirpc::ObjectId id);
 
     std::unordered_map<std::type_index, TypeId> m_registeredTypeIds;
 

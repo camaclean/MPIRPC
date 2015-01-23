@@ -45,9 +45,9 @@ struct FunctionParts<R(*)(Args...)>
     using function_type = R(*)(Args...);
 };
 
-using FunctionHandle = uint64_t;
-using TypeId = uint64_t;
-using ObjectId = uint64_t;
+using FunctionHandle = unsigned long;
+using TypeId = unsigned long;
+using ObjectId = unsigned long;
 
 }
 

@@ -14,7 +14,7 @@ Manager::Manager(MPI_Comm comm) : m_comm(comm), m_nextTypeId(0), m_count(0), m_s
 
     const int nitems = 2;
     int blocklengths[2] = {1,1};
-    MPI_Datatype types[2] = {MPI_UINT64_T, MPI_UINT64_T};
+    MPI_Datatype types[2] = {MPI_UNSIGNED_LONG, MPI_UNSIGNED_LONG};
     MPI_Aint offsets[2];
     offsets[0] = offsetof(ObjectInfo, type);
     offsets[1] = offsetof(ObjectInfo, id);
@@ -43,7 +43,7 @@ int Manager::rank() const
     return m_rank;
 }
 
-void Manager::notifyNewObject(uint64_t type, uint64_t id)
+void Manager::notifyNewObject(TypeId type, ObjectId id)
 {
     if (m_shutdown)
         return;
@@ -170,7 +170,7 @@ void Manager::barrier() {
     checkMessages();
 }
 
-void Manager::registerRemoteObject(int rank, uint64_t type, uint64_t id) {
+void Manager::registerRemoteObject(int rank, TypeId type, ObjectId id) {
     ObjectWrapper<void> *a = new ObjectWrapper<void>();
     a->m_id = id;
     a->m_type = type;
