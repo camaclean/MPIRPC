@@ -3,10 +3,20 @@ cmake_minimum_required(VERSION 2.8.12)
 set(mpirpc_VERSION_MAJOR 0)
 set(mpirpc_VERSION_MINOR 1)
 set(mpirpc_VERSION_PATCH 0)
+option(USE_LTO "Build with Link Time Optimizations" OFF)
 
-add_definitions(-std=c++11 -O3 -march=native -flto -fuse-linker-plugin)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3 -march=native")
 
 include(FindMPI REQUIRED)
+
+if(USE_LTO)
+    if(CMAKE_COMPILER_IS_GNUCXX)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto -fuse-linker-plugin -fuse-ld=gold")
+        set(CMAKE_AR "gcc-ar")
+        set(CMAKE_NM "gcc-nm")
+        set(CMAKE_RANLIB "gcc-ranlib")
+    endif(CMAKE_COMPILER_IS_GNUCXX)
+endif(USE_LTO)
 
 if(MPI_FOUND)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${MPI_C_COMPILE_FLAGS}")
