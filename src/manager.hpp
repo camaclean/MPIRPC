@@ -20,6 +20,7 @@
 #include <vector>
 #include <iterator>
 #include <exception>
+#include <algorithm>
 #include <mpi.h>
 
 #include "objectwrapper.hpp"
@@ -27,6 +28,7 @@
 #include "orderedcall.hpp"
 #include "common.hpp"
 #include "parameterstream.hpp"
+#include "mpitype.hpp"
 
 #define ERR_ASSERT     1
 #define ERR_MAX_ACTORS 2
@@ -680,6 +682,19 @@ public:
     std::unordered_set<ObjectWrapperBase*> getObjectsOfType()
     {
         return getObjectsOfType(getTypeId<Class>());
+    }
+    
+    template<typename T>
+    T allreduce(std::vector<T>& vec,  MPI_Op op)
+    {
+        int vecsize = vec.size();
+        int maxvecsize;
+        MPI_Allreduce(&vecsize, &maxvecsize, 1, MPI_INT, MPI_MAX, m_comm);
+        vec.reserve(maxvecsize);
+        std::fill_n(&vec.data()[vecsize], maxvecsize-vecsize, 0);
+        T res;
+        MPI_Allreduce(vec.data(), &res, maxvecsize, mpiType<T>(), op, m_comm);
+        return res;
     }
 
     /**

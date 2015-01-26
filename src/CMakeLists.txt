@@ -25,13 +25,12 @@ if(MPI_FOUND)
     include_directories("${MPI_CXX_INCLUDE_PATH}")
 endif(MPI_FOUND)
 
-set(SRC_LIST manager.cpp manager.hpp common.hpp lambda.hpp
-    objectwrapper.hpp objectwrapper.cpp orderedcall.hpp reduce.hpp reduce.cpp parameterstream.cpp)
+set(SRC_LIST manager.cpp objectwrapper.cpp parameterstream.cpp mpitype.cpp)
 add_library(mpirpc STATIC ${SRC_LIST})
 target_link_libraries(mpirpc ${MPI_CXX_LIBRARIES})
 
 install(TARGETS mpirpc DESTINATION lib EXPORT MPIRPCConfig)
-install(FILES common.hpp lambda.hpp manager.hpp objectwrapper.hpp orderedcall.hpp parameterstream.hpp reduce.hpp DESTINATION include/mpirpc)
+install(FILES common.hpp lambda.hpp manager.hpp objectwrapper.hpp orderedcall.hpp parameterstream.hpp mpitype.hpp DESTINATION include/mpirpc)
 install(EXPORT MPIRPCConfig DESTINATION lib/cmake/mpirpc)
 
 set(CMAKE_AUTOMOC ON)
