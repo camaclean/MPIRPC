@@ -753,9 +753,11 @@ protected:
         MPI_Status status;
         //QByteArray b;
         //QDataStream stream(&b, QIODevice::WriteOnly);
-        ParameterStream stream;
+        std::vector<char>* buffer = new std::vector<char>();
+        ParameterStream stream(buffer);
         stream << r;
-        MPI_Send((void*) stream.constData(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
+        MPI_Send((void*) stream.dataVector()->data(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
+        delete buffer;
     }
 
     /**
@@ -817,9 +819,11 @@ protected:
             MPI_Get_count(&status, MPI_CHAR, &len);
         R ret;
         if (!shutdown && len != MPI_UNDEFINED) {
-            ParameterStream stream(len);
-            MPI_Recv((void*) stream.data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
+            std::vector<char>* buffer = new std::vector<char>(len);
+            ParameterStream stream(buffer);
+            MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
             ret = unmarshal<R>(stream);
+            delete buffer;
         }
         return ret;
     }

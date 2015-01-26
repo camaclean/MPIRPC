@@ -51,6 +51,8 @@ public:
     ParameterStream& operator<<(uint16_t val);
     ParameterStream& operator<<(uint32_t val);
     ParameterStream& operator<<(uint64_t val);
+    ParameterStream& operator<<(long long val);
+    ParameterStream& operator<<(unsigned long long val);
     
     ParameterStream& operator>>(int8_t& val);
     ParameterStream& operator>>(int16_t& val);
@@ -60,6 +62,8 @@ public:
     ParameterStream& operator>>(uint16_t& val);
     ParameterStream& operator>>(uint32_t& val);
     ParameterStream& operator>>(uint64_t& val);
+    ParameterStream& operator>>(long long& val);
+    ParameterStream& operator>>(unsigned long long& val);
     
     ParameterStream& operator<<(float val);
     ParameterStream& operator<<(double val);

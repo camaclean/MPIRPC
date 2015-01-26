@@ -112,6 +112,20 @@ ParameterStream& ParameterStream::operator<<(uint64_t val)
     return *this;
 }
 
+ParameterStream& ParameterStream::operator<<(long long unsigned int val)
+{
+    const char* p = reinterpret_cast<const char*>(&val);
+    m_data->insert(m_data->end(), p, p+sizeof(val));
+    return *this;
+}
+
+ParameterStream& ParameterStream::operator<<(long long int val)
+{
+    const char* p = reinterpret_cast<const char*>(&val);
+    m_data->insert(m_data->end(), p, p+sizeof(val));
+    return *this;
+}
+
 ParameterStream& ParameterStream::operator>>(int8_t& val)
 {
     val = *reinterpret_cast<int8_t*>(&(*m_data)[m_pos]);
@@ -165,6 +179,20 @@ ParameterStream& ParameterStream::operator>>(uint64_t& val)
 {
     val = *reinterpret_cast<uint64_t*>(&(*m_data)[m_pos]);
     m_pos += sizeof(uint64_t);
+    return *this;
+}
+
+ParameterStream& ParameterStream::operator>>(long long unsigned int& val)
+{
+    val = *reinterpret_cast<long long unsigned int*>(&(*m_data)[m_pos]);
+    m_pos += sizeof(long long unsigned int);
+    return *this;
+}
+
+ParameterStream& ParameterStream::operator>>(long long int& val)
+{
+    val = *reinterpret_cast<long long int*>(&(*m_data)[m_pos]);
+    m_pos += sizeof(long long int);
     return *this;
 }
 
