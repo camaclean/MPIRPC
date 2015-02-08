@@ -96,4 +96,56 @@ inline typename std::decay<T>::type unmarshal(ParameterStream& s) {
     return ret;
 }
 
+template<typename T>
+ParameterStream& operator<<(ParameterStream& out, const std::vector<T>& vector)
+{
+    out << vector.size();
+    for (std::size_t i = 0; i < vector.size(); ++i)
+    {
+        out << vector[i];
+    }
+    return out;
+}
+
+template <typename T>
+ParameterStream& operator>>(ParameterStream& in, std::vector<T>& vector)
+{
+    std::size_t size;
+    in >> size;
+    vector.resize(size);
+    for (std::size_t i = 0; i < size; ++i)
+    {
+        T val;
+        in >> val;
+        vector[i] = val;
+    }
+    return in;
+}
+
+template<typename T, typename U>
+ParameterStream& operator<<(ParameterStream& out, const std::map<T, U>& map)
+{
+    out <<  map.size();
+    for (auto pair : map)
+    {
+        out << pair.first << pair.second;
+    }
+    return out;
+}
+
+template<typename T, typename U>
+ParameterStream& operator>>(ParameterStream& in, std::map<T, U>& map)
+{
+    std::size_t size;
+    in >> size;
+    for (std::size_t i = 0; i < size; ++i)
+    {
+        T first;
+        U second;
+        in >> first >> second;
+        map.insert(std::make_pair(first, second));
+    }
+    return in;
+}
+
 #endif // PARAMETERSTREAM_H

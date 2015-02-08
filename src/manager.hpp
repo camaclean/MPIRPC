@@ -361,19 +361,6 @@ public:
     }
 
     /**
-     * @brief Register a std::function with the Manager
-     * @param f A std::function to register
-     * @return The handle associated with the std::function #f
-     */
-    /*template<typename F>
-    FunctionHandle registerFunctionObject(std::function<F> f)
-    {
-        FunctionBase *b = new Function<std::function<F>>(f);
-        m_registeredFunctions[b->id()] = b;
-        return b->id();
-    }*/
-
-    /**
      * @brief Query the type identifier for the class Class
      * @return The identifier associated with class Class
      */
@@ -537,7 +524,7 @@ public:
      * @return The return value of the function if getReturn is true. Otherwise returns a default constructed R.
      */
     template<typename R, class Class, typename... Args>
-    R invokeMemberFunction(ObjectWrapperBase *a, R(Class::*f)(Args...), bool getReturn, const typename std::decay<Args>::type&... args)
+    R invokeFunction(ObjectWrapperBase *a, R(Class::*f)(Args...), bool getReturn, const typename std::decay<Args>::type&... args)
     {
         if (a->rank() == m_rank)
         {
@@ -572,7 +559,7 @@ public:
      * @see Manager::invokeMemberFunction()
      */
     template<class Class, typename... Args>
-    void invokeMemberFunction(ObjectWrapperBase *a, void(Class::*f)(Args...), bool getReturn, const typename std::decay<Args>::type&... args)
+    void invokeFunction(ObjectWrapperBase *a, void(Class::*f)(Args...), bool getReturn, const typename std::decay<Args>::type&... args)
     {
         if (a->rank() == m_rank)
         {
@@ -595,10 +582,10 @@ public:
     }
 
     /**
-     * @see Manager::invokeMemberFunction()
+     * @see Manager::invokeFunction()
      */
     template<typename R, typename... Args>
-    R invokeMemberFunction(ObjectWrapperBase *a, FunctionHandle functionHandle, bool getReturn, Args&&... args)
+    R invokeFunction(ObjectWrapperBase *a, FunctionHandle functionHandle, bool getReturn, Args&&... args)
     {
         sendMemberFunctionInvocation(a, functionHandle, getReturn, std::forward<Args>(args)...);
         if (getReturn) {
@@ -612,10 +599,10 @@ public:
     /**
      * Specialized for void return type
      *
-     * @see Manager::invokeMemberFunction()
+     * @see Manager::invokeFunction()
      */
     template<typename... Args>
-    void invokeMemberFunction(ObjectWrapperBase *a, FunctionHandle functionHandle, Args&&... args)
+    void invokeFunction(ObjectWrapperBase *a, FunctionHandle functionHandle, Args&&... args)
     {
         sendMemberFunctionInvocation(a, functionHandle, false, std::forward<Args>(args)...);
     }
@@ -655,16 +642,54 @@ public:
      * @param typeId The type identifier
      * @return A pointer to the object's wrapper
      */
-    ObjectWrapperBase* getObjectOfType(TypeId typeId);
+    ObjectWrapperBase* getObjectOfType(TypeId typeId) const;
 
     /**
      * @brief Get the first wrapper to the object of type Class
      * @return A pointer to the object's wrapper
      */
     template<class Class>
-    ObjectWrapperBase* getObjectOfType()
+    ObjectWrapperBase* getObjectOfType() const
     {
         return getObjectOfType(getTypeId<Class>());
+    }
+    
+    /**
+     * @brief Get the first wrapper to the object of type #typeId which exists on rank #rank
+     * @param typeId The object's typeId
+     * @param rank The rank on which the object exists
+     * @return A pointer to the object's wrapper
+     */
+    ObjectWrapperBase* getObjectOfType(TypeId typeId, int rank) const;
+    
+    /**
+     * @brief Get the first wrapper to the object of type Class which exists on rank #rank
+     * @param rank The rank on which the object exists
+     * @return A pointer to the object's wrapper
+     */
+    template<class Class>
+    ObjectWrapperBase* getObjectOfType(int rank) const
+    {
+        return getObjectOfType(getTypeId<Class>(), rank);
+    }
+    
+    /**
+     * @brief Get the set of all objects of type #typeId for rank #rank
+     * @param typeId The type identifier
+     * @param rank The rank the objects exist on
+     * @return A std::unordered_set of object wrapers for the type and rank
+     */
+    std::unordered_set<ObjectWrapperBase*> getObjectsOfType(TypeId typeId, int rank) const;
+    
+    /**
+     * @brief Get the set of all objects of type Class for rank #rank
+     * @param rank The rank the objects exist on
+     * @return A std::unordered_set of object wrapers for the type and rank
+     */
+    template<class Class>
+    std::unordered_set<ObjectWrapperBase*> getObjectsOfType(int rank) const
+    {
+        return getObjectsOfType(getTypeId<Class>(), rank);
     }
 
     /**
@@ -672,7 +697,7 @@ public:
      * @param typeId The type identifier
      * @return A std::unordered_set of object wrappers for the type
      */
-    std::unordered_set<ObjectWrapperBase*> getObjectsOfType(TypeId typeId);
+    std::unordered_set<ObjectWrapperBase*> getObjectsOfType(mpirpc::TypeId typeId) const;
 
     /**
      * @brief Get the set of all objects of type Class

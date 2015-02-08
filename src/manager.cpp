@@ -184,7 +184,6 @@ void Manager::shutdown() {
     {
         if (i != m_rank) {
             MPI_Bsend((void*) &buf, 1, MPI_INT, i, MPIRPC_TAG_SHUTDOWN, m_comm);
-            //qDebug() << "sending shutdown to " << i;
         }
     }
     m_shutdown = true;
@@ -201,26 +200,20 @@ void Manager::handleShutdown()
 
 void Manager::receivedInvocationCommand(MPI_Status&& status)
 {
-    //qDebug() << "receivedInvocationCommand";
     m_count++;
     int len;
     MPI_Get_count(&status, MPI_CHAR, &len);
-    //char *rawData;
     if (len != MPI_UNDEFINED) {
-        //rawData = static_cast<char*>(malloc(len));
         std::vector<char>* buffer = new std::vector<char>(len);
         ParameterStream stream(buffer);
         MPI_Status recvStatus;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
-        //QByteArray b = QByteArray::fromRawData(rawData, len);
-        //QDataStream stream(&b, QIODevice::ReadOnly);
         FunctionHandle functionHandle;
         bool getReturn;
         stream >> functionHandle >> getReturn;
         FunctionBase *f = m_registeredFunctions[functionHandle];
         f->execute(stream, recvStatus.MPI_SOURCE, this, getReturn);
         delete buffer;
-        //free(rawData);
     }
 }
 
@@ -228,15 +221,11 @@ void Manager::receivedMemberInvocationCommand(MPI_Status&& status) {
     m_count++;
     int len;
     MPI_Get_count(&status, MPI_CHAR, &len);
-    //char *rawData;
     if (len != MPI_UNDEFINED) {
-        //rawData = static_cast<char*>(malloc(len));
         std::vector<char>* buffer = new std::vector<char>(len);
         ParameterStream stream(buffer);
         MPI_Status recvStatus;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
-        //QByteArray b = QByteArray::fromRawData(rawData, len);
-        //QDataStream stream(&b, QIODevice::ReadOnly);
         FunctionHandle functionHandle;
         ObjectId objectId;
         TypeId typeId;
@@ -245,7 +234,6 @@ void Manager::receivedMemberInvocationCommand(MPI_Status&& status) {
         FunctionBase *f = m_registeredFunctions[functionHandle];
         f->execute(stream, recvStatus.MPI_SOURCE, this, getReturn, getObjectWrapper(m_rank, typeId, objectId)->object());
         delete buffer;
-        //free(rawData);
     }
 }
 
@@ -254,22 +242,43 @@ MPI_Comm Manager::comm() const
     return m_comm;
 }
 
-ObjectWrapperBase* Manager::getObjectOfType(TypeId typeId)
+ObjectWrapperBase* Manager::getObjectOfType(mpirpc::TypeId typeId) const
 {
     for (ObjectWrapperBase* i : m_registeredObjects)
     {
         if (i->type() == typeId)
             return i;
     }
-    throw ;
+    throw std::out_of_range("Object not found");
 }
 
-std::unordered_set<ObjectWrapperBase*> Manager::getObjectsOfType(TypeId typeId)
+std::unordered_set<ObjectWrapperBase*> Manager::getObjectsOfType(TypeId typeId) const
 {
     std::unordered_set<ObjectWrapperBase*> ret;
     for (ObjectWrapperBase* i : m_registeredObjects)
     {
         if (i->type() == typeId)
+            ret.insert(i);
+    }
+    return ret;
+}
+
+ObjectWrapperBase* Manager::getObjectOfType(TypeId typeId, int rank) const
+{
+    for (ObjectWrapperBase* i : m_registeredObjects)
+    {
+        if (i->type() == typeId && i->rank() == rank)
+            return i;
+    }
+    throw std::out_of_range("Object not found");
+}
+
+std::unordered_set< ObjectWrapperBase* > Manager::getObjectsOfType(TypeId typeId, int rank) const
+{
+    std::unordered_set<ObjectWrapperBase*> ret;
+    for (ObjectWrapperBase* i : m_registeredObjects)
+    {
+        if (i->type() == typeId && i->rank() == rank)
             ret.insert(i);
     }
     return ret;
