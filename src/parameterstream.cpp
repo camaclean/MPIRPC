@@ -1,6 +1,6 @@
 /*
- * <one line to give the program's name and a brief idea of what it does.>
- * Copyright (C) 2014  Colin MacLean <colin@colin-maclean.com>
+ * MPIRPC: MPI based invocation of functions on other ranks
+ * Copyright (C) 2014  Colin MacLean <s0838159@sms.ed.ac.uk>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
