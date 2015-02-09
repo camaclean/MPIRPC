@@ -25,7 +25,7 @@ MPIRPC will be installed into `$HOME/install/`.
 
 The following is an example of the usage and features of MPIRPC:
 
-```C++
+```cpp
 #include <mpirpc/manager.hpp>
 #include <vector>
 #include <chrono>
