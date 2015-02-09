@@ -54,6 +54,8 @@ ParameterStream& operator>>(ParameterStream& in, MyType& t) {
 void processStep() {
     //Process range
     MyType res;
+    std::vector<int> dataLeft;
+    std::vector<int> dataRight;
     //...
     int left = (manager->rank() == 0)? manager->numProcs() - 1 : manager->rank() - 1;
     int right = (manager->rank() == manager->numProcs() - 1)? 0 : manager->rank() + 1;
@@ -61,8 +63,8 @@ void processStep() {
     manager->invokeFunction(right, dataRight, false);
     mpirpc::ObjectWrapperBase *vecLeft = manager->getObjectOfType<std::vector<int>>(left);
     mpirpc::ObjectWrapperBase *vecRight = manager->getObjectOfType<std::vector<int>>(right);
-    manager->invokeFunction(vecLeft, &std::vector::push_back, res);
-    manaber->invokeFunction(vecRight, &std::vector::push_back, res);
+    manager->invokeFunction(vecLeft, &std::vector<int>::push_back, res);
+    manaber->invokeFunction(vecRight, &std::vector<int>::push_back, res);
     manager->invokeFunction(fooFunc);
 }
 
