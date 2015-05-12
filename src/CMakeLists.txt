@@ -29,9 +29,18 @@ set(SRC_LIST manager.cpp objectwrapper.cpp parameterstream.cpp mpitype.cpp)
 add_library(mpirpc STATIC ${SRC_LIST})
 target_link_libraries(mpirpc ${MPI_CXX_LIBRARIES})
 
-install(TARGETS mpirpc DESTINATION lib EXPORT MPIRPCConfig)
+install(TARGETS mpirpc DESTINATION lib EXPORT MPIRPCTargets)
 install(FILES common.hpp lambda.hpp manager.hpp objectwrapper.hpp orderedcall.hpp parameterstream.hpp mpitype.hpp DESTINATION include/mpirpc)
-install(EXPORT MPIRPCConfig DESTINATION lib/cmake/mpirpc)
+install(EXPORT MPIRPCTargets DESTINATION lib/cmake/mpirpc)
+
+set(INCLUDE_INSTALL_DIR include/ CACHE STRING "MPIRPC include directory for install")
+set(LIB_INSTALL_DIR lib/ CACHE STRING "MPIRPC lib directory for install")
+include(CMakePackageConfigHelpers)
+configure_package_config_file(MPIRPCConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/MPIRPCConfig.cmake
+                              INSTALL_DESTINATION ${LIB_INSTALL_DIR}/cmake/mpirpc
+                              PATH_VARS INCLUDE_INSTALL_DIR)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/MPIRPCConfig.cmake
+        DESTINATION ${LIB_INSTALL_DIR}/cmake/mpirpc)
 
 set(CMAKE_AUTOMOC ON)
 find_package(Qt5 COMPONENTS Core Test)
