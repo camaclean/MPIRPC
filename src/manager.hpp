@@ -64,16 +64,9 @@
 
 namespace mpirpc {
 
-//template<typename T>
-//inline typename std::decay<T>::type unserialize(QDataStream& in) {
-//    typename std::decay<T>::type ret;
-//    in >> ret;
-//    return ret;
-//}
-
 struct UnregisteredFunctionException : std::exception
 {
-    const char* what() const noexcept //override
+    const char* what() const noexcept override
     {
         return "Unregistered Function\n";
     }
@@ -81,26 +74,32 @@ struct UnregisteredFunctionException : std::exception
 
 struct UnregisteredObjectException : std::exception
 {
-    const char* what() const noexcept //override
+    const char* what() const noexcept override
     {
         return "Unregistered Object\n";
     }
 };
 
+static std::map<std::type_index, std::string> names_map;
+
+#define UniqueID(G)  std::type_index(typeid(G))
+
+#define BIND(fp, cxx_target) \
+    { \
+        using G = FunctionId< decltype(&cxx_target), &cxx_target >; \
+        fp = &G::call; \
+        names_map[ UniqueID(G) ] = std::string(#cxx_target); \
+    }
 
 /**
  * @brief The Manager class
  *
  * The Manager class provides remote procedure call functionality over MPI. It makes heavy usage of C++11 varidic
  * templates to automatically generate classes to serialize and unserialize function parameters and return values.
- * For simplicity, Qt is used to serialize and unserialize data types to a binary stream. std::vector<char> could
- * be used to eliminate this dependency using reinterpret_cast<char*>() on data addresses along with std::copy and
- * std::back_inserter to copy variables as raw bytes. However, this was deemed too much added complication for the
- * time at hand.
  *
  * To add support for serializing and unserializing a custom type, provide the following stream operators:
- * QDataStream &operator<<(QDataStream& stream, const Type &t);
- * QDataStream &operator>>(QDataStream& stream, Type &t);
+ * ParameterStream &operator<<(ParameterStream& stream, const Type &t);
+ * ParameterStream &operator>>(ParameterStream& stream, Type &t);
  *
  * Currently, only one Manager per rank is permitted. However, a tag prefix could be implemented to allow for
  * multiple Managers, thus allowing multiple communicators to be used.
@@ -135,7 +134,7 @@ class Manager
         /*using GenericFunctionPointer = void(*)();*/
         typedef void(*GenericFunctionPointer)();
 
-        FunctionBase() : m_id(makeId()), m_pointer(0) {}
+        FunctionBase() : m_id(makeId()), m_pointer(0), m_type_index(std::type_index(typeid(int))) {}
 
         /**
          * @brief execute Execute the function
@@ -149,7 +148,7 @@ class Manager
 
         FunctionHandle id() const { return m_id; }
         GenericFunctionPointer pointer() const { return m_pointer; }
-        
+
         virtual ~FunctionBase() {};
 
     private:
@@ -162,7 +161,16 @@ class Manager
     protected:
         GenericFunctionPointer m_pointer;
         std::function<void()> m_function;
+        std::type_index m_type_index;
     };
+
+    template<typename Functor, Functor f> struct FunctionId;
+
+    template <typename R, class Class, typename... Args, R(Class::*target)(Args...)>
+    struct FunctionId<R(Class::*)(Args...), target> {};
+
+    template <typename R, typename... Args, R(*target)(Args...)>
+    struct FunctionId<R(*)(Args...), target> {};
 
     /**
      * The general Function<F> class, which is specialized to deduce additional typenames where required while only
@@ -178,12 +186,11 @@ class Manager
     class Function<R(*)(Args...)> : public FunctionBase
     {
     public:
-        /*using FunctionType = R(*)(Args...);*/
-        typedef R(*FunctionType)(Args...);
+        using FunctionType = R(*)(Args...);
 
-        Function(FunctionType f) : FunctionBase(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
+        Function(R(*f)(Args...)) : FunctionBase(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
 
-        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) //override
+        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
         {
             /*
              * func(convertData<Args>(data)...) does not work here
@@ -212,12 +219,11 @@ class Manager
     class Function<void(*)(Args...)> : public FunctionBase
     {
     public:
-        //using FunctionType = void(*)(Args...);
-        typedef void(*FunctionType)(Args...);
+        using FunctionType = void(*)(Args...);
 
         Function(FunctionType f) : FunctionBase(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
 
-        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) //override
+        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
         {
             OrderedCall<FunctionType> call{func, unmarshal<Args>(params)...};
             call();
@@ -234,12 +240,11 @@ class Manager
     class Function<R(Class::*)(Args...)> : public FunctionBase
     {
     public:
-        //using FunctionType = R(Class::*)(Args...);
-        typedef R(Class::*FunctionType)(Args...);
+        using FunctionType = R(Class::*)(Args...);
 
-        Function(FunctionType f) : FunctionBase(), func(f){}
+        Function(FunctionType f) : FunctionBase(), func(f) {}
 
-        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) //override
+        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
         {
             assert(object);
             assert(manager);
@@ -260,12 +265,11 @@ class Manager
     class Function<void(Class::*)(Args...)> : public FunctionBase
     {
     public:
-        //using FunctionType = void(Class::*)(Args...);
-        typedef void(Class::*FunctionType)(Args...);
+        using FunctionType = void(Class::*)(Args...);
 
-        Function(FunctionType f) : FunctionBase(), func(f) {}
+        Function(void(Class::*f)(Args...)) : FunctionBase(), func(f) { }
 
-        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) //override
+        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
         {
             assert(object);
             OrderedCall<FunctionType> call{func, static_cast<Class*>(object), unmarshal<Args>(params)...};
@@ -283,15 +287,15 @@ class Manager
         : public FunctionBase
     {
     public:
-        //using FunctionType = std::function<R(Args...)>;
-        typedef std::function<R(Args...)> FunctionType;
+        using FunctionType = std::function<R(Args...)>;
 
         Function(FunctionType& f) : FunctionBase(), func(f) {}
 
-        virtual void execute(ParameterStream &params, int senderRank, Manager *manager, bool getReturn, void *object = 0) //override
+        virtual void execute(ParameterStream &params, int senderRank, Manager *manager, bool getReturn, void *object = 0) override
         {
             assert(manager);
-            OrderedCall<std::function<R(Args...)>> call{func, unmarshal<Args>(params)...};
+            OrderedCall<FunctionType> call{func, unmarshal<Args>(params)...};
+
             if (getReturn)
                 manager->functionReturn(senderRank, call());
             else
@@ -309,14 +313,13 @@ class Manager
         : public FunctionBase
     {
     public:
-        //using FunctionType = std::function<void(Args...)>;
-        typedef std::function<void(Args...)> FunctionType;
+        using FunctionType = std::function<void(Args...)>;
 
         Function(FunctionType& f) : FunctionBase(), func(f) {}
 
-        virtual void execute(ParameterStream &params, int senderRank, Manager *manager, bool getReturn, void *object = 0) //override
+        virtual void execute(ParameterStream &params, int senderRank, Manager *manager, bool getReturn, void *object = 0) override
         {
-            OrderedCall<std::function<void(Args...)>> call{func, unmarshal<Args>(params)...};
+            OrderedCall<FunctionType> call{func, unmarshal<Args>(params)...};
             call();
         }
 
@@ -367,9 +370,23 @@ public:
     }
 
     /**
+     * This compile-time version allows for fast (hash table) function ID lookups
+     *
      * @brief Register a function or member function with the Manager
      * @param f A function pointer to the function to register
      * @return The handle associated with function #f
+     */
+    template<typename F, F f>
+    FunctionHandle registerFunction()
+    {
+        FunctionBase *b = new Function<F>(f);
+        m_registeredFunctions[b->id()] = b;
+        m_registeredFunctionTIs[std::type_index(typeid(FunctionId<F,f>))] = b->id();
+        return b->id();
+    }
+
+    /**
+     * This run-time version is incompatible with fast (hash table) function ID lookups
      */
     template<typename F>
     FunctionHandle registerFunction(F f)
@@ -402,6 +419,12 @@ public:
                 return func->id();
             }
         }
+    }
+
+    template<typename T, T t>
+    FunctionHandle getFunctionHandle()
+    {
+        return m_registeredFunctionTIs[std::type_index(typeid(FunctionId<T,t>))];
     }
 
     /**
@@ -453,28 +476,32 @@ public:
      *
      * @param rank The MPI rank to invoke the function on
      * @param f The function pointer to invoke. This function pointer must be registered with the Manager. See: Manager::registerFunction.
-     * @param getReturn If true, the remote process will send back the function's return value. Otherwise a default constructed R is returned.
+     * @param functionHandle The function handle for the registered function, f. If this value is 0, the function handle is searched for in the function map.
      * @param args... The function's parameters. These parameters should be treated as being passed by value. However, it would be possible to
      * use std::is_lvalue_reference to serialize the lvalue parameters and send back these potentially modified values. std::is_pointer could
      * similarly be used for pointers with serializable types.
      * @return The return value of the function if getReturn is true. Otherwise returns a default constructed R.
      */
-    template<typename R, typename... Args>
-    R invokeFunction(int rank, R(*f)(Args...), bool getReturn, const typename std::decay<Args>::type&... args)
+    template<typename R, typename... FArgs, typename... Args>
+    auto invokeFunctionR(int rank, R(*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
+        -> typename std::enable_if<!std::is_same<R, void>::value, R>::type
     {
         if (rank == m_rank) {
-            return f(args...);
+            return f(std::forward<FArgs>(args)...);
         } else {
-            for (const auto &i : m_registeredFunctions) {
-                if (i.second->pointer() == reinterpret_cast<void(*)()>(f)) {
-                    sendFunctionInvocation(rank, i.first, getReturn, args...);
-                    if (getReturn) {
+            if (functionHandle == 0)
+            {
+                for (const auto &i : m_registeredFunctions) {
+                    if (i.second->pointer() == reinterpret_cast<void(*)()>(f)) {
+                        sendFunctionInvocation<FArgs...>(rank, i.first, true, std::forward<FArgs>(args)...);
                         return processReturn<R>();
-                    } else {
-                        R ret;
-                        return ret;
                     }
                 }
+            }
+            else
+            {
+                sendFunctionInvocation<FArgs...>(rank, functionHandle, true, std::forward<FArgs>(args)...);
+                return processReturn<R>();
             }
             throw UnregisteredFunctionException();
         }
@@ -485,37 +512,40 @@ public:
      *
      * @see Manager::invokeFunction()
      */
-    template<typename... Args>
-    void invokeFunction(int rank, void(*f)(Args...), const typename std::decay<Args>::type&... args)
+    template<typename R, typename... FArgs, typename...Args>
+    void invokeFunction(int rank, R(*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
     {
         if (rank == m_rank) {
-            f(args...);
+            f(std::forward<FArgs>(args)...);
         } else {
-            for (const auto &i : m_registeredFunctions) {
-                if (i.second->pointer() == reinterpret_cast<void(*)()> (f)) {
-                    sendFunctionInvocation(rank, i.first, false, args...);
-                    return;
+            if (functionHandle == 0) {
+                for (const auto &i : m_registeredFunctions) {
+                    if (i.second->pointer() == reinterpret_cast<void(*)()> (f)) {
+                        sendFunctionInvocation<FArgs...>(rank, i.first, false, std::forward<FArgs>(args)...);
+                        return;
+                    }
                 }
+                throw UnregisteredFunctionException();
             }
-            throw UnregisteredFunctionException();
+            else
+            {
+                sendFunctionInvocation<FArgs...>(rank, functionHandle, false, std::forward<FArgs>(args)...);
+            }
         }
     }
 
     /**
      * @see Manager::invokeFunction()
      *
-     * @todo Optimize local calls
+     * Note: this function assumes that the arguments passed are what the function uses.
+     *
+     * Local calls cannot be optimized to a simple function call because we don't know how to cast the Function object here
      */
     template<typename R, typename... Args>
-    R invokeFunction(int rank, FunctionHandle functionHandle, bool getReturn, Args&&... args)
+    R invokeFunctionR(int rank, FunctionHandle functionHandle, Args&&... args)
     {
-        sendFunctionInvocation(rank, functionHandle, getReturn, std::forward<Args>(args)...);
-        if (getReturn) {
-            return processReturn<R>(rank);
-        } else {
-            R ret;
-            return ret;
-        }
+        sendFunctionInvocation(rank, functionHandle, true, std::forward<Args>(args)...);
+        return processReturn<R>(rank);
     }
 
     /**
@@ -542,61 +572,70 @@ public:
      * similarly be used for pointers with serializable types.
      * @return The return value of the function if getReturn is true. Otherwise returns a default constructed R.
      */
-    template<typename R, class Class, typename... Args>
-    R invokeFunction(ObjectWrapperBase *a, R(Class::*f)(Args...), bool getReturn, const typename std::decay<Args>::type&... args)
+    template<typename R, class Class, typename... FArgs, typename... Args>
+    auto invokeFunctionR(ObjectWrapperBase *a, R(Class::*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
+        -> typename std::enable_if<!std::is_same<R, void>::value, R>::type
     {
         if (a->rank() == m_rank)
         {
             ObjectWrapper<Class> *o = static_cast<ObjectWrapper<Class>*>(a);
-            return CALL_MEMBER_FN(*o->object(),f)(args...);
+            return CALL_MEMBER_FN(*o->object(),f)(std::forward<FArgs>(args)...);
         } else {
-            for (const auto &i : m_registeredFunctions)
+            if (functionHandle == 0)
             {
-                Function<R(Class::*)(Args...)>* func = dynamic_cast<Function<R(Class::*)(Args...)>*>(i.second);
-                if (func) {
-                    if (func->func == f)
-                    {
-                        sendMemberFunctionInvocation(a, func->id(), getReturn, args...);
-                        if (getReturn) {
+                for (const auto &i : m_registeredFunctions)
+                {
+                    Function<R(Class::*)(FArgs...)>* func = dynamic_cast<Function<R(Class::*)(FArgs...)>*>(i.second);
+                    if (func) {
+                        if (func->func == f)
+                        {
+                            sendMemberFunctionInvocation<FArgs...>(a, func->id(), true, std::forward<FArgs>(args)...);
                             return processReturn<R>(a->rank());
-                        } else {
-                            R ret;
-                            return ret;
                         }
                     }
                 }
+                throw UnregisteredFunctionException();
             }
-            throw UnregisteredFunctionException();
-            R ret;
-            return ret;
+            else
+            {
+                sendMemberFunctionInvocation<FArgs...>(a, functionHandle, true, std::forward<FArgs>(args)...);
+                return processReturn<R>(a->rank());
+            }
         }
     }
 
     /**
-     * Specialized for void return type
+     * Version for void return type
      *
      * @see Manager::invokeMemberFunction()
      */
-    template<class Class, typename... Args>
-    void invokeFunction(ObjectWrapperBase *a, void(Class::*f)(Args...), bool getReturn, const typename std::decay<Args>::type&... args)
+    template<typename R, class Class, typename... FArgs, typename... Args>
+    void invokeFunction(ObjectWrapperBase *a, R(Class::*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
     {
         if (a->rank() == m_rank)
         {
             ObjectWrapper<Class> *o = static_cast<ObjectWrapper<Class>*>(a);
-            CALL_MEMBER_FN(*o->object(),f)(args...);
+            CALL_MEMBER_FN(*o->object(),f)(std::forward<FArgs>(args)...);
         } else {
-            for (const auto &i : m_registeredFunctions)
+            if (functionHandle == 0)
             {
-                Function<void(Class::*)(Args...)>* func = dynamic_cast<Function<void(Class::*)(Args...)>*>(i.second);
-                if (func) {
-                    if (func->func == f)
-                    {
-                        sendMemberFunctionInvocation(a, func->id(), getReturn, args...);
-                        return;
+                for (const auto &i : m_registeredFunctions)
+                {
+                    Function<R(Class::*)(FArgs...)>* func = dynamic_cast<Function<R(Class::*)(FArgs...)>*>(i.second);
+                    if (func) {
+                        if (func->func == f)
+                        {
+                            sendMemberFunctionInvocation<FArgs...>(a, func->id(), false, std::forward<FArgs>(args)...);
+                            return;
+                        }
                     }
                 }
+                throw UnregisteredFunctionException();
             }
-            throw UnregisteredFunctionException();
+            else
+            {
+                sendMemberFunctionInvocation<FArgs...>(a, functionHandle, false, std::forward<FArgs>(args)...);
+            }
         }
     }
 
@@ -604,15 +643,10 @@ public:
      * @see Manager::invokeFunction()
      */
     template<typename R, typename... Args>
-    R invokeFunction(ObjectWrapperBase *a, FunctionHandle functionHandle, bool getReturn, Args&&... args)
+    R invokeFunctionR(ObjectWrapperBase *a, FunctionHandle functionHandle, Args&&... args)
     {
-        sendMemberFunctionInvocation(a, functionHandle, getReturn, std::forward<Args>(args)...);
-        if (getReturn) {
-            return processReturn<R>(a->rank());
-        } else {
-            R ret;
-            return ret;
-        }
+        sendMemberFunctionInvocation(a, functionHandle, true, std::forward<Args>(args)...);
+        return processReturn<R>(a->rank());
     }
 
     /**
@@ -624,12 +658,6 @@ public:
     void invokeFunction(ObjectWrapperBase *a, FunctionHandle functionHandle, Args&&... args)
     {
         sendMemberFunctionInvocation(a, functionHandle, false, std::forward<Args>(args)...);
-    }
-
-    template<typename T>
-    T reduce(T value, MPI_Op op, int root, MPI_Comm comm)
-    {
-
     }
 
     /**
@@ -672,7 +700,7 @@ public:
     {
         return getObjectOfType(getTypeId<Class>());
     }
-    
+
     /**
      * @brief Get the first wrapper to the object of type #typeId which exists on rank #rank
      * @param typeId The object's typeId
@@ -680,7 +708,7 @@ public:
      * @return A pointer to the object's wrapper
      */
     ObjectWrapperBase* getObjectOfType(TypeId typeId, int rank) const;
-    
+
     /**
      * @brief Get the first wrapper to the object of type Class which exists on rank #rank
      * @param rank The rank on which the object exists
@@ -691,7 +719,7 @@ public:
     {
         return getObjectOfType(getTypeId<Class>(), rank);
     }
-    
+
     /**
      * @brief Get the set of all objects of type #typeId for rank #rank
      * @param typeId The type identifier
@@ -699,7 +727,7 @@ public:
      * @return A std::unordered_set of object wrapers for the type and rank
      */
     std::unordered_set<ObjectWrapperBase*> getObjectsOfType(TypeId typeId, int rank) const;
-    
+
     /**
      * @brief Get the set of all objects of type Class for rank #rank
      * @param rank The rank the objects exist on
@@ -727,17 +755,59 @@ public:
     {
         return getObjectsOfType(getTypeId<Class>());
     }
-    
+
     template<typename T>
-    T allreduce(std::vector<T>& vec,  MPI_Op op)
+    std::vector<T> reduce(std::vector<T>& vec, MPI_Op op, int root)
     {
         int vecsize = vec.size();
-        int maxvecsize;
-        MPI_Allreduce(&vecsize, &maxvecsize, 1, MPI_INT, MPI_MAX, m_comm);
-        vec.reserve(maxvecsize);
-        std::fill_n(&vec.data()[vecsize], maxvecsize-vecsize, 0);
+        std::vector<T> res(vecsize);
+        MPI_Reduce(vec.data(), res.data(), vecsize, mpiType<T>(), op, root, m_comm);
+        return res;
+    }
+
+    template<typename T>
+    std::vector<T> allreduce(std::vector<T>& vec,  MPI_Op op)
+    {
+        int vecsize = vec.size();
+        std::vector<T> res(vecsize);
+        MPI_Allreduce(vec.data(), res.data(), vecsize, mpiType<T>(), op, m_comm);
+        return res;
+    }
+
+    template<typename T>
+    T* reduce(T* first, T* last, MPI_Op mpiOp, int root)
+    {
+        std::size_t size = last-first;
+        T* res = new T[size];
+        MPI_Reduce(first, res, size, mpiType<T>(), mpiOp, root, m_comm);
+        return res;
+    }
+
+    template<typename T>
+    T* allreduce(T* first, T* last, MPI_Op mpiOp)
+    {
+        std::size_t size = last-first;
+        T* res = new T[size];
+        MPI_Allreduce(first, res, size, mpiType<T>(), mpiOp, m_comm);
+        return res;
+    }
+
+    template<class InputIt, class T, class BinaryOperation>
+    T accumulate( InputIt first, InputIt last, T init, BinaryOperation op, MPI_Op mpiOp)
+    {
+        T intermediate = std::accumulate(first, last, init, op);
         T res;
-        MPI_Allreduce(vec.data(), &res, maxvecsize, mpiType<T>(), op, m_comm);
+        MPI_Allreduce(&intermediate, &res, 1, mpiType<T>(), mpiOp, m_comm);
+        return res;
+    }
+
+    template<class InputIt>
+    typename std::iterator_traits<InputIt>::value_type
+    accumulate( InputIt first, InputIt last)
+    {
+        typename std::iterator_traits<InputIt>::value_type intermediate = std::accumulate(first, last, static_cast<typename std::iterator_traits<InputIt>::value_type>(0));
+        typename std::iterator_traits<InputIt>::value_type res;
+        MPI_Allreduce(&intermediate, &res, 1, mpiType<typename std::iterator_traits<InputIt>::value_type>(), MPI_SUM, m_comm);
         return res;
     }
 
@@ -756,12 +826,12 @@ public:
     void registerUserMessageHandler(int tag, UserMessageHandler callback);
 
     /**
-     * @brief Send a QByteArray to rank #rank with tag #tag
+     * @brief Send a buffer to rank #rank with tag #tag
      */
     void sendRawMessage(int rank, const std::vector<char> *data, int tag = 0);
 
     /**
-     * @brief Send a QByteArray to every other rank with tag #tag
+     * @brief Send a buffer to every other rank with tag #tag
      *
      * Does not send to self.
      */
@@ -788,7 +858,7 @@ public:
      * @brief Get the MPI communicator
      */
     MPI_Comm comm() const;
-    
+
     /**
      * @brief The size of the message send queue. Can check mesages continuously while queue size >0 to ensure all messages have been sent.
      */
@@ -810,8 +880,6 @@ protected:
     void functionReturn(int rank, R r)
     {
         MPI_Status status;
-        //QByteArray b;
-        //QDataStream stream(&b, QIODevice::WriteOnly);
         std::vector<char>* buffer = new std::vector<char>();
         ParameterStream stream(buffer);
         stream << r;
@@ -832,9 +900,8 @@ protected:
      * unpacking will be done in the same order.
      */
     template<typename... Args>
-    void sendFunctionInvocation(int rank, FunctionHandle functionHandle, bool getReturn, Args... args) {
-        //QByteArray *data = new QByteArray();
-        //QDataStream stream(data, QIODevice::WriteOnly);
+    void sendFunctionInvocation(int rank, FunctionHandle functionHandle, bool getReturn, Args... args)
+    {
         std::vector<char>* buffer = new std::vector<char>();
         ParameterStream stream(buffer);
         stream << functionHandle << getReturn;
@@ -852,8 +919,6 @@ protected:
     {
         std::vector<char>* buffer = new std::vector<char>();
         ParameterStream stream(buffer);
-        //QByteArray *data = new QByteArray();
-        //QDataStream stream(data, QIODevice::ReadWrite);
         stream << a->type() << a->id();
         stream << functionHandle << getReturn;
         Passer p{(stream << args, 0)...};
@@ -920,6 +985,7 @@ protected:
     std::unordered_map<std::type_index, TypeId> m_registeredTypeIds;
 
     std::map<FunctionHandle, FunctionBase*> m_registeredFunctions;
+    std::unordered_map<std::type_index, FunctionHandle> m_registeredFunctionTIs;
     std::vector<ObjectWrapperBase*> m_registeredObjects;
 
     std::unordered_map<MPI_Request, const std::vector<char>*> m_mpiMessages;
