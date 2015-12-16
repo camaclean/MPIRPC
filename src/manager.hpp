@@ -40,6 +40,7 @@
 #include <iterator>
 #include <exception>
 #include <algorithm>
+#include <thread>
 #include <mpi.h>
 
 #include "objectwrapper.hpp"
@@ -494,14 +495,14 @@ public:
                 for (const auto &i : m_registeredFunctions) {
                     if (i.second->pointer() == reinterpret_cast<void(*)()>(f)) {
                         sendFunctionInvocation<FArgs...>(rank, i.first, true, std::forward<FArgs>(args)...);
-                        return processReturn<R>();
+                        return processReturn<R>(rank);
                     }
                 }
             }
             else
             {
                 sendFunctionInvocation<FArgs...>(rank, functionHandle, true, std::forward<FArgs>(args)...);
-                return processReturn<R>();
+                return processReturn<R>(rank);
             }
             throw UnregisteredFunctionException();
         }
@@ -842,7 +843,7 @@ public:
      *
      * When registering objects that depend on remote objects, they must be initialized in order (so that their ids are propagated).
      */
-    void barrier();
+    void sync();
 
     /**
      * @brief Shut down all Managers on all processes.

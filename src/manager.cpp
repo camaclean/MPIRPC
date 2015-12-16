@@ -107,7 +107,7 @@ void Manager::registerUserMessageHandler(int tag, UserMessageHandler callback) {
 bool Manager::checkSends() {
     for (auto i = m_mpiObjectMessages.begin(); i != m_mpiObjectMessages.end();) {
         MPI_Request req = i->first;
-        int flag = true;
+        int flag;
         MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
         if (flag) {
             i->second.reset();
@@ -176,17 +176,16 @@ void Manager::registerRemoteObject()
     registerRemoteObject(status.MPI_SOURCE, info.type, info.id);
 }
 
-void Manager::barrier() {
-#ifdef __GNUG__
-    __sync_synchronize();
-#endif
-    asm volatile("" ::: "memory");
-    MPI_Barrier(m_comm);
-#ifdef __GNUG__
-    __sync_synchronize();
-#endif
-    asm volatile("" ::: "memory");
-    checkMessages();
+void Manager::sync() {
+    while (queueSize() > 0) { checkMessages(); } //block until this rank's queue is processed
+    MPI_Request req;
+    int flag;
+    MPI_Ibarrier(m_comm, &req);
+    do
+    {
+        MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
+        checkMessages();
+    } while (!flag); //wait until all other ranks queues have been processed
 }
 
 void Manager::registerRemoteObject(int rank, TypeId type, ObjectId id) {
