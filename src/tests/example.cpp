@@ -93,7 +93,7 @@ int main(int argc, char** argv)
         manager->invokeFunction(0, &f1, 0); //handle lookup
         int ret2 = manager->invokeFunctionR<int>(0, &f2, manager->getFunctionHandle<decltype(&f2),&f2>());
         std::cout << "Rank 1 got " << ret2 << " as a return from f2()" << std::endl;
-        double ret3 = manager->invokeFunctionR<double>(0, &f3, 0, 5.3f); // 5.0f should convert to a double
+        double ret3 = manager->invokeFunctionR<double>(0, &f3, 0, 5.3f); // 5.3f should convert to a double
         std::cout << "Rank 1 got " << ret3 << " as a return from f3()" << std::endl;
         manager->invokeFunction(foo_w, &Foo::bar1, fooBar);
         std::string ret4 = manager->invokeFunctionR<std::string>(foo_w, &Foo::bar2, 0);
