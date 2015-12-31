@@ -122,7 +122,8 @@ int main(int argc, char** argv)
         //double ret3 = manager->invokeFunctionR<double>(0, &f3, 0, 5.3f); // 5.3f should convert to a double
         //std::cout << "Rank 1 got " << ret3 << " as a return from f3()" << std::endl;
         //manager->invokeFunction(0, &f4, 0, "C string");
-        manager->invokeFunction(0, &f5, 0, mpirpc::PointerParameter<int>(&test2), 6, 7, 8);
+	int *test3 = new int[4];
+        manager->invokeFunction(0, &f5, 0, mpirpc::PointerWrapper<int[]>(new int[4]), 6, 7, 8);
         //manager->invokeFunction(foo_w, &Foo::bar1, fooBar1);
         //std::string ret4 = manager->invokeFunctionR<std::string>(foo_w, &Foo::bar2, 0);
         //std::cout << "Rank 1 got \"" << ret4 << "\" as a return from Foo::bar2()" << std::endl;

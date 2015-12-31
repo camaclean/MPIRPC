@@ -47,11 +47,11 @@ struct arg_cleanup
     static void apply(typename std::decay<T>::type&& t) { std::cout << "generic rvalue " << typeid(t).name() << std::endl; }
 };
 
-template<typename T>
+/*template<typename T>
 struct arg_cleanup<PointerParameter<T>&>
 {
     static void apply(PointerParameter<T>& t) { std::cout << "cleaned up pointer" << std::endl; delete t.pointer; }
-};
+};*/
 
 template<typename T>
 struct arg_cleanup<PointerParameter<T>&&>
@@ -61,9 +61,9 @@ struct arg_cleanup<PointerParameter<T>&&>
 };
 
 template<typename T, std::size_t N>
-struct arg_cleanup<CArrayWrapper<T,N>&>
+struct arg_cleanup<PointerWrapper<T,N>&>
 {
-    static void apply(CArrayWrapper<T,N>& t) { std::cout << "cleaned up C Array" << std::endl; t.del(); }
+    static void apply(PointerWrapper<T,N>& t) { std::cout << "cleaned up C Array" << std::endl; t.del(); }
 };
 
 /*template<typename T, std::size_t N>

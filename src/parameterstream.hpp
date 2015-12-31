@@ -28,6 +28,7 @@
 #include<string>
 #include<sstream>
 #include<iostream>
+#include<type_traits>
 #include<map>
 
 namespace mpirpc {
@@ -111,8 +112,8 @@ inline R unmarshal(ParameterStream& s) {
 
 template<typename T, typename R = typename std::decay<T>::type, typename B = typename std::remove_pointer<R>::type,
          typename P = B*, typename std::enable_if<std::is_same<R,P>::value && !std::is_same<R,char*>::value>::type* = nullptr>
-inline CArrayWrapper<B> unmarshal(ParameterStream& s) {
-    CArrayWrapper<B> ret;
+inline PointerWrapper<B> unmarshal(ParameterStream& s) {
+    PointerWrapper<B> ret;
     s >> ret;
     return ret;
 }
@@ -221,7 +222,7 @@ ParameterStream& operator>>(ParameterStream& in, T*& p)
 }
 
 template<typename T, std::size_t N>
-ParameterStream& operator<<(ParameterStream& out, const CArrayWrapper<T,N>& wrapper)
+ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N>& wrapper)
 {
     if (N == 0)
         out << wrapper.size();
@@ -231,7 +232,7 @@ ParameterStream& operator<<(ParameterStream& out, const CArrayWrapper<T,N>& wrap
 }
 
 template<typename T, std::size_t N>
-ParameterStream& operator>>(ParameterStream& in, CArrayWrapper<T,N>& wrapper)
+ParameterStream& operator>>(ParameterStream& in, PointerWrapper<T,N>& wrapper)
 {
     std::size_t size = N;
     if (size == 0) {
