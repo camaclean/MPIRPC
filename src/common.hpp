@@ -83,118 +83,12 @@ template<typename T> struct remove_all_const<T * const> {
 };
 
 template<typename T>
-struct PointerParameter
-{
-    PointerParameter(T* p = nullptr) { pointer = p; }
-    operator T*() { return pointer; }
-    operator T*&() { return pointer; }
-    operator T*&&() { return std::move(pointer); }
-    T* pointer;
-};
-
-template<typename T, std::size_t N = 0, bool PassOwnership = false, typename Deleter = std::default_delete<T>>
-class PointerWrapper
-{
-public:
-    PointerWrapper(T* data = nullptr) { m_data = data; }
-    std::size_t size() const { return N; }
-    void setData(T* data) { m_data = data; }
-    
-    template<bool PO = PassOwnership, typename std::enable_if<!PO>::type* = nullptr>
-    void del() { m_deleter(m_data); }
-    template<bool PO = PassOwnership, typename std::enable_if<PO>::type* = nullptr>
-    void del() {}
-    
-    T& operator[](std::size_t n) { return m_data[n]; }
-    T const& operator[](std::size_t n) const { return m_data[n]; }
-    operator T*() { return m_data; }
-    operator T*&() { return m_data; }
-    operator T*&&() { std::cout << "moved pointer" << std::endl; return std::move(m_data); }
-protected:
-    T* m_data;
-    std::size_t m_size;
-    Deleter m_deleter;
-};
-
-template<typename T, bool PassOwnership, typename Deleter>
-class PointerWrapper<T, 0, PassOwnership, Deleter>
-{
-public:
-    PointerWrapper(T* data = nullptr, std::size_t size = 1) { m_data = data; m_size = size; }
-    std::size_t size() const { return m_size; }
-    void setSize(std::size_t size) { m_size = size; }
-    void setData(T* data) { m_data = data; }
-    
-    template<bool PO = PassOwnership, typename std::enable_if<!PO>::type* = nullptr>
-    void del() { m_deleter(m_data); }
-    template<bool PO = PassOwnership, typename std::enable_if<PO>::type* = nullptr>
-    void del() {}
-    
-    T& operator[](std::size_t n) { return m_data[n]; }
-    T const& operator[](std::size_t n) const { return m_data[n]; }
-    operator T*() { return m_data; }
-    operator T*&() { return m_data; }
-    operator T*&&() { std::cout << "moved pointer" << std::endl; return std::move(m_data); }
-protected:
-    T* m_data;
-    std::size_t m_size;
-    Deleter m_deleter;
-};
-
-template<typename T, std::size_t N, bool PassOwnership, typename Deleter>
-class PointerWrapper<T[], N, PassOwnership, Deleter> 
-{
-public:
-    PointerWrapper(T *data = nullptr) { m_data = data;}
-    std::size_t size() const { return N; }
-    void setData(T* data) { m_data = data; }
-    
-    template<bool PO = PassOwnership, typename std::enable_if<!PO>::type* = nullptr>
-    void del() { m_deleter(m_data); }
-    template<bool PO = PassOwnership, typename std::enable_if<PO>::type* = nullptr>
-    void del() {}
-    
-    T& operator[](std::size_t n) { return m_data[n]; }
-    T const& operator[](std::size_t n) const { return m_data[n]; }
-    operator T*() { return m_data; }
-    operator T*&() { return m_data; }
-    operator T*&&() { std::cout << "moved pointer" << std::endl; return std::move(m_data); }
-protected:
-    T* m_data;
-    Deleter m_deleter;
-};
-
-template<typename T, bool PassOwnership, typename Deleter>
-class PointerWrapper<T[], 0, PassOwnership, Deleter> 
-{
-public:
-    PointerWrapper(T *data = nullptr, std::size_t size = 1) { m_data = data; m_size = size; }
-    std::size_t size() const { return m_size; }
-    void setSize(std::size_t size) { m_size = size; }
-    void setData(T* data) { m_data = data; }
-    
-    template<bool PO = PassOwnership, typename std::enable_if<!PO>::type* = nullptr>
-    void del() { m_deleter(m_data); }
-    template<bool PO = PassOwnership, typename std::enable_if<PO>::type* = nullptr>
-    void del() {}
-    
-    T& operator[](std::size_t n) { return m_data[n]; }
-    T const& operator[](std::size_t n) const { return m_data[n]; }
-    operator T*() { return m_data; }
-    operator T*&() { return m_data; }
-    operator T*&&() { std::cout << "moved pointer" << std::endl; return std::move(m_data); }
-protected:
-    T* m_data;
-    std::size_t m_size;
-    Deleter m_deleter;
-};
-
-/*template<typename T, typename Deleter = std::default_delete<T>>
 class AbstractPointerWrapper
 {
 public:
-    PointerWrapper(T *pointer = nullptr, Deleter& deleter = Deleter()) : m_pointer(pointer), m_deleter(deleter) {}
-    void setData(T* data) { m_pointer = data; }
+    AbstractPointerWrapper(T *pointer = nullptr) : m_pointer(pointer) {}
+    void setPointer(T* pointer) { m_pointer = pointer; }
+    virtual void free() = 0;
     T& operator[](std::size_t n) { return m_pointer[n]; }
     T const& operator[](std::size_t n) const { return m_pointer[n]; }
     operator T*() { return m_pointer; }
@@ -202,6 +96,136 @@ public:
     operator T*&&() { std::cout << "moved pointer" << std::endl; return std::move(m_pointer); }
 protected:
     T* m_pointer;
+};
+
+template<typename T, std::size_t N = 1, bool PassOwnership = false, typename Deleter = std::default_delete<T>>
+class PointerWrapper : public AbstractPointerWrapper<T>
+{
+    using AbstractPointerWrapper<T>::m_pointer;
+public:
+    PointerWrapper(T* data = nullptr) : AbstractPointerWrapper<T>(data) { }
+    std::size_t size() const { return N; }
+    virtual void free() override { m_deleter(m_pointer); }
+    
+protected:
+    Deleter m_deleter;
+};
+
+template<typename T, std::size_t N, typename Deleter>
+class PointerWrapper<T, N, true, Deleter> : public AbstractPointerWrapper<T>
+{
+public:
+    PointerWrapper(T* data = nullptr) : AbstractPointerWrapper<T>(data) { }
+    std::size_t size() const { return N; }
+    virtual void free() override {}
+};
+
+template<typename T, std::size_t N, typename Deleter>
+class PointerWrapper<T[], N, true, Deleter> : public AbstractPointerWrapper<T>
+{
+public:
+    PointerWrapper(T* data = nullptr) : AbstractPointerWrapper<T>(data) { }
+    std::size_t size() const { return N; }
+    virtual void free() override {}
+};
+
+template<typename T, std::size_t N, typename Deleter>
+class PointerWrapper<T[], N, false, Deleter> : public AbstractPointerWrapper<T>
+{
+    using AbstractPointerWrapper<T>::m_pointer;
+public:
+    PointerWrapper(T* data = nullptr) : AbstractPointerWrapper<T>(data) { }
+    std::size_t size() const { return N; }
+    virtual void free() override { m_deleter(m_pointer); }
+protected:
+    Deleter m_deleter;
+};
+
+template<typename T, typename Deleter>
+class PointerWrapper<T, 0, false, Deleter> : public AbstractPointerWrapper<T>
+{
+    using AbstractPointerWrapper<T>::m_pointer;
+public:
+    PointerWrapper(T* data = nullptr, std::size_t size = 1) : AbstractPointerWrapper<T>(data), m_size(size) {}
+    std::size_t size() const { return m_size; }
+    void setSize(std::size_t size) { m_size = size; }
+    virtual void free() override { m_deleter(m_pointer); }
+protected:
+    std::size_t m_size;
+    Deleter m_deleter;
+};
+
+template<typename T, typename Deleter>
+class PointerWrapper<T, 0, true, Deleter> : public AbstractPointerWrapper<T>
+{
+public:
+    PointerWrapper(T* data = nullptr, std::size_t size = 1) : AbstractPointerWrapper<T>(data), m_size(size) {}
+    std::size_t size() const { return m_size; }
+    void setSize(std::size_t size) { m_size = size; }
+    virtual void free() override {}
+protected:
+    std::size_t m_size;
+};
+
+template<typename T, typename Deleter>
+class PointerWrapper<T[], 0, false, Deleter> : public AbstractPointerWrapper<T>
+{
+    using AbstractPointerWrapper<T>::m_pointer;
+public:
+    PointerWrapper(T* data = nullptr, std::size_t size = 1) : AbstractPointerWrapper<T>(data), m_size(size) {}
+    std::size_t size() const { return m_size; }
+    void setSize(std::size_t size) { m_size = size; }
+    virtual void free() override { m_deleter(m_pointer); }
+protected:
+    std::size_t m_size;
+    Deleter m_deleter;
+};
+
+template<typename T, typename Deleter>
+class PointerWrapper<T[], 0, true, Deleter> : public AbstractPointerWrapper<T>
+{
+public:
+    PointerWrapper(T* data = nullptr, std::size_t size = 1) : AbstractPointerWrapper<T>(data), m_size(size) {}
+    std::size_t size() const { return m_size; }
+    void setSize(std::size_t size) { m_size = size; }
+    virtual void free() override {}
+protected:
+    std::size_t m_size;
+};
+
+template<typename T, bool PassOwnership, typename Deleter, typename std::enable_if<!std::is_array<T>::value>::type* = nullptr>
+using BasicPointerWrapper = PointerWrapper<T,1,PassOwnership, Deleter>;
+
+template<typename T, bool PassOwnership, typename Deleter, typename std::enable_if<!std::is_array<T>::value>::type* = nullptr>
+using DynamicPointerWrapper = PointerWrapper<T,0,PassOwnership, Deleter>;
+
+template<typename T>
+constexpr std::size_t array_size(const T&) noexcept
+{
+    return sizeof(T)/sizeof(typename std::remove_all_extents<T>::type);
+}
+
+/*template<typename T, bool PassOwnership, typename Deleter>
+class PointerWrapper<T[], 0, PassOwnership, Deleter> : public AbstractPointerWrapper<T>
+{
+public:
+    PointerWrapper(T *pointer = nullptr, std::size_t size = 1) : AbstractPointerWrapper(pointer), m_size(size) { }
+    std::size_t size() const { return m_size; }
+    void setSize(std::size_t size) { m_size = size; }
+    
+    template<bool PO = PassOwnership, typename std::enable_if<!PO>::type* = nullptr>
+    void del() { m_deleter(m_pointer); }
+    template<bool PO = PassOwnership, typename std::enable_if<PO>::type* = nullptr>
+    void del() {}
+protected:
+    std::size_t m_size;
+    Deleter m_deleter;
+};
+
+template<typename T, bool PassOwnership, typename Deleter = std::default_delete<T>>
+class BasicPointerWrapper : public PointerWrapper<T,1,PassOwnership,Deleter> 
+{
+    BasicPointerWrapper(T* pointer = nullptr) : PointerWrapper<T,1,PassOwnership,Deleter>(pointer) {}
 };*/
 
 /*template<typename T, std::size_t N>
@@ -232,19 +256,19 @@ struct forward_parameter_type_helper
     using type = typename std::conditional<std::is_same<base_type, FArg>::value,base_type,typename std::conditional<std::is_same<base_type&,FArg>::value,base_type&,base_type&&>::type>::type;
 };
 
-template<typename FArg, typename T>
-struct forward_parameter_type_helper<FArg, PointerParameter<T>>
+template<typename FArg, typename T, std::size_t N, bool PassOwnership, typename Deleter>
+struct forward_parameter_type_helper<FArg, PointerWrapper<T,N,PassOwnership,Deleter>>
 {
-    using base_type = PointerParameter<T>;
+    using base_type = PointerWrapper<T,N,PassOwnership,Deleter>;
     using type = typename std::conditional<std::is_same<base_type, FArg>::value,base_type,typename std::conditional<std::is_same<base_type&,FArg>::value,base_type&,base_type&&>::type>::type;
 };
 
-template<typename FArg, typename T>
+/*template<typename FArg, typename T>
 struct forward_parameter_type_helper<FArg, PointerWrapper<T>>
 {
     using base_type = PointerWrapper<T>;
     using type = typename std::conditional<std::is_same<base_type, FArg>::value,base_type,typename std::conditional<std::is_same<base_type&,FArg>::value,base_type&,base_type&&>::type>::type;
-};
+};*/
 
 template<typename FT, typename T>
 inline constexpr auto forward_parameter_type(typename std::remove_reference<T>::type& t) noexcept
@@ -275,22 +299,22 @@ struct forward_parameter_cleanup_helper
     using type = arg_type&;
 };
 
-template<typename FArg, typename T>
+/*template<typename FArg, typename T>
 struct forward_parameter_cleanup_helper<FArg, PointerParameter<T>>
 {
     //using farg_type = typename std::remove_reference<FArg>::type;
     //using arg_type = PointerParameter<T>;
     //using type = typename std::conditional<std::is_same<farg_type, FArg>::value,arg_type&,typename std::conditional<std::is_same<farg_type&,FArg>::value,arg_type&,arg_type&>::type>::type;
     using type = PointerParameter<T>&;
-};
+};*/
 
-template<typename FArg, typename T>
-struct forward_parameter_cleanup_helper<FArg, PointerWrapper<T>>
+template<typename FArg, typename T, std::size_t N, bool PassOwnership, typename Deleter>
+struct forward_parameter_cleanup_helper<FArg, PointerWrapper<T,N,PassOwnership,Deleter>>
 {
     //using farg_type = typename std::remove_reference<FArg>::type;
     //using arg_type = CArrayWrapper<T>;
     //using type = typename std::conditional<std::is_same<farg_type, FArg>::value,arg_type&,typename std::conditional<std::is_same<farg_type&,FArg>::value,arg_type&,arg_type&>::type>::type;
-    using type = PointerWrapper<T>&;
+    using type = PointerWrapper<T,N,PassOwnership,Deleter>&;
 };
 
 template<typename FT, typename T>
@@ -304,7 +328,7 @@ template<typename FT, typename T>
 inline constexpr auto forward_parameter_cleanup(typename std::remove_reference<T>::type&& t) noexcept
     -> typename forward_parameter_cleanup_helper<FT, T>::type&&
 {
-    return static_cast<typename forward_parameter_type_helper<FT, T>::type>(t);
+    return static_cast<typename forward_parameter_cleanup_helper<FT, T>::type>(t);
 }
 
 template<typename FT, typename T, typename R = typename remove_all_const<FT>::type>

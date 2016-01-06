@@ -332,6 +332,20 @@ ObjectWrapperBase* Manager::getObjectWrapper(int rank, TypeId tid, ObjectId oid)
     throw UnregisteredObjectException();
 }
 
+void Manager::registerPointer(void* ptr, std::size_t sz, bool gc)
+{
+    _pointer_registry[ptr] = std::make_pair(sz,gc);
+}
+
+void Manager::setPointerGc(void* ptr, bool gc)
+{
+    _pointer_registry[ptr].second = gc;
+}
+
 FunctionHandle Manager::FunctionBase::_idCounter = 0;
 
+std::unordered_map<void*, std::pair<std::size_t, bool>> Manager::_pointer_registry = {};
+
 }
+
+// kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;

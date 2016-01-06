@@ -39,9 +39,48 @@ struct Foo
     double val;
 };
 
+template<typename... Dims, typename T>
+void testvla(T *&t, Dims... dims)
+{
+  t[1];
+}
+
+auto testvla2(size_t x, size_t y, int* vla)
+{
+    return reinterpret_cast<int(*)[x]>(vla);
+}
+
+void testvla3(std::size_t x, std::size_t y, int* pvla)
+{
+    int (*vla)[x] = reinterpret_cast<int(*)[x]>(pvla);
+    for(int i = 0; i < y; ++i)
+    {
+        for(int j = 0; j < x; ++j)
+        {
+            std::cout << vla[i][j] << std::endl;
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
     MPI_Init(&argc, &argv);
+    
+    size_t x = 4, y=5;
+    int vla[y][x] = { {1,2,3,4},
+                      {5,6,7,8},
+                      {9,10,11,12},
+                      {13,14,15,16},
+                      {17,18,19,20}
+                    };
+    int *pvla = (int*) vla;
+    int (*vla2)[x] = reinterpret_cast<int(*)[x]>(pvla);
+    
+    testvla2(x,y,pvla);
+    
+    
+    //auto testvar = testvla(pvla, x,y);
+    testvla3(x,y,pvla);
 
     mpirpc::Manager* manager = new mpirpc::Manager();
 
@@ -86,7 +125,7 @@ int main(int argc, char** argv)
     //mpirpc::FunctionHandle fooBar2 = manager->registerFunction<decltype(&Foo::bar2),&Foo::bar2>();
     //mpirpc::FunctionHandle fooBar3 = manager->registerFunction<decltype(&Foo::bar3),&Foo::bar3>();
     //mpirpc::FunctionHandle fooBar4 = manager->registerFunction<decltype(&Foo::bar4<double,std::string>),&Foo::bar4<double,std::string>>();
-    mpirpc::FunctionHandle fooBar5 = manager->registerFunction<decltype(&Foo::bar5<double,std::string>),&Foo::bar5<double,std::string>>();
+    //mpirpc::FunctionHandle fooBar5 = manager->registerFunction<decltype(&Foo::bar5<double,std::string>),&Foo::bar5<double,std::string>>();
     //mpirpc::FunctionHandle fooBar5 = manager->registerFunction<void(Foo::*)(PointerParameter<std::map<double,std::string>>&),&Foo::bar5<double,std::string>>();
     //mpirpc::FunctionHandle syscall = manager->registerFunction<decltype(&getuid),&getuid>();
 
@@ -147,3 +186,5 @@ int main(int argc, char** argv)
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Finalize();
 }
+
+// kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;

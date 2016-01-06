@@ -188,7 +188,7 @@ ParameterStream& operator>>(ParameterStream& in, T (&a)[N])
     return in;
 }*/
 
-template<typename T>
+/*template<typename T>
 ParameterStream& operator<<(ParameterStream& out, const PointerParameter<T>& p)
 {
     out << (std::size_t) 1;
@@ -205,9 +205,9 @@ ParameterStream& operator>>(ParameterStream& in, PointerParameter<T>& p)
     in >> (*t);
     p.pointer = t;
     return in;
-}
+}*/
 
-template<typename T>
+/*template<typename T>
 ParameterStream& operator>>(ParameterStream& in, T*& p)
 {
     std::size_t num;
@@ -219,11 +219,12 @@ ParameterStream& operator>>(ParameterStream& in, T*& p)
     //T ret;
     in >> (*p);
     return in;
-}
+}*/
 
-template<typename T, std::size_t N>
-ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N>& wrapper)
+template<typename T, std::size_t N, bool PassOwnership, typename Deleter>
+ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N,PassOwnership,Deleter>& wrapper)
 {
+  std::cout << "streaming PointerWrapper" << std::endl;
     if (N == 0)
         out << wrapper.size();
     for (std::size_t i = 0; i < wrapper.size(); ++i)
@@ -231,15 +232,13 @@ ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N>& wra
     return out;
 }
 
-template<typename T, std::size_t N>
-ParameterStream& operator>>(ParameterStream& in, PointerWrapper<T,N>& wrapper)
+template<typename T>
+ParameterStream& operator>>(ParameterStream& in, AbstractPointerWrapper<T>& wrapper)
 {
-    std::size_t size = N;
-    if (size == 0) {
-        in >> size;
-        wrapper.setSize(size);
-    }
-    wrapper.setData(new T[size]());
+    std::cout << "setting AbstractPointerWrapper" << std::endl;
+    std::size_t size;
+    in >> size;
+    wrapper.setPointer(new T[size]());
     for (std::size_t i = 0; i < size; ++i)
         in >> wrapper[i];
     return in;

@@ -1016,8 +1016,17 @@ protected:
     unsigned long long m_count;
     bool m_shutdown;
     MPI_Datatype MpiObjectInfo;
+    
+public:
+    static void registerPointer(void* ptr, std::size_t sz, bool gc = true);
+    static void setPointerGc(void* ptr, bool gc);
+    
+protected:
+    static std::unordered_map<void*, std::pair<std::size_t, bool>> _pointer_registry;
 };
 
 }
 
 #endif // MPIRPCMANAGER_H
+
+// kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;
