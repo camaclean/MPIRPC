@@ -86,47 +86,62 @@ template<typename T>
 class AbstractPointerWrapper
 {
 public:
-    AbstractPointerWrapper(T *pointer = nullptr) : m_pointer(pointer) {}
+    AbstractPointerWrapper(T *pointer) : m_pointer(pointer) {}
     void setPointer(T* pointer) { m_pointer = pointer; }
     virtual void free() = 0;
     T& operator[](std::size_t n) { return m_pointer[n]; }
     T const& operator[](std::size_t n) const { return m_pointer[n]; }
     operator T*() { return m_pointer; }
-    operator T*&() { return m_pointer; }
-    operator T*&&() { std::cout << "moved pointer" << std::endl; return std::move(m_pointer); }
+//     operator T*&() { return m_pointer; }
+//     operator T*&&() { std::cout << "moved pointer" << std::endl; return std::move(m_pointer); }
 protected:
     T* m_pointer;
 };
 
-template<typename T, std::size_t N = 1, bool PassOwnership = false, typename Deleter = std::default_delete<T>>
+template<typename T, std::size_t N = 0, bool PassOwnership = false, typename Allocator = std::allocator<T>>
 class PointerWrapper : public AbstractPointerWrapper<T>
 {
     using AbstractPointerWrapper<T>::m_pointer;
 public:
-    PointerWrapper(T* data = nullptr) : AbstractPointerWrapper<T>(data) { }
-    std::size_t size() const { return N; }
-    virtual void free() override { m_deleter(m_pointer); }
-    
+    PointerWrapper(T* data, std::size_t size) : AbstractPointerWrapper<T>(data), m_size{size} { }
+    std::size_t size() const { return size; }
+    virtual void free() override { /*m_deleter(m_pointer);*/ }
+
 protected:
-    Deleter m_deleter;
+    //Deleter m_deleter;
+    std::size_t m_size;
 };
 
-template<typename T, std::size_t N, typename Deleter>
-class PointerWrapper<T, N, true, Deleter> : public AbstractPointerWrapper<T>
+template<typename T, std::size_t N, typename Allocator>
+class PointerWrapper<T, N, true, Allocator> : public AbstractPointerWrapper<T>
 {
 public:
-    PointerWrapper(T* data = nullptr) : AbstractPointerWrapper<T>(data) { }
+    PointerWrapper(T* data) : AbstractPointerWrapper<T>(data) { }
     std::size_t size() const { return N; }
     virtual void free() override {}
 };
 
-template<typename T, std::size_t N, typename Deleter>
-class PointerWrapper<T[], N, true, Deleter> : public AbstractPointerWrapper<T>
+template<typename T, std::size_t N, typename Allocator>
+class PointerWrapper<T, N, false, Allocator> : public AbstractPointerWrapper<T>
 {
+    using AbstractPointerWrapper<T>::m_pointer;
 public:
-    PointerWrapper(T* data = nullptr) : AbstractPointerWrapper<T>(data) { }
+    using type = T;
+    static constexpr std::size_t count = N;
+    static constexpr bool pass_ownership = false;
+    using allocator_t = Allocator;
+
+    PointerWrapper(T* data) : AbstractPointerWrapper<T>(data) { }
     std::size_t size() const { return N; }
-    virtual void free() override {}
+
+    //template<bool B = PassOwnership, tstd::enable_if<!B>::type* = nullptr>
+    virtual void free() override {
+        for (std::size_t i = 0; i < N; ++i)
+            m_allocator.destroy(&m_pointer[i]);
+        m_allocator.deallocate(m_pointer,N);
+    }
+protected:
+    Allocator m_allocator;
 };
 
 template<typename T, std::size_t N, typename Deleter>
@@ -134,32 +149,43 @@ class PointerWrapper<T[], N, false, Deleter> : public AbstractPointerWrapper<T>
 {
     using AbstractPointerWrapper<T>::m_pointer;
 public:
-    PointerWrapper(T* data = nullptr) : AbstractPointerWrapper<T>(data) { }
+    PointerWrapper(T* data) : AbstractPointerWrapper<T>(data) { }
     std::size_t size() const { return N; }
     virtual void free() override { m_deleter(m_pointer); }
 protected:
     Deleter m_deleter;
 };
 
-template<typename T, typename Deleter>
-class PointerWrapper<T, 0, false, Deleter> : public AbstractPointerWrapper<T>
+template<typename T, typename Allocator>
+class PointerWrapper<T, 0, false, Allocator> : public AbstractPointerWrapper<T>
 {
     using AbstractPointerWrapper<T>::m_pointer;
 public:
-    PointerWrapper(T* data = nullptr, std::size_t size = 1) : AbstractPointerWrapper<T>(data), m_size(size) {}
+    using type = T;
+    static constexpr std::size_t count = 0;
+    static constexpr bool pass_ownership = false;
+    using allocator_t = Allocator;
+
+    PointerWrapper(T* data, std::size_t size) : AbstractPointerWrapper<T>(data), m_size(size) {}
     std::size_t size() const { return m_size; }
     void setSize(std::size_t size) { m_size = size; }
-    virtual void free() override { m_deleter(m_pointer); }
+    virtual void free() override {
+        for (std::size_t i = 0; i < m_size; ++i)
+            m_allocator.destroy(&m_pointer[i]);
+        m_allocator.deallocate(m_pointer,m_size);
+    }
+//     operator T*&() { return m_pointer; }
+//     operator T*&&() { std::cout << "moved pointer" << std::endl; return std::move(m_pointer); }
 protected:
     std::size_t m_size;
-    Deleter m_deleter;
+    Allocator m_allocator;
 };
 
 template<typename T, typename Deleter>
 class PointerWrapper<T, 0, true, Deleter> : public AbstractPointerWrapper<T>
 {
 public:
-    PointerWrapper(T* data = nullptr, std::size_t size = 1) : AbstractPointerWrapper<T>(data), m_size(size) {}
+    PointerWrapper(T* data, std::size_t size) : AbstractPointerWrapper<T>(data), m_size(size) {}
     std::size_t size() const { return m_size; }
     void setSize(std::size_t size) { m_size = size; }
     virtual void free() override {}
@@ -172,7 +198,7 @@ class PointerWrapper<T[], 0, false, Deleter> : public AbstractPointerWrapper<T>
 {
     using AbstractPointerWrapper<T>::m_pointer;
 public:
-    PointerWrapper(T* data = nullptr, std::size_t size = 1) : AbstractPointerWrapper<T>(data), m_size(size) {}
+    PointerWrapper(T* data, std::size_t size) : AbstractPointerWrapper<T>(data), m_size(size) {}
     std::size_t size() const { return m_size; }
     void setSize(std::size_t size) { m_size = size; }
     virtual void free() override { m_deleter(m_pointer); }
@@ -185,7 +211,7 @@ template<typename T, typename Deleter>
 class PointerWrapper<T[], 0, true, Deleter> : public AbstractPointerWrapper<T>
 {
 public:
-    PointerWrapper(T* data = nullptr, std::size_t size = 1) : AbstractPointerWrapper<T>(data), m_size(size) {}
+    PointerWrapper(T* data, std::size_t size) : AbstractPointerWrapper<T>(data), m_size(size) {}
     std::size_t size() const { return m_size; }
     void setSize(std::size_t size) { m_size = size; }
     virtual void free() override {}
@@ -197,7 +223,7 @@ template<typename T, bool PassOwnership, typename Deleter, typename std::enable_
 using BasicPointerWrapper = PointerWrapper<T,1,PassOwnership, Deleter>;
 
 template<typename T, bool PassOwnership, typename Deleter, typename std::enable_if<!std::is_array<T>::value>::type* = nullptr>
-using DynamicPointerWrapper = PointerWrapper<T,0,PassOwnership, Deleter>;
+using DynamicPointerWrapper = PointerWrapper<T[],0,PassOwnership, Deleter>;
 
 template<typename T>
 constexpr std::size_t array_size(const T&) noexcept
@@ -212,7 +238,7 @@ public:
     PointerWrapper(T *pointer = nullptr, std::size_t size = 1) : AbstractPointerWrapper(pointer), m_size(size) { }
     std::size_t size() const { return m_size; }
     void setSize(std::size_t size) { m_size = size; }
-    
+
     template<bool PO = PassOwnership, typename std::enable_if<!PO>::type* = nullptr>
     void del() { m_deleter(m_pointer); }
     template<bool PO = PassOwnership, typename std::enable_if<PO>::type* = nullptr>
@@ -223,7 +249,7 @@ protected:
 };
 
 template<typename T, bool PassOwnership, typename Deleter = std::default_delete<T>>
-class BasicPointerWrapper : public PointerWrapper<T,1,PassOwnership,Deleter> 
+class BasicPointerWrapper : public PointerWrapper<T,1,PassOwnership,Deleter>
 {
     BasicPointerWrapper(T* pointer = nullptr) : PointerWrapper<T,1,PassOwnership,Deleter>(pointer) {}
 };*/
@@ -329,18 +355,6 @@ inline constexpr auto forward_parameter_cleanup(typename std::remove_reference<T
     -> typename forward_parameter_cleanup_helper<FT, T>::type&&
 {
     return static_cast<typename forward_parameter_cleanup_helper<FT, T>::type>(t);
-}
-
-template<typename FT, typename T, typename R = typename remove_all_const<FT>::type>
-inline constexpr R&& forward_parameter_type_local(typename std::remove_reference<T>::type& t) noexcept
-{
-    return static_cast<R&&>(t);
-}
-
-template<typename FT, typename T, typename R = typename remove_all_const<FT>::type>
-inline constexpr R&& forward_parameter_type_local(typename std::remove_reference<T>::type&& t) noexcept
-{
-    return static_cast<R&&>(t);
 }
 
 }

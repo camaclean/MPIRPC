@@ -21,12 +21,13 @@
 #include "common.hpp"
 #include <mpi.h>
 
-#define BUFFER_SIZE 10*1024*1024
+//#define BUFFER_SIZE 10*1024*1024
 
 namespace mpirpc
 {
 
-Manager::Manager(MPI_Comm comm) : m_comm(comm), m_nextTypeId(0), m_count(0), m_shutdown(false)
+
+Manager::Manager(MPI_Comm comm) : m_comm(comm), m_nextTypeId(0), m_nextDeleterId(0), m_count(0), m_shutdown(false)
 {
     MPI_Comm_rank(m_comm, &m_rank);
     MPI_Comm_size(comm, &m_numProcs);
@@ -43,6 +44,7 @@ Manager::Manager(MPI_Comm comm) : m_comm(comm), m_nextTypeId(0), m_count(0), m_s
     MPI_Buffer_attach(buffer, BUFFER_SIZE);
     MPI_Barrier(m_comm);
 }
+
 
 Manager::~Manager()
 {
@@ -344,7 +346,7 @@ void Manager::setPointerGc(void* ptr, bool gc)
 
 FunctionHandle Manager::FunctionBase::_idCounter = 0;
 
-std::unordered_map<void*, std::pair<std::size_t, bool>> Manager::_pointer_registry = {};
+std::unordered_map<void*, std::pair<std::size_t, bool>> Manager::_pointer_registry;
 
 }
 

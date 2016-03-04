@@ -30,7 +30,12 @@ namespace mpirpc {
  *
  * Used to reference objects on remote ranks
  */
+
+/*template<typename MessageInterface, typename CustomAllocators, typename CustomDeleters>
+class Manager;*/
+
 class ObjectWrapperBase {
+    //template<typename MessageInterface, typename CustomAllocators, typename CustomDeleters>
     friend class Manager;
 public:
     ObjectWrapperBase(void* object = nullptr) : m_object(object), m_type(0) {
@@ -60,6 +65,7 @@ protected:
 template<typename T>
 class ObjectWrapper : public ObjectWrapperBase
 {
+    //template<typename MessageInterface, typename CustomAllocators, typename CustomDeleters>
     friend class Manager;
 public:
     ObjectWrapper(T* object = nullptr) :  ObjectWrapperBase(object) {}

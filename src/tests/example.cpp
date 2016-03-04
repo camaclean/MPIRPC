@@ -15,7 +15,7 @@ double f3(double p) { std::cout << "Running function f3(double)" << std::endl; r
 
 void f4(const char* s) { std::cout << "f4(const char*): " << s << std::endl; }
 
-void f5(int* p, int t1, int& t2, int&& t3) { std::cout << "basic pointer type: " << *p << " , int: " << t1 << " int&: " << t2 << " int&&: " << t3 << std::endl; }
+void f5(int p[], int t1, int& t2, int&& t3) { std::cout << "basic pointer type: " << p[0] << " " << p[1] << " " << p[2] << " " << p[3] << " , int: " << t1 << " int&: " << t2 << " int&&: " << t3 << std::endl; }
 
 struct Foo
 {
@@ -39,48 +39,9 @@ struct Foo
     double val;
 };
 
-template<typename... Dims, typename T>
-void testvla(T *&t, Dims... dims)
-{
-  t[1];
-}
-
-auto testvla2(size_t x, size_t y, int* vla)
-{
-    return reinterpret_cast<int(*)[x]>(vla);
-}
-
-void testvla3(std::size_t x, std::size_t y, int* pvla)
-{
-    int (*vla)[x] = reinterpret_cast<int(*)[x]>(pvla);
-    for(int i = 0; i < y; ++i)
-    {
-        for(int j = 0; j < x; ++j)
-        {
-            std::cout << vla[i][j] << std::endl;
-        }
-    }
-}
-
 int main(int argc, char** argv)
 {
     MPI_Init(&argc, &argv);
-    
-    size_t x = 4, y=5;
-    int vla[y][x] = { {1,2,3,4},
-                      {5,6,7,8},
-                      {9,10,11,12},
-                      {13,14,15,16},
-                      {17,18,19,20}
-                    };
-    int *pvla = (int*) vla;
-    int (*vla2)[x] = reinterpret_cast<int(*)[x]>(pvla);
-    
-    testvla2(x,y,pvla);
-    
-    
-    //auto testvar = testvla(pvla, x,y);
-    testvla3(x,y,pvla);
 
     mpirpc::Manager* manager = new mpirpc::Manager();
 
@@ -96,9 +57,9 @@ int main(int argc, char** argv)
         std::cout << "Running simple lambda" << std::endl;
     });
 
-    mpirpc::FunctionHandle reply = manager->registerLambda([](int r, const std::string& s) {
+    /*mpirpc::FunctionHandle reply = manager->registerLambda([](int r, const std::string& s) {
         std::cout << "Rank " << r << " replied with a message: " << s << std::endl;
-    });
+    });*/
 
     mpirpc::FunctionHandle set_test = manager->registerLambda([&]() {
         std::cout << "Setting test to true" << std::endl;
@@ -106,10 +67,10 @@ int main(int argc, char** argv)
         return 2.0f;
     });
 
-    mpirpc::FunctionHandle set_test2 = manager->registerLambda([&](int p) {
+    /*mpirpc::FunctionHandle set_test2 = manager->registerLambda([&](int p) {
         std::cout << "Setting test2 to " << p << std::endl; test2 = p;
         manager->invokeFunction(p, reply, manager->rank(), std::string("Hello there!"));
-    });
+    });*/
 
     mpirpc::FunctionHandle done = manager->registerLambda([&](int r) {
         --procsToGo;
@@ -120,7 +81,11 @@ int main(int argc, char** argv)
     //mpirpc::FunctionHandle hf2 = manager->registerFunction<decltype(&f2),&f2>();
     //mpirpc::FunctionHandle hf3 = manager->registerFunction<decltype(&f3),&f3>();
     //mpirpc::FunctionHandle hf4 = manager->registerFunction<decltype(&f4),&f4>();
-    mpirpc::FunctionHandle hf5 = manager->registerFunction<decltype(&f5),&f5>();
+    //mpirpc::FunctionHandle hf5 = manager->registerFunction<decltype(&f5),&f5>();
+    //std::vector<char> buffer;
+    //mpirpc::ParameterStream s(&buffer);
+    //mpirpc::unmarshal<mpirpc::PointerWrapper<int,0UL,false,std::allocator<int>>>(s);
+    mpirpc::FunctionHandle hf5 = manager->registerFunction<void(*)(mpirpc::PointerWrapper<int,4>,int,int&,int&&),&f5>();
     //mpirpc::FunctionHandle fooBar1 = manager->registerFunction<decltype(&Foo::bar1),&Foo::bar1>();
     //mpirpc::FunctionHandle fooBar2 = manager->registerFunction<decltype(&Foo::bar2),&Foo::bar2>();
     //mpirpc::FunctionHandle fooBar3 = manager->registerFunction<decltype(&Foo::bar3),&Foo::bar3>();
@@ -153,7 +118,7 @@ int main(int argc, char** argv)
         //manager->invokeFunction(0, simple_lambda);
         //float ret1 = manager->invokeFunctionR<float>(0, set_test);
         //std::cout << "Rank 1 got " << ret1 << " as a return from set_test lambda" << std::endl;
-        manager->invokeFunction(0, set_test2, 1);
+        //manager->invokeFunction(0, set_test2, 1);
         //manager->invokeFunction(0, &f1, hf1);
         //manager->invokeFunction(0, &f1, 0); //handle lookup
         //int ret2 = manager->invokeFunctionR<int>(0, &f2, manager->getFunctionHandle<decltype(&f2),&f2>());
@@ -162,7 +127,11 @@ int main(int argc, char** argv)
         //std::cout << "Rank 1 got " << ret3 << " as a return from f3()" << std::endl;
         //manager->invokeFunction(0, &f4, 0, "C string");
 	int *test3 = new int[4];
-        manager->invokeFunction(0, &f5, 0, mpirpc::PointerWrapper<int[]>(new int[4]), 6, 7, 8);
+        test3[0] = 1;
+        test3[1] = 2;
+        test3[2] = 3;
+        test3[3] = 4;
+        manager->invokeFunction(0, &f5, hf5, mpirpc::PointerWrapper<int,4>(test3), 6, 7, 8);
         //manager->invokeFunction(foo_w, &Foo::bar1, fooBar1);
         //std::string ret4 = manager->invokeFunctionR<std::string>(foo_w, &Foo::bar2, 0);
         //std::cout << "Rank 1 got \"" << ret4 << "\" as a return from Foo::bar2()" << std::endl;

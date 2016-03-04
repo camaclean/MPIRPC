@@ -5,7 +5,9 @@ set(mpirpc_VERSION_MINOR 1)
 set(mpirpc_VERSION_PATCH 0)
 option(USE_LTO "Build with Link Time Optimizations" OFF)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++14 -O3 -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -O3 -march=native")
+
+#set(CMAKE_CXX_COMPILER "clang++")
 
 include(FindMPI REQUIRED)
 
@@ -63,5 +65,5 @@ set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "x86_64")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Colin MacLean <cmaclean@illinois.edu>")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "mpich (>= 3.0.0), libgcc1 (>= 1:4.7), libstdc++6 (>= 4.7)")
 set(CPACK_RPM_PACKAGE_ARCHITECTURE "x86_64")
-set(CPACK_RPM_PACKAGE_REQUIRES "mpich >= 3.0.0, libgcc1 >= 4.7, libstdc++6 >= 4.7") 
+set(CPACK_RPM_PACKAGE_REQUIRES "mpich >= 3.0.0, libgcc1 >= 4.7, libstdc++6 >= 4.7")
 include(CPack)

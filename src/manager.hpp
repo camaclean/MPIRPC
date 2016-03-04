@@ -62,9 +62,43 @@
 #define MPIRPC_TAG_INVOKE_MEMBER 4
 #define MPIRPC_TAG_RETURN 5
 
+#define BUFFER_SIZE 10*1024*1024
+
 #define CALL_MEMBER_FN(object,ptr) ((object).*(ptr))
 
 namespace mpirpc {
+
+template<typename T>
+struct StorageType
+{
+    using type = T;
+};
+
+template<typename T, std::size_t N, bool PassOwnership, typename Allocator>
+struct StorageType<PointerWrapper<T,N,PassOwnership,Allocator>>
+{
+    using type = typename std::conditional<std::is_array<T>::value,T,T*>::type;
+};
+
+template<typename F>
+struct StorageFunctionParts;
+
+template<typename R, class Class, typename... Args>
+struct StorageFunctionParts<R(Class::*)(Args...)>
+{
+    using return_type = R;
+    using class_type = Class;
+    using function_type = R(Class::*)(Args...);
+    using storage_function_type = R(Class::*)(typename StorageType<Args>::type...);
+};
+
+template<typename R, typename... Args>
+struct StorageFunctionParts<R(*)(Args...)>
+{
+    using return_type = R;
+    using function_type = R(*)(Args...);
+    using storage_function_type = R(*)(typename StorageType<Args>::type...);
+};
 
 struct UnregisteredFunctionException : std::exception
 {
@@ -98,7 +132,12 @@ struct UnregisteredObjectException : std::exception
  *
  * @todo Allow function and type IDs to be specified by the user.
  */
-class Manager
+
+/*template<typename MessageInterface, typename CustomAllocators, typename CustomDeleters>
+class Manager;*/
+
+//template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+class Manager //<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>
 {
     struct ObjectInfo {
         ObjectInfo() {}
@@ -179,7 +218,7 @@ class Manager
     public:
         using FunctionType = R(*)(Args...);
 
-        Function(R(*f)(Args...)) : FunctionBase(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
+        Function(R(*f)(Args...)) : FunctionBase(), func(f) {}
 
         virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
         {
@@ -210,9 +249,9 @@ class Manager
     class Function<void(*)(Args...)> : public FunctionBase
     {
     public:
-        using FunctionType = void(*)(Args...);
+        using FunctionType = typename StorageFunctionParts<void(*)(Args...)>::storage_function_type;//void(*)(Args...);
 
-        Function(FunctionType f) : FunctionBase(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
+        Function(FunctionType f) : FunctionBase(), func(f) {}
 
         virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
         {
@@ -345,8 +384,22 @@ public:
     template<typename T>
     TypeId getTypeId() const
     {
-        TypeId id = 0;
-        id = m_registeredTypeIds.at(std::type_index(typeid(typename std::decay<T>::type)));
+        TypeId id = m_registeredTypeIds.at(std::type_index(typeid(typename std::decay<T>::type)));
+        return id;
+    }
+
+    template<typename A, typename D>
+    TypeId registerMemoryManager()
+    {
+        TypeId id = ++m_nextDeleterId;
+        m_registeredMemoryManagers[std::type_index(typeid(std::pair<A,D>))] = id;
+        return id;
+    }
+
+    template<typename A, typename D>
+    TypeId getMemoryManagerId() const
+    {
+        TypeId id = m_registeredMemoryManagers.at(std::type_index(typeid(std::pair<A,D>)));
         return id;
     }
 
@@ -360,6 +413,12 @@ public:
         return registerFunction(static_cast<typename LambdaTraits<Lambda>::lambda_stdfunction>(l));
     }
 
+    /*template<typename F, typename StorageFunctionParts<F>::storage_function_type f>
+    FunctionHandle registerFunction()
+    {
+        return registerFunction<typename StorageFunctionParts<F>::storage_function_type, f>();
+    }*/
+
     /**
      * This compile-time version allows for fast (hash table) function ID lookups
      *
@@ -367,12 +426,12 @@ public:
      * @param f A function pointer to the function to register
      * @return The handle associated with function #f
      */
-    template<typename F, F f>
+    template<typename F, typename StorageFunctionParts<F>::storage_function_type f>
     FunctionHandle registerFunction()
     {
         FunctionBase *b = new Function<F>(f);
         m_registeredFunctions[b->id()] = b;
-        m_registeredFunctionTIs[std::type_index(typeid(FunctionId<F,f>))] = b->id();
+        m_registeredFunctionTIs[std::type_index(typeid(FunctionId<typename StorageFunctionParts<F>::storage_function_type,f>))] = b->id();
         return b->id();
     }
 
@@ -406,7 +465,7 @@ public:
         for (const auto &i : m_registeredFunctions)
         {
             Function<R(Class::*)(Args...)>* func = dynamic_cast<Function<R(Class::*)(Args...)>*>(i.second);
-            if (func) {
+            if (func && func == f) {
                 return func->id();
             }
         }
@@ -498,7 +557,7 @@ public:
         -> typename std::enable_if<!std::is_same<R, void>::value, R>::type
     {
         if (rank == m_rank) {
-            return f(forward_parameter_type_local<FArgs,Args>(args)...);
+            return f(forward_parameter_type<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0)
             {
@@ -527,7 +586,7 @@ public:
     void invokeFunction(int rank, R(*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
     {
         if (rank == m_rank) {
-            f(forward_parameter_type_local<FArgs,Args>(args)...);
+            f(forward_parameter_type<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0) {
                 for (const auto &i : m_registeredFunctions) {
@@ -590,7 +649,7 @@ public:
         if (a->rank() == m_rank)
         {
             ObjectWrapper<Class> *o = static_cast<ObjectWrapper<Class>*>(a);
-            return CALL_MEMBER_FN(*o->object(),f)(forward_parameter_type_local<FArgs,Args>(args)...);
+            return CALL_MEMBER_FN(*o->object(),f)(forward_parameter_type<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0)
             {
@@ -626,7 +685,7 @@ public:
         if (a->rank() == m_rank)
         {
             ObjectWrapper<Class> *o = static_cast<ObjectWrapper<Class>*>(a);
-            CALL_MEMBER_FN(*o->object(),f)(forward_parameter_type_local<FArgs,Args>(args)...);
+            CALL_MEMBER_FN(*o->object(),f)(forward_parameter_type<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0)
             {
@@ -895,7 +954,6 @@ protected:
     template<typename R>
     void functionReturn(int rank, R r)
     {
-        MPI_Status status;
         std::vector<char>* buffer = new std::vector<char>();
         ParameterStream stream(buffer);
         stream << r;
@@ -999,6 +1057,7 @@ protected:
     void registerRemoteObject(int rank, mpirpc::TypeId type, mpirpc::ObjectId id);
 
     std::unordered_map<std::type_index, TypeId> m_registeredTypeIds;
+    std::unordered_map<std::type_index, TypeId> m_registeredMemoryManagers;
 
     std::map<FunctionHandle, FunctionBase*> m_registeredFunctions;
     std::unordered_map<std::type_index, FunctionHandle> m_registeredFunctionTIs;
@@ -1011,19 +1070,360 @@ protected:
 
     MPI_Comm m_comm;
     TypeId m_nextTypeId;
+    TypeId m_nextDeleterId;
     int m_rank;
     int m_numProcs;
     unsigned long long m_count;
     bool m_shutdown;
     MPI_Datatype MpiObjectInfo;
-    
+
 public:
     static void registerPointer(void* ptr, std::size_t sz, bool gc = true);
     static void setPointerGc(void* ptr, bool gc);
-    
+
 protected:
     static std::unordered_map<void*, std::pair<std::size_t, bool>> _pointer_registry;
 };
+
+/*
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::~Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>()
+{
+    MPI_Type_free(&MpiObjectInfo);
+    for (auto i : m_mpiMessages)
+        delete i.second;
+    for (auto i : m_mpiObjectMessages)
+        i.second.reset();
+    for (auto i : m_registeredFunctions)
+        delete i.second;
+    for (auto i : m_registeredObjects)
+        delete i;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+int Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::rank() const
+{
+    return m_rank;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::notifyNewObject(TypeId type, ObjectId id)
+{
+    if (m_shutdown)
+        return;
+    std::shared_ptr<ObjectInfo> info(new ObjectInfo(type, id));
+    for(int i = 0; i < m_numProcs; ++i)
+    {
+        if (i != m_rank)
+        {
+            MPI_Request req;
+            MPI_Issend(info.get(), 1, MpiObjectInfo, i, MPIRPC_TAG_NEW, m_comm, &req);
+            m_mpiObjectMessages[req] = info;
+        }
+    }
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::sendRawMessage(int rank, const std::vector<char> *data, int tag)
+{
+    if (checkSends() && !m_shutdown) {
+        MPI_Request req;
+        MPI_Issend((void*) data->data(), data->size(), MPI_CHAR, rank, tag, m_comm, &req);
+        m_mpiMessages[req] = data;
+    }
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::sendRawMessageToAll(const std::vector<char>* data, int tag)
+{
+    for (int i = 0; i < m_numProcs; ++i) {
+#ifndef USE_MPI_LOCALLY
+        if (i != m_rank) {
+#endif
+            sendRawMessage(i, data, tag);
+#ifndef USE_MPI_LOCALLY
+        }
+#endif
+    }
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::registerUserMessageHandler(int tag, UserMessageHandler callback)
+{
+    m_userMessageHandlers[tag] = callback;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+bool Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::checkSends() {
+    for (auto i = m_mpiObjectMessages.begin(); i != m_mpiObjectMessages.end();) {
+        MPI_Request req = i->first;
+        int flag;
+        MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
+        if (flag) {
+            i->second.reset();
+            m_mpiObjectMessages.erase(i++);
+        } else {
+            ++i;
+        }
+    }
+    for (auto i = m_mpiMessages.begin(); i != m_mpiMessages.end();) {
+        MPI_Request req = i->first;
+        int flag;
+        MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
+        if (flag) {
+            delete i->second;
+            m_mpiMessages.erase(i++);
+        } else {
+            ++i;
+        }
+    }
+    if (m_shutdown) {
+        return false;
+    }
+    return true;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+bool Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::checkMessages() {
+    if (m_shutdown)
+        return false;
+    checkSends();
+    int flag = 1;
+    while (flag) {
+        MPI_Status status;
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, m_comm, &flag, &status);
+        if (flag) {
+            switch (status.MPI_TAG) {
+                case MPIRPC_TAG_SHUTDOWN:
+                    m_shutdown = true;
+                    handleShutdown();
+                    checkSends();
+                    return false;
+                case MPIRPC_TAG_NEW:
+                    registerRemoteObject();
+                    break;
+                case MPIRPC_TAG_INVOKE:
+                    receivedInvocationCommand(std::move(status));
+                    break;
+                case MPIRPC_TAG_INVOKE_MEMBER:
+                    receivedMemberInvocationCommand(std::move(status));
+                    break;
+                case MPIRPC_TAG_RETURN:
+                    return true;
+                default:
+                    UserMessageHandler func = m_userMessageHandlers.at(status.MPI_TAG);
+                    func(std::move(status));
+            }
+        }
+    }
+    return true;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::registerRemoteObject()
+{
+    ObjectInfo info;
+    MPI_Status status;
+    MPI_Recv(&info, 1, MpiObjectInfo, MPI_ANY_SOURCE, MPIRPC_TAG_NEW, m_comm, &status);
+    registerRemoteObject(status.MPI_SOURCE, info.type, info.id);
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::sync() {
+    while (queueSize() > 0) { checkMessages(); } //block until this rank's queue is processed
+    MPI_Request req;
+    int flag;
+    MPI_Ibarrier(m_comm, &req);
+    do
+    {
+        MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
+        checkMessages();
+    } while (!flag); //wait until all other ranks queues have been processed
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::registerRemoteObject(int rank, TypeId type, ObjectId id)
+{
+    ObjectWrapper<void> *a = new ObjectWrapper<void>();
+    a->m_id = id;
+    a->m_type = type;
+    a->m_rank = rank;
+    m_registeredObjects.push_back(a);
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::shutdownAll() {
+    int buf = 0;
+    for (int i = 0; i < m_numProcs; ++i)
+    {
+        if (i != m_rank) {
+            MPI_Bsend((void*) &buf, 1, MPI_INT, i, MPIRPC_TAG_SHUTDOWN, m_comm);
+        }
+    }
+    sync();
+    m_shutdown = true;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::shutdown()
+{
+    sync();
+    m_shutdown = true;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::handleShutdown()
+{
+    int buf;
+    MPI_Status status;
+    MPI_Recv(&buf, 1, MPI_INT, MPI_ANY_SOURCE, MPIRPC_TAG_SHUTDOWN, m_comm, &status);
+    sync();
+    m_shutdown = true;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::receivedInvocationCommand(MPI_Status&& status)
+{
+    m_count++;
+    int len;
+    MPI_Get_count(&status, MPI_CHAR, &len);
+    if (len != MPI_UNDEFINED) {
+        std::vector<char>* buffer = new std::vector<char>(len);
+        ParameterStream stream(buffer);
+        MPI_Status recvStatus;
+        MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
+        FunctionHandle functionHandle;
+        bool getReturn;
+        stream >> functionHandle >> getReturn;
+        FunctionBase *f = m_registeredFunctions[functionHandle];
+        f->execute(stream, recvStatus.MPI_SOURCE, this, getReturn);
+        delete buffer;
+    }
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::receivedMemberInvocationCommand(MPI_Status&& status) {
+    m_count++;
+    int len;
+    MPI_Get_count(&status, MPI_CHAR, &len);
+    if (len != MPI_UNDEFINED) {
+        std::vector<char>* buffer = new std::vector<char>(len);
+        ParameterStream stream(buffer);
+        MPI_Status recvStatus;
+        MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
+        FunctionHandle functionHandle;
+        ObjectId objectId;
+        TypeId typeId;
+        bool getReturn;
+        stream >> typeId >> objectId >> functionHandle >> getReturn;
+        FunctionBase *f = m_registeredFunctions[functionHandle];
+        f->execute(stream, recvStatus.MPI_SOURCE, this, getReturn, getObjectWrapper(m_rank, typeId, objectId)->object());
+        delete buffer;
+    }
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+MPI_Comm Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::comm() const
+{
+    return m_comm;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+ObjectWrapperBase* Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::getObjectOfType(mpirpc::TypeId typeId) const
+{
+    for (ObjectWrapperBase* i : m_registeredObjects)
+    {
+        if (i->type() == typeId)
+            return i;
+    }
+    throw std::out_of_range("Object not found");
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+std::unordered_set<ObjectWrapperBase*> Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::getObjectsOfType(TypeId typeId) const
+{
+    std::unordered_set<ObjectWrapperBase*> ret;
+    for (ObjectWrapperBase* i : m_registeredObjects)
+    {
+        if (i->type() == typeId)
+            ret.insert(i);
+    }
+    return ret;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+ObjectWrapperBase* Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::getObjectOfType(TypeId typeId, int rank) const
+{
+    for (ObjectWrapperBase* i : m_registeredObjects)
+    {
+        if (i->type() == typeId && i->rank() == rank)
+            return i;
+    }
+    throw std::out_of_range("Object not found");
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+std::unordered_set< ObjectWrapperBase* > Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::getObjectsOfType(TypeId typeId, int rank) const
+{
+    std::unordered_set<ObjectWrapperBase*> ret;
+    for (ObjectWrapperBase* i : m_registeredObjects)
+    {
+        if (i->type() == typeId && i->rank() == rank)
+            ret.insert(i);
+    }
+    return ret;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+unsigned long long Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::stats() const
+{
+    return m_count;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+int Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::numProcs() const
+{
+    return m_numProcs;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+size_t Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::queueSize() const
+{
+    return m_mpiObjectMessages.size() + m_mpiMessages.size();
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+ObjectWrapperBase* Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::getObjectWrapper(int rank, TypeId tid, ObjectId oid) const {
+    for (ObjectWrapperBase* i : m_registeredObjects)
+        if (i->type() == tid && i->id() == oid && i->rank() == rank)
+            return i;
+    throw UnregisteredObjectException();
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::registerPointer(void* ptr, std::size_t sz, bool gc)
+{
+    _pointer_registry[ptr] = std::make_pair(sz,gc);
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::setPointerGc(void* ptr, bool gc)
+{
+    _pointer_registry[ptr].second = gc;
+}
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+FunctionHandle Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::FunctionBase::_idCounter = 0;
+
+template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
+std::unordered_map<void*, std::pair<std::size_t, bool>> Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::_pointer_registry;
+
+class MpiMessageInterface {};
+
+template<typename CustomAllocators = std::tuple<>, typename CustomDeleters = std::tuple<>>
+using MpiManager = Manager<MpiMessageInterface, CustomAllocators, CustomDeleters>;
+
+*/
 
 }
 

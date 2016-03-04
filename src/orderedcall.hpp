@@ -60,10 +60,10 @@ struct arg_cleanup<PointerParameter<T>&&>
     static void apply(PointerParameter<T>&& t) { std::cout << "not cleaning up pointer rvalue" << std::endl; delete t.pointer; }
 };*/
 
-template<typename T>
-struct arg_cleanup<AbstractPointerWrapper<T>&>
+template<typename T, std::size_t N, bool PassOwnership, typename Allocator>
+struct arg_cleanup<PointerWrapper<T,N,PassOwnership,Allocator>&>
 {
-    static void apply(AbstractPointerWrapper<T>& t) { std::cout << "cleaned up C Array" << std::endl; t.free(); }
+    static void apply(PointerWrapper<T,N,PassOwnership,Allocator>& t) { std::cout << "cleaned up C Array" << std::endl; t.free(); }
 };
 
 /*template<typename T, std::size_t N>
@@ -82,7 +82,7 @@ struct arg_cleanup<char*>
 template<typename... Args>
 void do_post_exec(Args&&... args)
 {
-    Passer p{ (arg_cleanup<Args>::apply(std::forward<Args>(args)), 0)... };
+    [](...){}( (arg_cleanup<Args>::apply(std::forward<Args>(args)), 0)... );
 }
 
 /**
@@ -109,8 +109,8 @@ struct OrderedCall<R(*)(FArgs...)>
     OrderedCall(R(*function)(FArgs...), Args&&... args)
     {
         func = function;
-        bound = std::bind([&](){ return function(forward_parameter_type_local<typename std::remove_cv<FArgs>::type,Args>(args)...);});
-        post = std::bind([&](){ do_post_exec(forward_parameter_cleanup<typename std::remove_cv<FArgs>::type,Args>(args)...);}); // do_post_exec(forward_parameter_type<typename std::::remove_cv<FArgs>::type,Args>(args)...);}); //do_post_exec(static_cast<FArgs>(args)...);}); //forward_parameter_type_local<typename std::remove_cv<FArgs>::type,Args>(args)...);});
+        bound = std::bind([&](){ return function(forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);});
+        post = std::bind(do_post_exec<std::decay_t<Args>&...>, args...);
     }
 
     template<typename T = R, typename std::enable_if<!std::is_same<T,void>::value,T>::type* = nullptr>
@@ -142,7 +142,7 @@ struct OrderedCall<R(Class::*)(FArgs...)>
     template<typename... Args>
     OrderedCall(R(Class::*function)(FArgs...), Class *c, Args&&... args)
     {
-        bound = std::bind(function, c, forward_parameter_type_local<typename std::remove_cv<FArgs>::type,Args>(args)...);
+        bound = std::bind(function, c, forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);
         post = std::bind(do_post_exec<std::decay_t<Args>&...>, args...);
     }
 
@@ -174,7 +174,7 @@ struct OrderedCall<std::function<R(FArgs...)>>
     template<typename... Args>
     OrderedCall(std::function<R(FArgs...)> &function, Args&&... args)
     {
-        bound = std::bind(function, forward_parameter_type_local<typename std::remove_cv<FArgs>::type,Args>(args)...);
+        bound = std::bind(function, forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);
         post = std::bind(do_post_exec<std::decay_t<Args>&...>, args...);
     }
 

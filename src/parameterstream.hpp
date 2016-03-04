@@ -94,28 +94,87 @@ protected:
     std::size_t  m_pos;
 };
 
+namespace detail
+{
+template<std::size_t N>
+struct PointerWrapperSize
+{
+    static std::size_t get(ParameterStream& s)
+    {
+        std::cout << "static size" << std::endl;
+        return N;
+    }
+};
+
+template<>
+struct PointerWrapperSize<0>
+{
+    static std::size_t get(ParameterStream& s)
+    {
+        std::size_t size;
+        s >> size;
+        return size;
+    }
+};
+
+template<typename T, std::size_t N, bool PassOwnership, typename Allocator>
+struct PointerWrapperFactory
+{
+    static PointerWrapper<T,N,PassOwnership,Allocator> create(T* data, std::size_t size)
+    {
+        return PointerWrapper<T,N,PassOwnership,Allocator>(data);
+    }
+};
+
+template<typename T, bool PassOwnership, typename Allocator>
+struct PointerWrapperFactory<T,0,PassOwnership,Allocator>
+{
+    static PointerWrapper<T,0,PassOwnership,Allocator> create(T* data, std::size_t size)
+    {
+        return PointerWrapper<T,0,PassOwnership,Allocator>(data,size);
+    }
+};
+
+}
+
 template<typename T>
 inline void marshal(ParameterStream& s, T&& val) {
     s << val;
 }
 
-//template<typename T, typename R, typename std::enable_if<
-
 // if T, P*, if T*, P*
-template<typename T, typename R = typename std::decay<T>::type, typename B = typename std::remove_pointer<R>::type,
-         typename P = B*, typename std::enable_if<!std::is_same<R,P>::value || std::is_same<R,char*>::value>::type* = nullptr>
+template<typename T,
+         typename R = typename std::decay<T>::type,
+         typename B = typename std::remove_pointer<R>::type,
+         typename P = B*,
+         typename std::enable_if<!std::is_same<R,P>::value || std::is_same<R,char*>::value>::type* = nullptr,
+         typename std::enable_if<std::is_default_constructible<typename std::decay<T>::type>::value>::type* = nullptr>
 inline R unmarshal(ParameterStream& s) {
-    typename std::decay<T>::type ret;
+    R ret;
     s >> ret;
     return ret;
 }
 
-template<typename T, typename R = typename std::decay<T>::type, typename B = typename std::remove_pointer<R>::type,
-         typename P = B*, typename std::enable_if<std::is_same<R,P>::value && !std::is_same<R,char*>::value>::type* = nullptr>
-inline PointerWrapper<B> unmarshal(ParameterStream& s) {
-    PointerWrapper<B> ret;
-    s >> ret;
-    return ret;
+template<class PW>
+auto unmarshal(ParameterStream& s)
+     -> PointerWrapper<typename PW::type,
+                       PW::count,
+                       PW::pass_ownership,
+                       typename PW::allocator_t>
+{
+    using T = typename PW::type;
+    constexpr auto N = PW::count;
+    constexpr auto PassOwnership = PW::pass_ownership;
+    using Allocator = typename PW::allocator_t;
+    Allocator a;
+    std::size_t size = detail::PointerWrapperSize<PW::count>::get(s);
+    std::cout << "data count: " << PW::count << " " << size << std::endl;
+    T* data = a.allocate(size);
+    for (std::size_t i = 0; i < size; ++i)
+    {
+        data[i] = unmarshal<T>(s);
+    }
+    return detail::PointerWrapperFactory<T,N,PassOwnership,Allocator>::create(data,size);
 }
 
 template<typename T>
@@ -224,7 +283,7 @@ ParameterStream& operator>>(ParameterStream& in, T*& p)
 template<typename T, std::size_t N, bool PassOwnership, typename Deleter>
 ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N,PassOwnership,Deleter>& wrapper)
 {
-  std::cout << "streaming PointerWrapper" << std::endl;
+    std::cout << "streaming PointerWrapper" << std::endl;
     if (N == 0)
         out << wrapper.size();
     for (std::size_t i = 0; i < wrapper.size(); ++i)
@@ -238,7 +297,8 @@ ParameterStream& operator>>(ParameterStream& in, AbstractPointerWrapper<T>& wrap
     std::cout << "setting AbstractPointerWrapper" << std::endl;
     std::size_t size;
     in >> size;
-    wrapper.setPointer(new T[size]());
+    std::cout << "number of elements: " << size << std::endl;
+    wrapper.setPointer(new T[size]);
     for (std::size_t i = 0; i < size; ++i)
         in >> wrapper[i];
     return in;
