@@ -21,6 +21,8 @@
 #define ORDEREDCALL_HPP
 
 #include "common.hpp"
+#include "pointerwrapper.hpp"
+#include "forwarders.hpp"
 
 #include <tuple>
 #include <iostream>
@@ -109,7 +111,7 @@ struct OrderedCall<R(*)(FArgs...)>
     OrderedCall(R(*function)(FArgs...), Args&&... args)
     {
         func = function;
-        bound = std::bind([&](){ return function(forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);});
+        bound = std::bind([&](){ return function(detail::forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);});
         post = std::bind(do_post_exec<std::decay_t<Args>&...>, args...);
     }
 
@@ -142,7 +144,7 @@ struct OrderedCall<R(Class::*)(FArgs...)>
     template<typename... Args>
     OrderedCall(R(Class::*function)(FArgs...), Class *c, Args&&... args)
     {
-        bound = std::bind(function, c, forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);
+        bound = std::bind(function, c, detail::forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);
         post = std::bind(do_post_exec<std::decay_t<Args>&...>, args...);
     }
 
@@ -174,7 +176,7 @@ struct OrderedCall<std::function<R(FArgs...)>>
     template<typename... Args>
     OrderedCall(std::function<R(FArgs...)> &function, Args&&... args)
     {
-        bound = std::bind(function, forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);
+        bound = std::bind(function, detail::forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);
         post = std::bind(do_post_exec<std::decay_t<Args>&...>, args...);
     }
 

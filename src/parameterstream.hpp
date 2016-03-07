@@ -21,6 +21,7 @@
 #define PARAMETERSTREAM_H
 
 #include "common.hpp"
+#include "pointerwrapper.hpp"
 
 #include<vector>
 #include<cstddef>
@@ -97,7 +98,7 @@ protected:
 namespace detail
 {
 template<std::size_t N>
-struct PointerWrapperSize
+struct PointerWrapperStreamSize
 {
     static std::size_t get(ParameterStream& s)
     {
@@ -107,7 +108,7 @@ struct PointerWrapperSize
 };
 
 template<>
-struct PointerWrapperSize<0>
+struct PointerWrapperStreamSize<0>
 {
     static std::size_t get(ParameterStream& s)
     {
@@ -120,18 +121,18 @@ struct PointerWrapperSize<0>
 template<typename T, std::size_t N, bool PassOwnership, typename Allocator>
 struct PointerWrapperFactory
 {
-    static PointerWrapper<T,N,PassOwnership,Allocator> create(T* data, std::size_t size)
+    static ::mpirpc::PointerWrapper<T,N,PassOwnership,Allocator> create(T* data, std::size_t size)
     {
-        return PointerWrapper<T,N,PassOwnership,Allocator>(data);
+        return ::mpirpc::PointerWrapper<T,N,PassOwnership,Allocator>(data);
     }
 };
 
 template<typename T, bool PassOwnership, typename Allocator>
 struct PointerWrapperFactory<T,0,PassOwnership,Allocator>
 {
-    static PointerWrapper<T,0,PassOwnership,Allocator> create(T* data, std::size_t size)
+    static ::mpirpc::PointerWrapper<T,0,PassOwnership,Allocator> create(T* data, std::size_t size)
     {
-        return PointerWrapper<T,0,PassOwnership,Allocator>(data,size);
+        return ::mpirpc::PointerWrapper<T,0,PassOwnership,Allocator>(data,size);
     }
 };
 
@@ -167,8 +168,7 @@ auto unmarshal(ParameterStream& s)
     constexpr auto PassOwnership = PW::pass_ownership;
     using Allocator = typename PW::allocator_t;
     Allocator a;
-    std::size_t size = detail::PointerWrapperSize<PW::count>::get(s);
-    std::cout << "data count: " << PW::count << " " << size << std::endl;
+    std::size_t size = detail::PointerWrapperStreamSize<PW::count>::get(s);
     T* data = a.allocate(size);
     for (std::size_t i = 0; i < size; ++i)
     {
@@ -177,8 +177,8 @@ auto unmarshal(ParameterStream& s)
     return detail::PointerWrapperFactory<T,N,PassOwnership,Allocator>::create(data,size);
 }
 
-template<typename T>
-ParameterStream& operator<<(ParameterStream& out, const std::vector<T>& vector)
+template<typename T, typename... O>
+ParameterStream& operator<<(ParameterStream& out, const std::vector<T,O...>& vector)
 {
     out << vector.size();
     for (std::size_t i = 0; i < vector.size(); ++i)
@@ -188,8 +188,8 @@ ParameterStream& operator<<(ParameterStream& out, const std::vector<T>& vector)
     return out;
 }
 
-template <typename T>
-ParameterStream& operator>>(ParameterStream& in, std::vector<T>& vector)
+template <typename T, typename... O>
+ParameterStream& operator>>(ParameterStream& in, std::vector<T,O...>& vector)
 {
     std::size_t size;
     in >> size;
@@ -203,8 +203,8 @@ ParameterStream& operator>>(ParameterStream& in, std::vector<T>& vector)
     return in;
 }
 
-template<typename T, typename U>
-ParameterStream& operator<<(ParameterStream& out, const std::map<T, U>& map)
+template<typename T, typename U, typename... O>
+ParameterStream& operator<<(ParameterStream& out, const std::map<T, U, O...>& map)
 {
     out <<  map.size();
     for (auto& pair : map)
@@ -215,8 +215,8 @@ ParameterStream& operator<<(ParameterStream& out, const std::map<T, U>& map)
     return out;
 }
 
-template<typename T, typename U>
-ParameterStream& operator>>(ParameterStream& in, std::map<T, U>& map)
+template<typename T, typename U, typename... O>
+ParameterStream& operator>>(ParameterStream& in, std::map<T, U, O...>& map)
 {
     std::size_t size;
     in >> size;
@@ -231,7 +231,7 @@ ParameterStream& operator>>(ParameterStream& in, std::map<T, U>& map)
     return in;
 }
 
-/*template<typename T, std::size_t N>
+template<typename T, std::size_t N>
 ParameterStream& operator<<(ParameterStream& out, const T (&a)[N])
 {
     for (auto& v : a)
@@ -245,40 +245,7 @@ ParameterStream& operator>>(ParameterStream& in, T (&a)[N])
     for (std::size_t i = 0; i < N; ++i)
         in >> a[i];
     return in;
-}*/
-
-/*template<typename T>
-ParameterStream& operator<<(ParameterStream& out, const PointerParameter<T>& p)
-{
-    out << (std::size_t) 1;
-    out << *p.pointer;
-    return out;
 }
-
-template<typename T>
-ParameterStream& operator>>(ParameterStream& in, PointerParameter<T>& p)
-{
-    std::size_t num;
-    in >> num;
-    T* t = new T();
-    in >> (*t);
-    p.pointer = t;
-    return in;
-}*/
-
-/*template<typename T>
-ParameterStream& operator>>(ParameterStream& in, T*& p)
-{
-    std::size_t num;
-    in >> num;
-    //p = new T[num]();
-    //for (std::size_t i = 0; i < num; ++i)
-    //    in >> p[i];
-    p = new T();
-    //T ret;
-    in >> (*p);
-    return in;
-}*/
 
 template<typename T, std::size_t N, bool PassOwnership, typename Deleter>
 ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N,PassOwnership,Deleter>& wrapper)
@@ -289,19 +256,6 @@ ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N,PassO
     for (std::size_t i = 0; i < wrapper.size(); ++i)
         out << wrapper[i];
     return out;
-}
-
-template<typename T>
-ParameterStream& operator>>(ParameterStream& in, AbstractPointerWrapper<T>& wrapper)
-{
-    std::cout << "setting AbstractPointerWrapper" << std::endl;
-    std::size_t size;
-    in >> size;
-    std::cout << "number of elements: " << size << std::endl;
-    wrapper.setPointer(new T[size]);
-    for (std::size_t i = 0; i < size; ++i)
-        in >> wrapper[i];
-    return in;
 }
 
 }

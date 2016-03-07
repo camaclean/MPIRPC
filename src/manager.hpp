@@ -49,6 +49,7 @@
 #include "orderedcall.hpp"
 #include "common.hpp"
 #include "parameterstream.hpp"
+#include "forwarders.hpp"
 #include "mpitype.hpp"
 
 #define ERR_ASSERT     1
@@ -557,20 +558,20 @@ public:
         -> typename std::enable_if<!std::is_same<R, void>::value, R>::type
     {
         if (rank == m_rank) {
-            return f(forward_parameter_type<FArgs,Args>(args)...);
+            return f(detail::forward_parameter_type<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0)
             {
                 for (const auto &i : m_registeredFunctions) {
                     if (i.second->pointer() == reinterpret_cast<void(*)()>(f)) {
-                        sendFunctionInvocation(rank, i.first, true, forward_parameter_type<FArgs,Args>(args)...);
+                        sendFunctionInvocation(rank, i.first, true, detail::forward_parameter_type<FArgs,Args>(args)...);
                         return processReturn<R>(rank);
                     }
                 }
             }
             else
             {
-                sendFunctionInvocation(rank, functionHandle, true, forward_parameter_type<FArgs,Args>(args)...);
+                sendFunctionInvocation(rank, functionHandle, true, detail::forward_parameter_type<FArgs,Args>(args)...);
                 return processReturn<R>(rank);
             }
             throw UnregisteredFunctionException();
@@ -586,12 +587,12 @@ public:
     void invokeFunction(int rank, R(*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
     {
         if (rank == m_rank) {
-            f(forward_parameter_type<FArgs,Args>(args)...);
+            f(detail::forward_parameter_type<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0) {
                 for (const auto &i : m_registeredFunctions) {
                     if (i.second->pointer() == reinterpret_cast<void(*)()> (f)) {
-                        sendFunctionInvocation(rank, i.first, false, forward_parameter_type<FArgs,Args>(args)...);
+                        sendFunctionInvocation(rank, i.first, false, detail::forward_parameter_type<FArgs,Args>(args)...);
                         return;
                     }
                 }
@@ -599,7 +600,7 @@ public:
             }
             else
             {
-                sendFunctionInvocation(rank, functionHandle, false, forward_parameter_type<FArgs,Args>(args)...);
+                sendFunctionInvocation(rank, functionHandle, false, detail::forward_parameter_type<FArgs,Args>(args)...);
             }
         }
     }
@@ -649,7 +650,7 @@ public:
         if (a->rank() == m_rank)
         {
             ObjectWrapper<Class> *o = static_cast<ObjectWrapper<Class>*>(a);
-            return CALL_MEMBER_FN(*o->object(),f)(forward_parameter_type<FArgs,Args>(args)...);
+            return CALL_MEMBER_FN(*o->object(),f)(detail::forward_parameter_type<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0)
             {
@@ -659,7 +660,7 @@ public:
                     if (func) {
                         if (func->func == f)
                         {
-                            sendMemberFunctionInvocation(a, func->id(), true, forward_parameter_type<FArgs,Args>(args)...);
+                            sendMemberFunctionInvocation(a, func->id(), true, detail::forward_parameter_type<FArgs,Args>(args)...);
                             return processReturn<R>(a->rank());
                         }
                     }
@@ -668,7 +669,7 @@ public:
             }
             else
             {
-                sendMemberFunctionInvocation(a, functionHandle, true, forward_parameter_type<FArgs,Args>(args)...);
+                sendMemberFunctionInvocation(a, functionHandle, true, detail::forward_parameter_type<FArgs,Args>(args)...);
                 return processReturn<R>(a->rank());
             }
         }
@@ -685,7 +686,7 @@ public:
         if (a->rank() == m_rank)
         {
             ObjectWrapper<Class> *o = static_cast<ObjectWrapper<Class>*>(a);
-            CALL_MEMBER_FN(*o->object(),f)(forward_parameter_type<FArgs,Args>(args)...);
+            CALL_MEMBER_FN(*o->object(),f)(detail::forward_parameter_type<FArgs,Args>(args)...);
         } else {
             if (functionHandle == 0)
             {
@@ -695,7 +696,7 @@ public:
                     if (func) {
                         if (func->func == f)
                         {
-                            sendMemberFunctionInvocation(a, func->id(), false, forward_parameter_type<FArgs,Args>(args)...);
+                            sendMemberFunctionInvocation(a, func->id(), false, detail::forward_parameter_type<FArgs,Args>(args)...);
                             return;
                         }
                     }
@@ -704,7 +705,7 @@ public:
             }
             else
             {
-                sendMemberFunctionInvocation(a, functionHandle, false, forward_parameter_type<FArgs,Args>(args)...);
+                sendMemberFunctionInvocation(a, functionHandle, false, detail::forward_parameter_type<FArgs,Args>(args)...);
             }
         }
     }
