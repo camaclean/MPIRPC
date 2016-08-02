@@ -5,7 +5,7 @@ set(mpirpc_VERSION_MINOR 1)
 set(mpirpc_VERSION_PATCH 0)
 option(USE_LTO "Build with Link Time Optimizations" OFF)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -O3 -march=native")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -O3 -march=native -g -ggdb")
 
 #set(CMAKE_CXX_COMPILER "clang++")
 
@@ -24,12 +24,16 @@ if(MPI_FOUND)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${MPI_C_COMPILE_FLAGS}")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MPI_CXX_COMPILE_FLAGS}")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${MPI_CXX_LINK_FLAGS}")
+    set(CMAKE_C_COMPILER "mpicc")
+    set(CMAKE_CXX_COMPILER "mpicxx")
     include_directories("${MPI_CXX_INCLUDE_PATH}")
 endif(MPI_FOUND)
 
 set(SRC_LIST manager.cpp objectwrapper.cpp parameterstream.cpp mpitype.cpp)
 add_library(mpirpc STATIC ${SRC_LIST})
 target_link_libraries(mpirpc ${MPI_CXX_LIBRARIES})
+
+include_directories(detail)
 
 install(TARGETS mpirpc DESTINATION lib EXPORT MPIRPCTargets)
 install(FILES common.hpp lambda.hpp manager.hpp objectwrapper.hpp orderedcall.hpp parameterstream.hpp mpitype.hpp DESTINATION include/mpirpc)

@@ -22,6 +22,7 @@
 
 #include "common.hpp"
 #include "pointerwrapper.hpp"
+#include "forwarders.hpp"
 
 #include<vector>
 #include<cstddef>
@@ -118,21 +119,21 @@ struct PointerWrapperStreamSize<0>
     }
 };
 
-template<typename T, std::size_t N, bool PassOwnership, typename Allocator>
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
 struct PointerWrapperFactory
 {
-    static ::mpirpc::PointerWrapper<T,N,PassOwnership,Allocator> create(T* data, std::size_t size)
+    static ::mpirpc::PointerWrapper<T,N,PassOwnership,PassBack,Allocator> create(T* data, std::size_t size)
     {
-        return ::mpirpc::PointerWrapper<T,N,PassOwnership,Allocator>(data);
+        return ::mpirpc::PointerWrapper<T,N,PassOwnership,PassBack,Allocator>(data);
     }
 };
 
-template<typename T, bool PassOwnership, typename Allocator>
-struct PointerWrapperFactory<T,0,PassOwnership,Allocator>
+template<typename T, bool PassOwnership, bool PassBack, typename Allocator>
+struct PointerWrapperFactory<T,0,PassOwnership,PassBack,Allocator>
 {
-    static ::mpirpc::PointerWrapper<T,0,PassOwnership,Allocator> create(T* data, std::size_t size)
+    static ::mpirpc::PointerWrapper<T,0,PassOwnership,PassBack,Allocator> create(T* data, std::size_t size)
     {
-        return ::mpirpc::PointerWrapper<T,0,PassOwnership,Allocator>(data,size);
+        return ::mpirpc::PointerWrapper<T,0,PassOwnership,PassBack,Allocator>(data,size);
     }
 };
 
@@ -140,6 +141,7 @@ struct PointerWrapperFactory<T,0,PassOwnership,Allocator>
 
 template<typename T>
 inline void marshal(ParameterStream& s, T&& val) {
+    //std::cout << "marshalling type: " << typeid(T).name() << " " <<val << std::endl;
     s << val;
 }
 
@@ -161,20 +163,25 @@ auto unmarshal(ParameterStream& s)
      -> PointerWrapper<typename PW::type,
                        PW::count,
                        PW::pass_ownership,
+                       PW::pass_back,
                        typename PW::allocator_t>
 {
     using T = typename PW::type;
     constexpr auto N = PW::count;
     constexpr auto PassOwnership = PW::pass_ownership;
+    constexpr auto PassBack = PW::pass_back;
     using Allocator = typename PW::allocator_t;
     Allocator a;
     std::size_t size = detail::PointerWrapperStreamSize<PW::count>::get(s);
+    std::cout << "creating array for object. " << size << " objects. " << typeid(T).name() << " " << PW::count << std::endl;
     T* data = a.allocate(size);
+    std::cout << "pointer: " << data << std::endl;
     for (std::size_t i = 0; i < size; ++i)
     {
         data[i] = unmarshal<T>(s);
+        //data[i] = T();
     }
-    return detail::PointerWrapperFactory<T,N,PassOwnership,Allocator>::create(data,size);
+    return detail::PointerWrapperFactory<T,N,PassOwnership,PassBack,Allocator>::create(data,size);
 }
 
 template<typename T, typename... O>
@@ -247,8 +254,8 @@ ParameterStream& operator>>(ParameterStream& in, T (&a)[N])
     return in;
 }
 
-template<typename T, std::size_t N, bool PassOwnership, typename Deleter>
-ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N,PassOwnership,Deleter>& wrapper)
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
 {
     std::cout << "streaming PointerWrapper" << std::endl;
     if (N == 0)
@@ -256,6 +263,85 @@ ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N,PassO
     for (std::size_t i = 0; i < wrapper.size(); ++i)
         out << wrapper[i];
     return out;
+}
+
+namespace detail
+{
+
+template<typename FT, typename IS, typename... Args>
+struct fn_type_marshaller_impl;
+
+template<typename... FArgs, std::size_t... Is, typename... Args>
+struct fn_type_marshaller_impl<std::tuple<FArgs...>, std::index_sequence<Is...>, Args...>
+{
+    static void marshal(ParameterStream& ps, Args... args)
+    {
+        static_assert(sizeof...(FArgs) == sizeof...(Args), "Wrong number of arguments for function.");
+        using swallow = int[];
+        (void)swallow{(marshal(ps, static_cast<typename detail::types_at_index<Is,std::tuple<FArgs...>,std::tuple<Args...>>::type>(args)), 0)...};
+    }
+};
+
+template<typename FA, typename A>
+struct test;
+
+template<typename... FArgs, typename... Args>
+struct test<std::tuple<FArgs...>, std::tuple<Args...>>
+{
+    static void marshal(ParameterStream& ps, Args... args)
+    {
+        Passer p{(marshal(ps, detail::forward_parameter_type<FArgs,Args>(args)), std::cout << "blah" << std::endl, 0)...};
+    }
+};
+
+/*template<typename F>
+struct fn_type_marshaller;
+
+template<typename R, typename... FArgs>
+struct fn_type_marshaller<R(*)(FArgs...)>
+{
+    template<class Stream, typename... Args, std::size_t... Is>
+    static void marshal(Stream& ps, Args&&... args)
+    {
+        //test<std::tuple<FArgs...>,std::tuple<Args...>>::marshal(ps, args...);
+        detail::fn_type_marshaller_impl<std::tuple<FArgs...>, std::index_sequence_for<Args...>, decltype(std::forward<Args>(args))...>::marshal(ps, std::forward<Args>(args)...);
+    }
+};
+
+template<typename R, class C, typename... FArgs>
+struct fn_type_marshaller<R(C::*)(FArgs...)>
+{
+    template<class Stream, typename... Args, std::size_t... Is>
+    static void marshal(Stream& ps, Args&&... args)
+    {
+        //test<std::tuple<FArgs...>,std::tuple<Args...>>::marshal(ps, args...);
+        detail::fn_type_marshaller_impl<std::tuple<FArgs...>, std::index_sequence_for<Args...>, decltype(std::forward<Args>(args))...>::marshal(ps, std::forward<Args>(args)...);
+    }
+};
+
+template<typename R, typename... FArgs>
+struct fn_type_marshaller<std::function<R(FArgs...)>>
+{
+    template<class Stream, typename... Args, std::size_t... Is>
+    static void marshal(Stream& ps, Args&&... args)
+    {
+        //test<std::tuple<FArgs...>,std::tuple<Args...>>::marshal(ps, args...);
+        detail::fn_type_marshaller_impl<std::tuple<FArgs...>, std::index_sequence_for<Args...>, decltype(std::forward<Args>(args))...>::marshal(ps, std::forward<Args>(args)...);
+    }
+};*/
+
+template<typename F>
+struct fn_type_marshaller
+{
+    template<class Stream, typename... Args>
+    static void marshal(Stream& ps, Args&&... args)
+    {
+        using Applier = typename detail::marshaller_function_signature<F,Args...>::applier;
+        Applier apply = [&](auto&&... a) { Passer p{(marshal(ps, std::forward<decltype(a)>(a)), 0)...}; };
+        apply(std::forward<Args>(args)...);
+    }
+};
+
 }
 
 }

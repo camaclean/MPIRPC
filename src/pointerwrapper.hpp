@@ -48,14 +48,15 @@ protected:
 
 }
 
-template<typename T, std::size_t N = 0, bool PassOwnership = false, typename Allocator = std::allocator<T>>
+template<typename T, std::size_t N = 0, bool PassOwnership = false, bool PassBack = false, typename Allocator = std::allocator<T>>
 class PointerWrapper : public detail::PointerWrapper<T,N>
 {
     using detail::PointerWrapper<T,N>::m_pointer;
 public:
-    using type = T;
+    using type = typename std::decay_t<T>;
     static constexpr std::size_t count = N;
-    static constexpr bool pass_ownership = false;
+    static constexpr bool pass_ownership = PassOwnership;
+    static constexpr bool pass_back = PassBack;
     using allocator_t = Allocator;
 
     template<std::size_t N2 = N, typename std::enable_if<N2 != 0>::type* = nullptr>
@@ -78,11 +79,11 @@ protected:
     Allocator m_allocator;
 };
 
-template<typename T, bool PassOwnership, typename Allocator, typename std::enable_if<!std::is_array<T>::value>::type* = nullptr>
-using BasicPointerWrapper = PointerWrapper<T,1,PassOwnership, Allocator>;
+template<typename T, bool PassOwnership, bool PassBack, typename Allocator, typename std::enable_if<!std::is_array<T>::value>::type* = nullptr>
+using BasicPointerWrapper = PointerWrapper<T,1,PassOwnership,PassBack,Allocator>;
 
-template<typename T, bool PassOwnership, typename Allocator, typename std::enable_if<!std::is_array<T>::value>::type* = nullptr>
-using DynamicPointerWrapper = PointerWrapper<T,0,PassOwnership, Allocator>;
+template<typename T, bool PassOwnership, bool PassBack, typename Allocator, typename std::enable_if<!std::is_array<T>::value>::type* = nullptr>
+using DynamicPointerWrapper = PointerWrapper<T,0,PassOwnership,PassBack,Allocator>;
 
 }
 

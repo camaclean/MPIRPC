@@ -3,6 +3,50 @@
 
 #include "../../manager.hpp"
 
+template <typename Tuple, size_t... I>
+decltype(auto) pass_back_impl(ParameterStream& p, Tuple&& t, std::index_sequence<I...>)
+{
+    using swallow = int[];
+    (void)swallow{(marshal(p,std::get<I>(std::forward<Tuple>(t))), 0)...};
+}
+
+template <typename F, typename Tuple>
+decltype(auto) pass_back(F&& f, ParameterStream& p, Tuple&& t)
+{
+    using Indices = std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>;
+    return pass_back_impl(std::forward<F>(f), p, std::forward<Tuple>(t), Indices{});
+}
+
+template<typename T>
+struct is_pass_back
+{
+    constexpr static bool value = std::is_lvalue_reference<T>::value &&
+                                  !std::is_const<typename std::remove_reference<T>::type>::value &&
+                                  !std::is_pointer<typename std::remove_reference<T>::type>::value &&
+                                  !std::is_array<typename std::remove_reference<T>::type>::value;
+};
+
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+struct is_pass_back<PointerWrapper<T,N,PassOwnership,PassBack,Allocator>>
+{
+    constexpr static bool value = PassBack;
+};
+
+template<std::size_t Pos, bool Head, bool... Tails>
+struct bool_vartem_pos
+{
+    static constexpr bool value = (Pos == sizeof...(Tails)+1) ? Head : bool_vartem_pos<Pos,Tails...>::value;
+};
+
+template<std::size_t Pos, typename T>
+struct get_pass_back_at;
+
+template<std::size_t Pos, bool...Vs>
+struct get_pass_back_at<Pos,bool_tuple<Vs...>>
+{
+    static constexpr bool value = bool_vartem_pos<Pos,Vs...>::value;
+};
+
 template<class MessageInterface>
 class mpirpc::Manager<MessageInterface>::FunctionBase
 {
@@ -21,25 +65,25 @@ public:
         */
     virtual void execute(ParameterStream& params, int sender_rank, Manager *manager, bool get_return = false, void* object = 0) = 0;
 
-    fnhandle_t id() const { return m_id; }
+    FnHandle id() const { return m_id; }
     generic_fp_type pointer() const { return m_pointer; }
 
     virtual ~FunctionBase() {};
 
 private:
-    static fnhandle_t make_id() {
+    static FnHandle make_id() {
         return ++id_counter_;
     }
 
-    fnhandle_t m_id;
-    static fnhandle_t id_counter_;
+    FnHandle m_id;
+    static FnHandle id_counter_;
 protected:
     generic_fp_type m_pointer;
     std::function<void()> m_function;
 };
 
 template<typename MessageInterface>
-fnhandle_t mpirpc::Manager<MessageInterface>::FunctionBase::id_counter_ = 0;
+FnHandle mpirpc::Manager<MessageInterface>::FunctionBase::id_counter_ = 0;
 
 template<class MessageInterface>
 template<typename R, typename... Args>
@@ -64,9 +108,14 @@ public:
         assert(manager);
         OrderedCall<function_type> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
         if (get_return)
-            manager->functionReturn(sender_rank, call());
+        {
+            R ret = call();
+            manager->functionReturn(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+        }
         else
+        {
             call();
+        }
     }
 
 protected:
@@ -87,6 +136,10 @@ public:
     {
         OrderedCall<function_type> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
         call();
+
+
+        if (get_return)
+            manager->functionReturn(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
     }
 
 protected:
@@ -108,9 +161,14 @@ public:
         assert(manager);
         OrderedCall<function_type> call{func, static_cast<Class*>(object), unmarshal<typename remove_all_const<Args>::type>(params)...};
         if (get_return)
-            manager->functionReturn(sender_rank, call());
+        {
+            R ret = call();
+            manager->functionReturn(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+        }
         else
+        {
             call();
+        }
     }
 
     function_type func;
@@ -130,6 +188,8 @@ public:
         assert(object);
         OrderedCall<function_type> call{func, static_cast<Class*>(object), unmarshal<typename remove_all_const<Args>::type>(params)...};
         call();
+        if (get_return)
+            manager->functionReturn(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
     }
 
     function_type func;
@@ -150,9 +210,14 @@ public:
         OrderedCall<function_type> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
 
         if (get_return)
-            manager->functionReturn(sender_rank, call());
+        {
+            R ret = call();
+            manager->functionReturn(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+        }
         else
+        {
             call();
+        }
     }
 
     function_type func;
@@ -171,6 +236,8 @@ public:
     {
         OrderedCall<function_type> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
         call();
+        if (get_return)
+            manager->functionReturn(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
     }
 
     function_type func;

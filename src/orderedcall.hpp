@@ -32,7 +32,13 @@ namespace mpirpc {
 template <typename F, typename Tuple, size_t... I>
 decltype(auto) apply_impl(F&& f, Tuple&& t, std::index_sequence<I...>)
 {
-    return std::forward<F>(f)(std::get<I>(std::forward<Tuple>(t))...);
+    return std::forward<F>(f)(static_cast<std::tuple_element_t<I,typename FunctionParts<std::remove_reference_t<F>>::args_tuple_type>>(std::get<I>(std::forward<Tuple>(t)))...);
+}
+
+template <typename F, class Class, typename Tuple, size_t... I>
+decltype(auto) apply_impl(F&& f, Class *c, Tuple&& t, std::index_sequence<I...>)
+{
+    return ((*c).*(std::forward<F>(f)))(static_cast<std::tuple_element_t<I,typename FunctionParts<std::remove_reference_t<F>>::args_tuple_type>>(std::get<I>(std::forward<Tuple>(t)))...);
 }
 
 template <typename F, typename Tuple>
@@ -42,11 +48,18 @@ decltype(auto) apply(F&& f, Tuple&& t)
     return apply_impl(std::forward<F>(f), std::forward<Tuple>(t), Indices{});
 }
 
+template <typename F, class Class, typename Tuple>
+decltype(auto) apply(F&& f, Class *c, Tuple&& t)
+{
+    using Indices = std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>;
+    return apply_impl(std::forward<F>(f), c, std::forward<Tuple>(t), Indices{});
+}
+
 template<typename T>
 struct arg_cleanup
 {
-    static void apply(typename std::decay<T>::type& t) { std::cout << "blank clean up for " << typeid(t).name() << std::endl; }
-    static void apply(typename std::decay<T>::type&& t) { std::cout << "generic rvalue " << typeid(t).name() << std::endl; }
+    static void apply(typename std::remove_reference<T>::type& t) { std::cout << "blank clean up for " << typeid(t).name() << std::endl; }
+    static void apply(typename std::remove_reference<T>::type&& t) { std::cout << "generic rvalue " << typeid(t).name() << std::endl; }
 };
 
 /*template<typename T>
@@ -62,10 +75,10 @@ struct arg_cleanup<PointerParameter<T>&&>
     static void apply(PointerParameter<T>&& t) { std::cout << "not cleaning up pointer rvalue" << std::endl; delete t.pointer; }
 };*/
 
-template<typename T, std::size_t N, bool PassOwnership, typename Allocator>
-struct arg_cleanup<PointerWrapper<T,N,PassOwnership,Allocator>&>
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+struct arg_cleanup<PointerWrapper<T,N,PassOwnership,PassBack,Allocator>&>
 {
-    static void apply(PointerWrapper<T,N,PassOwnership,Allocator>& t) { std::cout << "cleaned up C Array" << std::endl; t.free(); }
+    static void apply(PointerWrapper<T,N,PassOwnership,PassBack,Allocator>& t) { std::cout << "cleaned up C Array of " << typeid(T).name() << std::endl; t.free(); }
 };
 
 /*template<typename T, std::size_t N>
@@ -75,16 +88,87 @@ struct arg_cleanup<CArrayWrapper<T,N>>
     static void apply(CArrayWrapper<T,N>&& t) { std::cout << "not cleaning up C Array rvalue " << typeid(t).name() <<  std::endl; }
 };*/
 
+template<bool C, typename T>
+struct reapply_const_helper;
+
+template<typename T>
+struct reapply_const_helper<true,T>
+{
+    using type = const T;
+};
+
+template<typename T>
+struct reapply_const_helper<false,T>
+{
+    using type = T;
+};
+
+template<typename FT, typename T>
+using reapply_const_t = typename reapply_const_helper<std::is_const<FT>::value && !std::is_pointer<FT>::value,T>::type;
+
+template<typename FT, typename T>
+auto reapply_const(T&& t)
+    -> typename reapply_const_helper<std::is_const<FT>::value && !std::is_pointer<FT>::value,T>::type
+{
+    return static_cast<typename reapply_const_helper<std::is_const<FT>::value && !std::is_pointer<FT>::value,T>::type>(t);
+};
+
 template<>
 struct arg_cleanup<char*>
 {
     static void apply(char*& s) { delete[] s; /*std::cout << "deleted s" << std::endl;*/ }
 };
 
+/*template<bool PassBack>
+struct pass_back_helper;
+
+template<>
+struct pass_back_helper<true>
+{
+    template<typename T>
+    static void process(T&& t)
+    {
+        std::cout << "Passing back " << typeid(t).name() << " " << t << std::endl;
+    }
+};
+
+template<>
+struct pass_back_helper<false>
+{
+    template<typename T>
+    static void process(T&& t) {}
+};
+
+template<typename...FArgs>
+struct pass_back
+{
+    template<typename... Args>
+    static void do_pass_back(Args&&... args)
+    {
+        [](...){}( (pass_back_helper<is_pass_back<FArgs>::value>::process(std::forward<Args>(args)), 0)...);
+    }
+
+    static void pass(FArgs&... args)
+    {
+        [](...){}( (pass_back_helper<is_pass_back<FArgs>::value>::process(args), 0)...);
+    }
+
+};*/
+
+/*template<typename F>
+struct post_function_types;
+
+template<typename R, class C, typename... Args>
+struct post_function_types<R(C::*)(Args...)>
+{
+    using pass_back = pass_back<Args...>;
+    //using cleanup = do_post_exec<Args...>;
+};*/
+
 template<typename... Args>
 void do_post_exec(Args&&... args)
 {
-    [](...){}( (arg_cleanup<Args>::apply(std::forward<Args>(args)), 0)... );
+    [](...){}( (arg_cleanup<Args>::apply(std::forward<Args>(args)), 0)...);
 }
 
 /**
@@ -105,34 +189,35 @@ struct OrderedCall;
 template<typename R, typename... FArgs>
 struct OrderedCall<R(*)(FArgs...)>
 {
-    using FuncType = R(*)(FArgs...);
+    using FunctionType = R(*)(FArgs...);
+    using StorageTuple = typename storage_function_parts<FunctionType>::storage_tuple_type;
 
-    template<typename... Args>
-    OrderedCall(R(*function)(FArgs...), Args&&... args)
-    {
-        func = function;
-        bound = std::bind([&](){ return function(detail::forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);});
-        post = std::bind(do_post_exec<std::decay_t<Args>&...>, args...);
-    }
+    OrderedCall(FunctionType func, std::remove_reference_t<FArgs>&&... args)
+        : function(func), args_tuple(std::forward<FArgs>(args)...)
+    {}
 
     template<typename T = R, typename std::enable_if<!std::is_same<T,void>::value,T>::type* = nullptr>
     R operator()()
     {
-        T ret = bound();
-        post();
+        T ret = apply(function, args_tuple);
+        //apply(&pass_back<FArgs...>::pass, args_tuple);
         return ret;
     }
 
     template<typename T = R, typename std::enable_if<std::is_same<T,void>::value,void>::type* = nullptr>
     void operator()()
     {
-        bound();
-        post();
+        apply(function, args_tuple);
+        //apply(&pass_back<FArgs...>::pass, args_tuple);
     }
 
-    FuncType func;
-    std::function<R()> bound;
-    std::function<void()> post;
+    ~OrderedCall()
+    {
+        apply(&do_post_exec<FArgs...>, args_tuple);
+    }
+
+    FunctionType function;
+    StorageTuple args_tuple;
 };
 
 /**
@@ -141,30 +226,36 @@ struct OrderedCall<R(*)(FArgs...)>
 template<typename R, typename Class, typename... FArgs>
 struct OrderedCall<R(Class::*)(FArgs...)>
 {
-    template<typename... Args>
-    OrderedCall(R(Class::*function)(FArgs...), Class *c, Args&&... args)
-    {
-        bound = std::bind(function, c, detail::forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);
-        post = std::bind(do_post_exec<std::decay_t<Args>&...>, args...);
-    }
+    using FunctionType = R(Class::*)(FArgs...);
+    using StorageTuple = typename storage_function_parts<FunctionType>::storage_tuple_type;
+
+    OrderedCall(FunctionType func, Class *c, std::remove_reference_t<FArgs>&&... args)
+        : function(func), obj(c), args_tuple(std::forward<FArgs>(args)...)
+    {}
 
     template<typename T = R, typename std::enable_if<!std::is_same<T,void>::value,T>::type* = nullptr>
     T operator()()
     {
-        T ret = bound();
-        post();
+        T ret = apply(function, obj, args_tuple);
+        //apply(&pass_back<FArgs...>::pass, args_tuple);
         return ret;
     }
 
     template<typename T = R, typename std::enable_if<std::is_same<T,void>::value,void>::type* = nullptr>
     void operator()()
     {
-        bound();
-        post();
+        apply(function, obj, args_tuple);
+        //apply(&pass_back<FArgs...>::pass, args_tuple);
     }
 
-    std::function<R()> bound;
-    std::function<void()> post;
+    ~OrderedCall()
+    {
+        apply(&do_post_exec<FArgs...>, args_tuple);
+    }
+
+    FunctionType function;
+    Class *obj;
+    StorageTuple args_tuple;
 };
 
 /**
@@ -173,30 +264,35 @@ struct OrderedCall<R(Class::*)(FArgs...)>
 template<typename R, typename... FArgs>
 struct OrderedCall<std::function<R(FArgs...)>>
 {
-    template<typename... Args>
-    OrderedCall(std::function<R(FArgs...)> &function, Args&&... args)
-    {
-        bound = std::bind(function, detail::forward_parameter_type<typename std::remove_cv<FArgs>::type,Args>(args)...);
-        post = std::bind(do_post_exec<std::decay_t<Args>&...>, args...);
-    }
+    using FunctionType = std::function<R(FArgs...)>;
+    using StorageTuple = typename storage_function_parts<FunctionType>::storage_tuple_type;
+
+    OrderedCall(FunctionType& func, std::remove_reference_t<FArgs>&&... args)
+        : function(func), args_tuple(std::forward<FArgs>(args)...)
+    {}
 
     template<typename T = R, typename std::enable_if<!std::is_same<T,void>::value,T>::type* = nullptr>
     T operator()()
     {
-        T ret = bound();
-        post();
+        T ret = apply(function, args_tuple);
+        //apply(&pass_back<FArgs...>::pass, args_tuple);
         return ret;
     }
 
     template<typename T = R, typename std::enable_if<std::is_same<T,void>::value,void>::type* = nullptr>
     void operator()()
     {
-        bound();
-        post();
+        apply(function, args_tuple);
+        //apply(&pass_back<FArgs...>::pass, args_tuple);
     }
 
-    std::function<R()> bound;
-    std::function<void()> post;
+    ~OrderedCall()
+    {
+        apply(&do_post_exec<FArgs...>, args_tuple);
+    }
+
+    FunctionType function;
+    StorageTuple args_tuple;
 };
 
 }

@@ -51,6 +51,7 @@
 #include "parameterstream.hpp"
 #include "forwarders.hpp"
 #include "mpitype.hpp"
+#include "exceptions.hpp"
 
 #define ERR_ASSERT     1
 #define ERR_MAX_ACTORS 2
@@ -69,55 +70,6 @@
 
 namespace mpirpc {
 
-template<typename T>
-struct StorageType
-{
-    using type = T;
-};
-
-template<typename T, std::size_t N, bool PassOwnership, typename Allocator>
-struct StorageType<PointerWrapper<T,N,PassOwnership,Allocator>>
-{
-    using type = typename std::conditional<std::is_array<T>::value,T,T*>::type;
-};
-
-template<typename F>
-struct StorageFunctionParts;
-
-template<typename R, class Class, typename... Args>
-struct StorageFunctionParts<R(Class::*)(Args...)>
-{
-    using return_type = R;
-    using class_type = Class;
-    using function_type = R(Class::*)(Args...);
-    using storage_function_type = R(Class::*)(typename StorageType<Args>::type...);
-};
-
-template<typename R, typename... Args>
-struct StorageFunctionParts<R(*)(Args...)>
-{
-    using return_type = R;
-    using function_type = R(*)(Args...);
-    using storage_function_type = R(*)(typename StorageType<Args>::type...);
-};
-
-struct UnregisteredFunctionException : std::exception
-{
-    const char* what() const noexcept override
-    {
-        return "Unregistered Function\n";
-    }
-};
-
-struct UnregisteredObjectException : std::exception
-{
-    const char* what() const noexcept override
-    {
-        return "Unregistered Object\n";
-    }
-};
-
-
 /**
  * @brief The Manager class
  *
@@ -134,18 +86,13 @@ struct UnregisteredObjectException : std::exception
  * @todo Allow function and type IDs to be specified by the user.
  */
 
-/*template<typename MessageInterface, typename CustomAllocators, typename CustomDeleters>
+/*template<typename MessageInterface>
 class Manager;*/
 
-//template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-class Manager //<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>
+template<typename MessageInterface>
+class Manager
 {
-    struct ObjectInfo {
-        ObjectInfo() {}
-        ObjectInfo(TypeId t, ObjectId i) : type(t), id(i) {}
-        TypeId type;
-        TypeId id;
-    };
+    struct ObjectInfo;
 
     /**
      * @brief The FunctionBase class
@@ -160,48 +107,7 @@ class Manager //<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<C
      * Static functions in a class behave as normal function pointers, not member
      * function pointers.
      */
-    class FunctionBase
-    {
-    public:
-        /*using GenericFunctionPointer = void(*)();*/
-        typedef void(*GenericFunctionPointer)();
-
-        FunctionBase() : m_id(makeId()), m_pointer(0) {}
-
-        /**
-         * @brief execute Execute the function
-         * @param params The serialized function parameters
-         * @param senderRank The rank requesting this function be invoked
-         * @param manager The Manager, when sending back the function return value
-         * @param getReturn Only send the function return value back to the sending rank when requested, as the return value may not be needed.
-         * @param object When the function is a member function, use object as the <i>this</i> pointer.
-         */
-        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) = 0;
-
-        FunctionHandle id() const { return m_id; }
-        GenericFunctionPointer pointer() const { return m_pointer; }
-
-        virtual ~FunctionBase() {};
-
-    private:
-        static FunctionHandle makeId() {
-            return ++_idCounter;
-        }
-
-        FunctionHandle m_id;
-        static FunctionHandle _idCounter;
-    protected:
-        GenericFunctionPointer m_pointer;
-        std::function<void()> m_function;
-    };
-
-    template<typename Functor, Functor f> struct FunctionId;
-
-    template <typename R, class Class, typename... Args, R(Class::*target)(Args...)>
-    struct FunctionId<R(Class::*)(Args...), target> {};
-
-    template <typename R, typename... Args, R(*target)(Args...)>
-    struct FunctionId<R(*)(Args...), target> {};
+    class FunctionBase;
 
     /**
      * The general Function<F> class, which is specialized to deduce additional typenames where required while only
@@ -214,152 +120,40 @@ class Manager //<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<C
      * Specialization of Function<F> for functions with non-void return types.
      */
     template<typename R, typename... Args>
-    class Function<R(*)(Args...)> : public FunctionBase
-    {
-    public:
-        using FunctionType = R(*)(Args...);
-
-        Function(R(*f)(Args...)) : FunctionBase(), func(f) {}
-
-        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
-        {
-            /*
-             * func(convertData<Args>(data)...) does not work here
-             * due to convertData<T>(const char *data) being evaluated
-             * in an undefined order,. The side effects matter. A workaround
-             * is to use uniform initilization of a struct that binds the
-             * parameters. Parameter packs are expanded as comma separated,
-             * but the commas cannot be used as comma operators.
-             */
-            assert(manager);
-            OrderedCall<FunctionType> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
-            if (getReturn)
-                manager->functionReturn(senderRank, call());
-            else
-                call();
-        }
-
-    protected:
-        FunctionType func;
-    };
+    class Function<R(*)(Args...)>;
 
     /**
      * Specialization of Function<F> for functions with void return types.
      */
     template<typename... Args>
-    class Function<void(*)(Args...)> : public FunctionBase
-    {
-    public:
-        using FunctionType = typename StorageFunctionParts<void(*)(Args...)>::storage_function_type;//void(*)(Args...);
-
-        Function(FunctionType f) : FunctionBase(), func(f) {}
-
-        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
-        {
-            OrderedCall<FunctionType> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
-            call();
-        }
-
-    protected:
-        FunctionType func;
-    };
+    class Function<void(*)(Args...)>;
 
     /**
      * Specialization of Function<F> for member functions witn non-void return types.
      */
     template<typename Class, typename R, typename... Args>
-    class Function<R(Class::*)(Args...)> : public FunctionBase
-    {
-    public:
-        using FunctionType = R(Class::*)(Args...);
-
-        Function(FunctionType f) : FunctionBase(), func(f) {}
-
-        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
-        {
-            assert(object);
-            assert(manager);
-            OrderedCall<FunctionType> call{func, static_cast<Class*>(object), unmarshal<typename remove_all_const<Args>::type>(params)...};
-            if (getReturn)
-                manager->functionReturn(senderRank, call());
-            else
-                call();
-        }
-
-        FunctionType func;
-    };
+    class Function<R(Class::*)(Args...)>;
 
     /**
      * Specialization of Function<F> for member functions with void return types.
      */
     template<typename Class, typename... Args>
-    class Function<void(Class::*)(Args...)> : public FunctionBase
-    {
-    public:
-        using FunctionType = void(Class::*)(Args...);
-
-        Function(void(Class::*f)(Args...)) : FunctionBase(), func(f) { }
-
-        virtual void execute(ParameterStream& params, int senderRank, Manager *manager, bool getReturn = false, void* object = 0) override
-        {
-            assert(object);
-            OrderedCall<FunctionType> call{func, static_cast<Class*>(object), unmarshal<typename remove_all_const<Args>::type>(params)...};
-            call();
-        }
-
-        FunctionType func;
-    };
+    class Function<void(Class::*)(Args...)>;
 
     /**
      * Specialization of Function<F> for std::function objects with non-void return types.
      */
     template<typename R, typename... Args>
-    class Function<std::function<R(Args...)>>
-        : public FunctionBase
-    {
-    public:
-        using FunctionType = std::function<R(Args...)>;
-
-        Function(FunctionType& f) : FunctionBase(), func(f) {}
-
-        virtual void execute(ParameterStream &params, int senderRank, Manager *manager, bool getReturn, void *object = 0) override
-        {
-            assert(manager);
-            OrderedCall<FunctionType> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
-
-            if (getReturn)
-                manager->functionReturn(senderRank, call());
-            else
-                call();
-        }
-
-        FunctionType func;
-    };
+    class Function<std::function<R(Args...)>>;
 
     /**
      * Specialization of Function<F> for std::function objects with void return types.
      */
     template<typename... Args>
-    class Function<std::function<void(Args...)>>
-        : public FunctionBase
-    {
-    public:
-        using FunctionType = std::function<void(Args...)>;
-
-        Function(FunctionType& f) : FunctionBase(), func(f) {}
-
-        virtual void execute(ParameterStream &params, int senderRank, Manager *manager, bool getReturn, void *object = 0) override
-        {
-            OrderedCall<FunctionType> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
-            call();
-        }
-
-        FunctionType func;
-    };
+    class Function<std::function<void(Args...)>>;
 
 public:
-    //using UserMessageHandler = void(*)(MPI_Status&&);
-    typedef void(*UserMessageHandler)(MPI_Status&&);
+    using UserMessageHandler = void(*)(MPI_Status&&);
 
     Manager(MPI_Comm comm = MPI_COMM_WORLD);
 
@@ -372,50 +166,24 @@ public:
      * @return The type ID
      */
     template<typename T>
-    TypeId registerType()
-    {
-        TypeId id = ++m_nextTypeId;
-        m_registeredTypeIds[std::type_index(typeid(typename std::decay<T>::type))] = id;
-        return id;
-    }
+    TypeId registerType();
 
     /**
-     * Get the type of a previously registered type.
+     * @brief Query the type identifier for the class Class
+     * @return The identifier associated with class Class
      */
     template<typename T>
-    TypeId getTypeId() const
-    {
-        TypeId id = m_registeredTypeIds.at(std::type_index(typeid(typename std::decay<T>::type)));
-        return id;
-    }
-
-    template<typename A, typename D>
-    TypeId registerMemoryManager()
-    {
-        TypeId id = ++m_nextDeleterId;
-        m_registeredMemoryManagers[std::type_index(typeid(std::pair<A,D>))] = id;
-        return id;
-    }
-
-    template<typename A, typename D>
-    TypeId getMemoryManagerId() const
-    {
-        TypeId id = m_registeredMemoryManagers.at(std::type_index(typeid(std::pair<A,D>)));
-        return id;
-    }
+    TypeId getTypeId() const;
 
     /**
      * @brief Register a lambda with the Manager
      * @return The handle for the lambda
      */
     template<typename Lambda>
-    FunctionHandle registerLambda(Lambda&& l)
-    {
-        return registerFunction(static_cast<typename LambdaTraits<Lambda>::lambda_stdfunction>(l));
-    }
+    FnHandle registerLambda(Lambda&& l);
 
     /*template<typename F, typename StorageFunctionParts<F>::storage_function_type f>
-    FunctionHandle registerFunction()
+    fnhandle_t registerFunction()
     {
         return registerFunction<typename StorageFunctionParts<F>::storage_function_type, f>();
     }*/
@@ -427,106 +195,56 @@ public:
      * @param f A function pointer to the function to register
      * @return The handle associated with function #f
      */
-    template<typename F, typename StorageFunctionParts<F>::storage_function_type f>
-    FunctionHandle registerFunction()
-    {
-        FunctionBase *b = new Function<F>(f);
-        m_registeredFunctions[b->id()] = b;
-        m_registeredFunctionTIs[std::type_index(typeid(FunctionId<typename StorageFunctionParts<F>::storage_function_type,f>))] = b->id();
-        return b->id();
-    }
+    template<typename F, typename storage_function_parts<F>::function_type f>
+    FnHandle registerFunction();
 
     /**
      * This run-time version is incompatible with fast (hash table) function ID lookups
      */
     template<typename F>
-    FunctionHandle registerFunction(F f)
-    {
-        FunctionBase *b = new Function<F>(f);
-        m_registeredFunctions[b->id()] = b;
-        return b->id();
-    }
-
-    /**
-     * @brief Query the type identifier for the class Class
-     * @return The identifier associated with class Class
-     */
-    template<class Class>
-    TypeId getTypeId() {
-        return m_registeredTypeIds.at(std::type_index(typeid(typename std::decay<Class>::type)));
-    }
+    FnHandle registerFunction(F f);
 
     /**
      * @brief Query the function handle for the member function pointer #f
      * @return The handle associated with the member function pointer #f
      */
-    template<typename R, class Class, typename... Args>
-    FunctionHandle getFunctionHandle(R(Class::*f)(Args...))
+    /*template<typename F>
+    fnhandle_t get_fn_handle(F&& f)
     {
-        for (const auto &i : m_registeredFunctions)
-        {
-            Function<R(Class::*)(Args...)>* func = dynamic_cast<Function<R(Class::*)(Args...)>*>(i.second);
-            if (func && func == f) {
-                return func->id();
-            }
-        }
-    }
+        return m_registered_function_typeids[std::type_index(typeid(function_identifier<typename storage_function_parts<F>::function_type,f>))];
+    }*/
 
-    template<typename T, T t>
-    FunctionHandle getFunctionHandle()
+    template<typename F, typename storage_function_parts<F>::function_type f>
+    FnHandle get_fn_handle()
     {
-        return m_registeredFunctionTIs[std::type_index(typeid(FunctionId<T,t>))];
+        return m_registered_function_typeids[std::type_index(typeid(function_identifier<F,f>))];
     }
 
     /**
      * @brief Query the function handle for the function pointer #f
      * @return The identifier handle with the function pointer #f
      */
-    template<typename R, typename... Args>
-    FunctionHandle getfunctionHandle(R(*f)(Args...))
+    /*template<typename F>
+    fnhandle_t get_fn_handle(F&& f)
     {
-        for (const auto &i : m_registeredFunctions)
+        static_assert(std::is_function<F>::value || std::is_member_function<F>::value, "mpirpc::Manager::get_fn_handle expects a function pointer as the first argument."
+        for (const auto &i : m_registered_functions)
         {
             if (i.second->pointer() == reinterpret_cast<void(*)()>(f))
                 return i.first;
         }
         throw UnregisteredFunctionException();
-    }
+    }*/
 
     /**
      * @brief Register an object with the Manager. Other ranks are informed of the existance of this object
      * @return A wrapper for the object, containing a pointer to the object and the ids used to call its member functions
      */
     template<class Class>
-    ObjectWrapper<Class>* registerObject(Class *object) {
-        ObjectWrapper<Class> *wrapper = new ObjectWrapper<Class>(object);
-        wrapper->m_rank = m_rank;
-        wrapper->m_type = getTypeId<Class>();
-        m_registeredObjects.push_back(wrapper);
-        notifyNewObject(wrapper->type(), wrapper->id());
-        return wrapper;
-    }
+    ObjectWrapper<Class>* registerObject(Class *object);
 
     template<class Class, typename... Args>
-    ObjectWrapperBase* constructGlobalObject(int rank, Args&&... args)
-    {
-        ObjectWrapperBase *wrapper;
-        if (rank == m_rank)
-        {
-            Class *object = new Class(std::forward<Args>(args)...);
-            wrapper = new ObjectWrapper<Class>(object);
-            wrapper->m_rank = m_rank;
-            wrapper->m_type = getTypeId<Class>();
-        }
-        else
-        {
-            wrapper = new ObjectWrapperBase();
-            wrapper->m_rank = rank;
-            wrapper->m_type = getTypeId<Class>();
-        }
-        m_registeredObjects.push_back(wrapper);
-        return wrapper;
-    }
+    ObjectWrapperBase* constructGlobalObject(int rank, Args&&... args);
 
     /**
      * @brief invoke a function on rank #rank
@@ -534,7 +252,7 @@ public:
      * Note: An object's static functions behave as normal function pointers.
      *
      * Note: function pointer versions of Manager::invokeFunction are slightly
-     * slower than FunctionHandle versions of Manager::invokeFunction when many functions
+     * slower than fnhandle_t versions of Manager::invokeFunction when many functions
      * are registered due to the need to search for the function id associated
      * with the function pointer.
      *
@@ -554,56 +272,23 @@ public:
      * @return The return value of the function if getReturn is true. Otherwise returns a default constructed R.
      */
     template<typename R, typename... FArgs, typename... Args>
-    auto invokeFunctionR(int rank, R(*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
-        -> typename std::enable_if<!std::is_same<R, void>::value, R>::type
-    {
-        if (rank == m_rank) {
-            return f(detail::forward_parameter_type<FArgs,Args>(args)...);
-        } else {
-            if (functionHandle == 0)
-            {
-                for (const auto &i : m_registeredFunctions) {
-                    if (i.second->pointer() == reinterpret_cast<void(*)()>(f)) {
-                        sendFunctionInvocation(rank, i.first, true, detail::forward_parameter_type<FArgs,Args>(args)...);
-                        return processReturn<R>(rank);
-                    }
-                }
-            }
-            else
-            {
-                sendFunctionInvocation(rank, functionHandle, true, detail::forward_parameter_type<FArgs,Args>(args)...);
-                return processReturn<R>(rank);
-            }
-            throw UnregisteredFunctionException();
-        }
-    }
+    auto invokeFunctionR(int rank, R(*f)(FArgs...), FnHandle functionHandle, Args&&... args)
+        -> typename std::enable_if<!std::is_same<R, void>::value, R>::type;
+
+    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    auto invokeFunctionR(int rank, Args&&... args)
+        -> typename detail::marshaller_function_signature<F,Args...>::return_type;
 
     /**
      * Specialized for void return type
      *
      * @see Manager::invokeFunction()
      */
+    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    void invokeFunction(int rank, Args&&... args);
+
     template<typename R, typename... FArgs, typename...Args>
-    void invokeFunction(int rank, R(*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
-    {
-        if (rank == m_rank) {
-            f(detail::forward_parameter_type<FArgs,Args>(args)...);
-        } else {
-            if (functionHandle == 0) {
-                for (const auto &i : m_registeredFunctions) {
-                    if (i.second->pointer() == reinterpret_cast<void(*)()> (f)) {
-                        sendFunctionInvocation(rank, i.first, false, detail::forward_parameter_type<FArgs,Args>(args)...);
-                        return;
-                    }
-                }
-                throw UnregisteredFunctionException();
-            }
-            else
-            {
-                sendFunctionInvocation(rank, functionHandle, false, detail::forward_parameter_type<FArgs,Args>(args)...);
-            }
-        }
-    }
+    void invokeFunction(int rank, R(*f)(FArgs...), FnHandle functionHandle, Args&&... args);
 
     /**
      * @see Manager::invokeFunction()
@@ -613,11 +298,7 @@ public:
      * Local calls cannot be optimized to a simple function call because we don't know how to cast the Function object here
      */
     template<typename R, typename... Args>
-    R invokeFunctionR(int rank, FunctionHandle functionHandle, Args&&... args)
-    {
-        sendFunctionInvocation(rank, functionHandle, true, std::forward<Args>(args)...);
-        return processReturn<R>(rank);
-    }
+    R invokeFunctionR(int rank, FnHandle functionHandle, Args&&... args);
 
     /**
      * Specialized for void return type
@@ -627,10 +308,7 @@ public:
      * @todo Optimize local calls
      */
     template<typename... Args>
-    void invokeFunction(int rank, FunctionHandle functionHandle, Args&&... args)
-    {
-        sendFunctionInvocation(rank, functionHandle, false, std::forward<Args>(args)...);
-    }
+    void invokeFunction(int rank, FnHandle functionHandle, Args&&... args);
 
     /**
      * @brief Call the member function of an object remotely
@@ -644,36 +322,12 @@ public:
      * @return The return value of the function if getReturn is true. Otherwise returns a default constructed R.
      */
     template<typename R, class Class, typename... FArgs, typename... Args>
-    auto invokeFunctionR(ObjectWrapperBase *a, R(Class::*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
-        -> typename std::enable_if<!std::is_same<R, void>::value, R>::type
-    {
-        if (a->rank() == m_rank)
-        {
-            ObjectWrapper<Class> *o = static_cast<ObjectWrapper<Class>*>(a);
-            return CALL_MEMBER_FN(*o->object(),f)(detail::forward_parameter_type<FArgs,Args>(args)...);
-        } else {
-            if (functionHandle == 0)
-            {
-                for (const auto &i : m_registeredFunctions)
-                {
-                    Function<R(Class::*)(FArgs...)>* func = dynamic_cast<Function<R(Class::*)(FArgs...)>*>(i.second);
-                    if (func) {
-                        if (func->func == f)
-                        {
-                            sendMemberFunctionInvocation(a, func->id(), true, detail::forward_parameter_type<FArgs,Args>(args)...);
-                            return processReturn<R>(a->rank());
-                        }
-                    }
-                }
-                throw UnregisteredFunctionException();
-            }
-            else
-            {
-                sendMemberFunctionInvocation(a, functionHandle, true, detail::forward_parameter_type<FArgs,Args>(args)...);
-                return processReturn<R>(a->rank());
-            }
-        }
-    }
+    [[deprecated]] auto invokeFunctionR(ObjectWrapperBase *a, R(Class::*f)(FArgs...), FnHandle functionHandle, Args&&... args)
+        -> typename std::enable_if<!std::is_same<R, void>::value, R>::type;
+
+    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    auto invokeFunctionR(ObjectWrapperBase *a, Args&&... args)
+        -> typename detail::marshaller_function_signature<F,Args...>::return_type;
 
     /**
      * Version for void return type
@@ -681,55 +335,10 @@ public:
      * @see Manager::invokeMemberFunction()
      */
     template<typename R, class Class, typename... FArgs, typename... Args>
-    void invokeFunction(ObjectWrapperBase *a, R(Class::*f)(FArgs...), FunctionHandle functionHandle, Args&&... args)
-    {
-        if (a->rank() == m_rank)
-        {
-            ObjectWrapper<Class> *o = static_cast<ObjectWrapper<Class>*>(a);
-            CALL_MEMBER_FN(*o->object(),f)(detail::forward_parameter_type<FArgs,Args>(args)...);
-        } else {
-            if (functionHandle == 0)
-            {
-                for (const auto &i : m_registeredFunctions)
-                {
-                    Function<R(Class::*)(FArgs...)>* func = dynamic_cast<Function<R(Class::*)(FArgs...)>*>(i.second);
-                    if (func) {
-                        if (func->func == f)
-                        {
-                            sendMemberFunctionInvocation(a, func->id(), false, detail::forward_parameter_type<FArgs,Args>(args)...);
-                            return;
-                        }
-                    }
-                }
-                throw UnregisteredFunctionException();
-            }
-            else
-            {
-                sendMemberFunctionInvocation(a, functionHandle, false, detail::forward_parameter_type<FArgs,Args>(args)...);
-            }
-        }
-    }
+    [[deprecated]] void invokeFunction(ObjectWrapperBase *a, R(Class::*f)(FArgs...), FnHandle functionHandle, Args&&... args);
 
-    /**
-     * @see Manager::invokeFunction()
-     */
-    template<typename R, typename... Args>
-    R invokeFunctionR(ObjectWrapperBase *a, FunctionHandle functionHandle, Args&&... args)
-    {
-        sendMemberFunctionInvocation(a, functionHandle, true, std::forward<Args>(args)...);
-        return processReturn<R>(a->rank());
-    }
-
-    /**
-     * Specialized for void return type
-     *
-     * @see Manager::invokeFunction()
-     */
-    template<typename... Args>
-    void invokeFunction(ObjectWrapperBase *a, FunctionHandle functionHandle, Args&&... args)
-    {
-        sendMemberFunctionInvocation(a, functionHandle, false, std::forward<Args>(args)...);
-    }
+    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    void invokeFunction(ObjectWrapperBase *a, Args&&... args);
 
     /**
      * @brief Get the MPI rank of this process
@@ -767,10 +376,7 @@ public:
      * @return A pointer to the object's wrapper
      */
     template<class Class>
-    ObjectWrapperBase* getObjectOfType() const
-    {
-        return getObjectOfType(getTypeId<Class>());
-    }
+    ObjectWrapperBase* getObjectOfType() const;
 
     /**
      * @brief Get the first wrapper to the object of type #typeId which exists on rank #rank
@@ -786,10 +392,7 @@ public:
      * @return A pointer to the object's wrapper
      */
     template<class Class>
-    ObjectWrapperBase* getObjectOfType(int rank) const
-    {
-        return getObjectOfType(getTypeId<Class>(), rank);
-    }
+    ObjectWrapperBase* getObjectOfType(int rank) const;
 
     /**
      * @brief Get the set of all objects of type #typeId for rank #rank
@@ -805,10 +408,7 @@ public:
      * @return A std::unordered_set of object wrapers for the type and rank
      */
     template<class Class>
-    std::unordered_set<ObjectWrapperBase*> getObjectsOfType(int rank) const
-    {
-        return getObjectsOfType(getTypeId<Class>(), rank);
-    }
+    std::unordered_set<ObjectWrapperBase*> getObjectsOfType(int rank) const;
 
     /**
      * @brief Get the set of all objects of type #typeId
@@ -822,10 +422,7 @@ public:
      * @return A std::unordered_set of all object wrappers for the type
      */
     template<class Class>
-    std::unordered_set<ObjectWrapperBase*> getObjectsOfType()
-    {
-        return getObjectsOfType(getTypeId<Class>());
-    }
+    std::unordered_set<ObjectWrapperBase*> getObjectsOfType() const;
 
     template<typename T>
     std::vector<T> reduce(std::vector<T>& vec, MPI_Op op, int root)
@@ -952,12 +549,25 @@ protected:
      * @param rank The rank which invoked the function
      * @param r The invoked functions return value
      */
-    template<typename R>
-    void functionReturn(int rank, R r)
+    template<typename R, typename... Args,bool...PBs,std::size_t... Is>
+    void functionReturn(int rank, R&& r, std::tuple<Args...> args, bool_tuple<PBs...>, std::index_sequence<Is...>)
     {
         std::vector<char>* buffer = new std::vector<char>();
         ParameterStream stream(buffer);
-        stream << r;
+        stream << std::forward<R>(r);
+        using swallow = int[];
+        (void)swallow{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
+        MPI_Send((void*) stream.dataVector()->data(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
+        delete buffer;
+    }
+
+    template<typename... Args,bool...PBs,std::size_t... Is>
+    void functionReturn(int rank, std::tuple<Args...> args, bool_tuple<PBs...>, std::index_sequence<Is...>)
+    {
+        std::vector<char>* buffer = new std::vector<char>();
+        ParameterStream stream(buffer);
+        using swallow = int[];
+        (void)swallow{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
         MPI_Send((void*) stream.dataVector()->data(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
         delete buffer;
     }
@@ -975,36 +585,50 @@ protected:
      * unpacking will be done in the same order.
      */
     template<typename... Args>
-    void sendFunctionInvocation(int rank, FunctionHandle functionHandle, bool getReturn, Args... args)
-    {
-        std::vector<char>* buffer = new std::vector<char>();
-        ParameterStream stream(buffer);
-        stream << functionHandle << getReturn;
-        Passer p{(stream << args, 0)...};
-        sendRawMessage(rank, stream.dataVector(), MPIRPC_TAG_INVOKE);
-    }
+    void sendFunctionInvocation(int rank, FnHandle functionHandle, bool getReturn, Args&&... args);
+
+    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    void sendFunctionInvocation(int rank, bool getReturn, Args&&... args);
 
     /**
      * Invoke a member function on a remote process
      *
-     * @see Manager::sendFunctionInvocation(int,FunctionHandle,bool,Args...)
+     * @see Manager::sendFunctionInvocation(int,fnhandle_t,bool,Args...)
      */
     template<typename... Args>
-    void sendMemberFunctionInvocation(ObjectWrapperBase *a, FunctionHandle functionHandle, bool getReturn, Args... args)
-    {
-        std::vector<char>* buffer = new std::vector<char>();
-        ParameterStream stream(buffer);
-        stream << a->type() << a->id();
-        stream << functionHandle << getReturn;
-        Passer p{(stream << args, 0)...};
-        sendRawMessage(a->rank(), stream.dataVector(), MPIRPC_TAG_INVOKE_MEMBER);
-    }
+    [[deprecated]] void sendMemberFunctionInvocation(ObjectWrapperBase *a, FnHandle functionHandle, bool getReturn, Args&&... args);
+
+    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    void sendMemberFunctionInvocation(ObjectWrapperBase* a, bool get_return, Args&&... args);
 
     /**
      * Wait for the remote process to run an invocation and send that function's return value back to this process.
      * Unserialize the result and return it.
      */
-    template<typename R>
+    template<typename R, typename... Args>
+    R processReturn(int rank) {
+        MPI_Status status;
+        int len;
+        int flag;
+        bool shutdown;
+        do {
+            shutdown = !checkMessages();
+            MPI_Iprobe(rank, MPIRPC_TAG_RETURN, m_comm, &flag, &status);
+        } while (!flag && !shutdown);
+        if (!shutdown)
+            MPI_Get_count(&status, MPI_CHAR, &len);
+        R ret;
+        if (!shutdown && len != MPI_UNDEFINED) {
+            std::vector<char>* buffer = new std::vector<char>(len);
+            ParameterStream stream(buffer);
+            MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
+            ret = unmarshal<R>(stream);
+            delete buffer;
+        }
+        return ret;
+    }
+
+    template<typename R, typename...Args>
     R processReturn(int rank) {
         MPI_Status status;
         int len;
@@ -1060,8 +684,8 @@ protected:
     std::unordered_map<std::type_index, TypeId> m_registeredTypeIds;
     std::unordered_map<std::type_index, TypeId> m_registeredMemoryManagers;
 
-    std::map<FunctionHandle, FunctionBase*> m_registeredFunctions;
-    std::unordered_map<std::type_index, FunctionHandle> m_registeredFunctionTIs;
+    std::map<FnHandle, FunctionBase*> m_registered_functions;
+    std::unordered_map<std::type_index, FnHandle> m_registered_function_typeids;
     std::vector<ObjectWrapperBase*> m_registeredObjects;
 
     std::unordered_map<MPI_Request, const std::vector<char>*> m_mpiMessages;
@@ -1077,38 +701,29 @@ protected:
     unsigned long long m_count;
     bool m_shutdown;
     MPI_Datatype MpiObjectInfo;
-
-public:
-    static void registerPointer(void* ptr, std::size_t sz, bool gc = true);
-    static void setPointerGc(void* ptr, bool gc);
-
-protected:
-    static std::unordered_map<void*, std::pair<std::size_t, bool>> _pointer_registry;
 };
 
-/*
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::~Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>()
-{
-    MPI_Type_free(&MpiObjectInfo);
-    for (auto i : m_mpiMessages)
-        delete i.second;
-    for (auto i : m_mpiObjectMessages)
-        i.second.reset();
-    for (auto i : m_registeredFunctions)
-        delete i.second;
-    for (auto i : m_registeredObjects)
-        delete i;
-}
+template<class MessageInterface>
+struct Manager<MessageInterface>::ObjectInfo {
+    ObjectInfo() {}
+    ObjectInfo(TypeId t, ObjectId i) : type(t), id(i) {}
+    TypeId type;
+    TypeId id;
+};
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-int Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::rank() const
+#include "detail/manager/manager.hpp"
+#include "detail/manager/function.hpp"
+#include "detail/manager/register.hpp"
+#include "detail/manager/invoke.hpp"
+
+template<typename MessageInterface>
+int Manager<MessageInterface>::rank() const
 {
     return m_rank;
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::notifyNewObject(TypeId type, ObjectId id)
+template<typename MessageInterface>
+void Manager<MessageInterface>::notifyNewObject(TypeId type, ObjectId id)
 {
     if (m_shutdown)
         return;
@@ -1124,8 +739,8 @@ void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<Custo
     }
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::sendRawMessage(int rank, const std::vector<char> *data, int tag)
+template<typename MessageInterface>
+void Manager<MessageInterface>::sendRawMessage(int rank, const std::vector<char> *data, int tag)
 {
     if (checkSends() && !m_shutdown) {
         MPI_Request req;
@@ -1134,8 +749,8 @@ void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<Custo
     }
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::sendRawMessageToAll(const std::vector<char>* data, int tag)
+template<typename MessageInterface>
+void Manager<MessageInterface>::sendRawMessageToAll(const std::vector<char>* data, int tag)
 {
     for (int i = 0; i < m_numProcs; ++i) {
 #ifndef USE_MPI_LOCALLY
@@ -1148,14 +763,23 @@ void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<Custo
     }
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::registerUserMessageHandler(int tag, UserMessageHandler callback)
+template<typename MessageInterface>
+void Manager<MessageInterface>::registerUserMessageHandler(int tag, UserMessageHandler callback)
 {
     m_userMessageHandlers[tag] = callback;
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-bool Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::checkSends() {
+template<typename MessageInterface>
+void Manager<MessageInterface>::registerRemoteObject()
+{
+    ObjectInfo info;
+    MPI_Status status;
+    MPI_Recv(&info, 1, MpiObjectInfo, MPI_ANY_SOURCE, MPIRPC_TAG_NEW, m_comm, &status);
+    registerRemoteObject(status.MPI_SOURCE, info.type, info.id);
+}
+
+template<typename MessageInterface>
+bool Manager<MessageInterface>::checkSends() {
     for (auto i = m_mpiObjectMessages.begin(); i != m_mpiObjectMessages.end();) {
         MPI_Request req = i->first;
         int flag;
@@ -1184,8 +808,8 @@ bool Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<Custo
     return true;
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-bool Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::checkMessages() {
+template<typename MessageInterface>
+bool Manager<MessageInterface>::checkMessages() {
     if (m_shutdown)
         return false;
     checkSends();
@@ -1220,17 +844,8 @@ bool Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<Custo
     return true;
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::registerRemoteObject()
-{
-    ObjectInfo info;
-    MPI_Status status;
-    MPI_Recv(&info, 1, MpiObjectInfo, MPI_ANY_SOURCE, MPIRPC_TAG_NEW, m_comm, &status);
-    registerRemoteObject(status.MPI_SOURCE, info.type, info.id);
-}
-
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::sync() {
+template<typename MessageInterface>
+void Manager<MessageInterface>::sync() {
     while (queueSize() > 0) { checkMessages(); } //block until this rank's queue is processed
     MPI_Request req;
     int flag;
@@ -1242,18 +857,8 @@ void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<Custo
     } while (!flag); //wait until all other ranks queues have been processed
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::registerRemoteObject(int rank, TypeId type, ObjectId id)
-{
-    ObjectWrapper<void> *a = new ObjectWrapper<void>();
-    a->m_id = id;
-    a->m_type = type;
-    a->m_rank = rank;
-    m_registeredObjects.push_back(a);
-}
-
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::shutdownAll() {
+template<typename MessageInterface>
+void Manager<MessageInterface>::shutdownAll() {
     int buf = 0;
     for (int i = 0; i < m_numProcs; ++i)
     {
@@ -1265,15 +870,15 @@ void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<Custo
     m_shutdown = true;
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::shutdown()
+template<typename MessageInterface>
+void Manager<MessageInterface>::shutdown()
 {
     sync();
     m_shutdown = true;
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::handleShutdown()
+template<typename MessageInterface>
+void Manager<MessageInterface>::handleShutdown()
 {
     int buf;
     MPI_Status status;
@@ -1282,8 +887,8 @@ void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<Custo
     m_shutdown = true;
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::receivedInvocationCommand(MPI_Status&& status)
+template<typename MessageInterface>
+void Manager<MessageInterface>::receivedInvocationCommand(MPI_Status&& status)
 {
     m_count++;
     int len;
@@ -1291,19 +896,19 @@ void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<Custo
     if (len != MPI_UNDEFINED) {
         std::vector<char>* buffer = new std::vector<char>(len);
         ParameterStream stream(buffer);
-        MPI_Status recvStatus;
-        MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
-        FunctionHandle functionHandle;
-        bool getReturn;
-        stream >> functionHandle >> getReturn;
-        FunctionBase *f = m_registeredFunctions[functionHandle];
-        f->execute(stream, recvStatus.MPI_SOURCE, this, getReturn);
+        MPI_Status recv_status;
+        MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recv_status);
+        FnHandle function_handle;
+        bool get_return;
+        stream >> function_handle >> get_return;
+        FunctionBase *f = m_registered_functions[function_handle];
+        f->execute(stream, recv_status.MPI_SOURCE, this, get_return);
         delete buffer;
     }
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::receivedMemberInvocationCommand(MPI_Status&& status) {
+template<typename MessageInterface>
+void Manager<MessageInterface>::receivedMemberInvocationCommand(MPI_Status&& status) {
     m_count++;
     int len;
     MPI_Get_count(&status, MPI_CHAR, &len);
@@ -1312,119 +917,44 @@ void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<Custo
         ParameterStream stream(buffer);
         MPI_Status recvStatus;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
-        FunctionHandle functionHandle;
+        FnHandle functionHandle;
         ObjectId objectId;
         TypeId typeId;
         bool getReturn;
         stream >> typeId >> objectId >> functionHandle >> getReturn;
-        FunctionBase *f = m_registeredFunctions[functionHandle];
+        FunctionBase *f = m_registered_functions[functionHandle];
         f->execute(stream, recvStatus.MPI_SOURCE, this, getReturn, getObjectWrapper(m_rank, typeId, objectId)->object());
         delete buffer;
     }
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-MPI_Comm Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::comm() const
+template<typename MessageInterface>
+MPI_Comm Manager<MessageInterface>::comm() const
 {
     return m_comm;
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-ObjectWrapperBase* Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::getObjectOfType(mpirpc::TypeId typeId) const
-{
-    for (ObjectWrapperBase* i : m_registeredObjects)
-    {
-        if (i->type() == typeId)
-            return i;
-    }
-    throw std::out_of_range("Object not found");
-}
-
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-std::unordered_set<ObjectWrapperBase*> Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::getObjectsOfType(TypeId typeId) const
-{
-    std::unordered_set<ObjectWrapperBase*> ret;
-    for (ObjectWrapperBase* i : m_registeredObjects)
-    {
-        if (i->type() == typeId)
-            ret.insert(i);
-    }
-    return ret;
-}
-
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-ObjectWrapperBase* Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::getObjectOfType(TypeId typeId, int rank) const
-{
-    for (ObjectWrapperBase* i : m_registeredObjects)
-    {
-        if (i->type() == typeId && i->rank() == rank)
-            return i;
-    }
-    throw std::out_of_range("Object not found");
-}
-
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-std::unordered_set< ObjectWrapperBase* > Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::getObjectsOfType(TypeId typeId, int rank) const
-{
-    std::unordered_set<ObjectWrapperBase*> ret;
-    for (ObjectWrapperBase* i : m_registeredObjects)
-    {
-        if (i->type() == typeId && i->rank() == rank)
-            ret.insert(i);
-    }
-    return ret;
-}
-
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-unsigned long long Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::stats() const
+template<typename MessageInterface>
+unsigned long long Manager<MessageInterface>::stats() const
 {
     return m_count;
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-int Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::numProcs() const
+template<typename MessageInterface>
+int Manager<MessageInterface>::numProcs() const
 {
     return m_numProcs;
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-size_t Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::queueSize() const
+template<typename MessageInterface>
+size_t Manager<MessageInterface>::queueSize() const
 {
     return m_mpiObjectMessages.size() + m_mpiMessages.size();
 }
 
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-ObjectWrapperBase* Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::getObjectWrapper(int rank, TypeId tid, ObjectId oid) const {
-    for (ObjectWrapperBase* i : m_registeredObjects)
-        if (i->type() == tid && i->id() == oid && i->rank() == rank)
-            return i;
-    throw UnregisteredObjectException();
-}
-
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::registerPointer(void* ptr, std::size_t sz, bool gc)
-{
-    _pointer_registry[ptr] = std::make_pair(sz,gc);
-}
-
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-void Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::setPointerGc(void* ptr, bool gc)
-{
-    _pointer_registry[ptr].second = gc;
-}
-
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-FunctionHandle Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::FunctionBase::_idCounter = 0;
-
-template<typename MessageInterface, typename... CustomAllocators, typename... CustomDeleters>
-std::unordered_map<void*, std::pair<std::size_t, bool>> Manager<MessageInterface, std::tuple<CustomAllocators...>, std::tuple<CustomDeleters...>>::_pointer_registry;
-
 class MpiMessageInterface {};
 
-template<typename CustomAllocators = std::tuple<>, typename CustomDeleters = std::tuple<>>
-using MpiManager = Manager<MpiMessageInterface, CustomAllocators, CustomDeleters>;
-
-*/
+using MpiManager = Manager<MpiMessageInterface>;
 
 }
 

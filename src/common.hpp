@@ -58,6 +58,7 @@ struct FunctionParts<R(Class::*)(Args...)>
 {
     using return_type = R;
     using class_type = Class;
+    using args_tuple_type = std::tuple<Args...>;
     using function_type = R(Class::*)(Args...);
 };
 
@@ -65,10 +66,68 @@ template<typename R, typename... Args>
 struct FunctionParts<R(*)(Args...)>
 {
     using return_type = R;
+    using args_tuple_type = std::tuple<Args...>;
     using function_type = R(*)(Args...);
 };
 
-using FunctionHandle = unsigned long long;
+template<typename R, typename... Args>
+struct FunctionParts<std::function<R(Args...)>>
+{
+    using return_type = R;
+    using args_tuple_type = std::tuple<Args...>;
+    using function_type = std::function<R(Args...)>;
+};
+
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+class PointerWrapper;
+
+template<typename T>
+struct storage_type
+{
+    using type = T;
+};
+
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+struct storage_type<PointerWrapper<T,N,PassOwnership,PassBack,Allocator>>
+{
+    using type = typename std::conditional<std::is_array<T>::value,T,T*>::type;
+};
+
+template<typename F>
+struct storage_function_parts;
+
+template<typename R, class Class, typename... Args>
+struct storage_function_parts<R(Class::*)(Args...)>
+{
+    using return_type = R;
+    using class_type = Class;
+    using wrapped_function_type = R(Class::*)(Args...);
+    using storage_tuple_type = std::tuple<typename std::remove_reference<Args>::type...>;
+    using function_type = R(Class::*)(typename storage_type<Args>::type...);
+};
+
+template<typename R, typename... Args>
+struct storage_function_parts<R(*)(Args...)>
+{
+    using return_type = R;
+    using wrapped_function_type = R(*)(Args...);
+    using storage_tuple_type = std::tuple<typename std::remove_reference<Args>::type...>;
+    using function_type = R(*)(typename storage_type<Args>::type...);
+};
+
+template<typename R, typename... Args>
+struct storage_function_parts<std::function<R(Args...)>>
+{
+    using return_type = R;
+    using wrapped_function_type = std::function<R(Args...)>;
+    using storage_tuple_type = std::tuple<typename std::remove_reference<Args>::type...>;
+    using function_type = std::function<R(typename storage_type<Args>::type...)>;
+};
+
+template<typename Functor, typename storage_function_parts<Functor>::function_type f>
+struct function_identifier {};
+
+using FnHandle = unsigned long long;
 using TypeId = unsigned long long;
 using ObjectId = unsigned long long;
 
@@ -81,6 +140,32 @@ template<typename T> struct remove_all_const<T*> {
 template<typename T> struct remove_all_const<T * const> {
     typedef typename remove_all_const<T>::type *type;
 };
+
+template<typename T> struct remove_all_const<T&> {
+    typedef typename remove_all_const<T>::type &type;
+};
+
+template<typename T> struct remove_all_const<const T&> {
+    typedef typename remove_all_const<T>::type &type;
+};
+
+template<bool... Bs>
+struct any_true;
+
+template<bool B1, bool... Bs>
+struct any_true<B1, Bs...>
+{
+    constexpr static bool value = B1 || any_true<Bs...>::value;
+};
+
+template<bool B>
+struct any_true<B>
+{
+    constexpr static bool value = B;
+};
+
+template<bool...Vs>
+struct bool_tuple{};
 
 /*template<typename T>
 constexpr std::size_t array_elements(const T&) noexcept

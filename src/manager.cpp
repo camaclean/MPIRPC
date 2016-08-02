@@ -26,7 +26,7 @@
 namespace mpirpc
 {
 
-
+/*
 Manager::Manager(MPI_Comm comm) : m_comm(comm), m_nextTypeId(0), m_nextDeleterId(0), m_count(0), m_shutdown(false)
 {
     MPI_Comm_rank(m_comm, &m_rank);
@@ -236,7 +236,7 @@ void Manager::receivedInvocationCommand(MPI_Status&& status)
         ParameterStream stream(buffer);
         MPI_Status recvStatus;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
-        FunctionHandle functionHandle;
+        fnhandle_t functionHandle;
         bool getReturn;
         stream >> functionHandle >> getReturn;
         FunctionBase *f = m_registeredFunctions[functionHandle];
@@ -254,7 +254,7 @@ void Manager::receivedMemberInvocationCommand(MPI_Status&& status) {
         ParameterStream stream(buffer);
         MPI_Status recvStatus;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
-        FunctionHandle functionHandle;
+        fnhandle_t functionHandle;
         ObjectId objectId;
         TypeId typeId;
         bool getReturn;
@@ -344,9 +344,10 @@ void Manager::setPointerGc(void* ptr, bool gc)
     _pointer_registry[ptr].second = gc;
 }
 
-FunctionHandle Manager::FunctionBase::_idCounter = 0;
+fnhandle_t Manager::FunctionBase::_idCounter = 0;
 
 std::unordered_map<void*, std::pair<std::size_t, bool>> Manager::_pointer_registry;
+*/
 
 }
 
