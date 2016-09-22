@@ -40,6 +40,7 @@
 #include <iterator>
 #include <exception>
 #include <algorithm>
+#include <numeric>
 #include <thread>
 
 #include <mpi.h>
@@ -628,7 +629,7 @@ protected:
         return ret;
     }
 
-    template<typename R, typename...Args>
+    /*template<typename R, typename...Args>
     R processReturn(int rank) {
         MPI_Status status;
         int len;
@@ -649,7 +650,7 @@ protected:
             delete buffer;
         }
         return ret;
-    }
+    }*/
 
     /**
      * @brief Handle a message indicating a remote process is registering a new object.

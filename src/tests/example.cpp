@@ -138,7 +138,7 @@ int main(int argc, char** argv)
         std::string s("blah");
         const char* cz = "C string";
         manager->invokeFunction<decltype(&f4),&f4>(0, s);
-	int *test3 = new int[4];
+        int *test3 = new int[4];
         test3[0] = 1;
         test3[1] = 2;
         test3[2] = 3;

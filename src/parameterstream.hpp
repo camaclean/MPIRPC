@@ -337,7 +337,7 @@ struct fn_type_marshaller
     static void marshal(Stream& ps, Args&&... args)
     {
         using Applier = typename detail::marshaller_function_signature<F,Args...>::applier;
-        Applier apply = [&](auto&&... a) { Passer p{(marshal(ps, std::forward<decltype(a)>(a)), 0)...}; };
+        Applier apply = [&](auto&&... a) { Passer p{(mpirpc::marshal(ps, std::forward<decltype(a)>(a)), 0)...}; };
         apply(std::forward<Args>(args)...);
     }
 };

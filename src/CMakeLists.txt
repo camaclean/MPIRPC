@@ -8,6 +8,7 @@ option(USE_LTO "Build with Link Time Optimizations" OFF)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -O3 -march=native -g -ggdb")
 
 #set(CMAKE_CXX_COMPILER "clang++")
+#add_definitions(-fconcepts)
 
 include(FindMPI REQUIRED)
 
@@ -29,7 +30,7 @@ if(MPI_FOUND)
     include_directories("${MPI_CXX_INCLUDE_PATH}")
 endif(MPI_FOUND)
 
-set(SRC_LIST manager.cpp objectwrapper.cpp parameterstream.cpp mpitype.cpp)
+set(SRC_LIST manager.cpp objectwrapper.cpp parameterstream.cpp mpitype.cpp detail/manager/invoke.hpp)
 add_library(mpirpc STATIC ${SRC_LIST})
 target_link_libraries(mpirpc ${MPI_CXX_LIBRARIES})
 
