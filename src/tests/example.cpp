@@ -13,12 +13,23 @@ int f2() { std::cout << "Running function f2()" << std::endl; return 2; }
 
 double f3(double p) { std::cout << "Running function f3(double) " << p << std::endl; return p; }
 
-void f4( std::string& s2) { std::cout << "f4(const char*): " << s2 << std::endl;
+void f4( std::string& s2)
+{
+    std::cout << "f4(std::string&): " << s2 << std::endl;
     s2 = "edited string";
-
 }
 
 void f5(int p[], int t1, int& t2, int&& t3) { std::cout << "basic pointer type: " << p[0] << " " << p[1] << " " << p[2] << " " << p[3] << " , int: " << t1 << " int&: " << t2 << " int&&: " << t3 << std::endl; t2 = -1; }
+
+void f6(const char* str) { std::cout << "f6(const char*): " << str << std::endl; }
+
+void f7(const std::vector<int>& v)
+{
+    std::cout << "f7(const std::vector<int>&): ";
+    for (const auto& i : v)
+        std::cout << i << " ";
+    std::cout << std::endl;
+}
 
 struct Foo
 {
@@ -91,8 +102,13 @@ int main(int argc, char** argv)
     mpirpc::FnHandle hf3 = manager->registerFunction<decltype(&f3),&f3>();
     mpirpc::FnHandle hf4 = manager->registerFunction<decltype(&f4),&f4>();
     //mpirpc::fnhandle_t hf5 = manager->registerFunction<decltype(&f5),&f5>();
-    //std::vector<char> buffer;
-    //mpirpc::ParameterStream s(&buffer);
+    mpirpc::FnHandle hf6 = manager->registerFunction<decltype(&f6),&f6>();
+    mpirpc::FnHandle hf7 = manager->registerFunction<decltype(&f7),&f7>();
+    std::vector<char> buffer;
+    mpirpc::ParameterStream s(&buffer);
+    const char* testcstr[] = {"test", "blahblah"};
+    std::cout << "cstrsize: " << sizeof(testcstr)/sizeof(testcstr[0]);
+    s << testcstr;
     //mpirpc::unmarshal<mpirpc::PointerWrapper<int,0UL,false,std::allocator<int>>>(s);
     mpirpc::FnHandle hf5 = manager->registerFunction<void(*)(mpirpc::PointerWrapper<int,4>,int,int&,int&&),&f5>();
     mpirpc::FnHandle fooBar1 = manager->registerFunction<decltype(&Foo::bar1),&Foo::bar1>();
@@ -132,8 +148,9 @@ int main(int argc, char** argv)
         manager->invokeFunction(0, &f1, 0); //handle lookup
         int ret2 = manager->invokeFunctionR<int>(0, &f2, manager->get_fn_handle<decltype(&f2),&f2>());
         std::cout << "Rank 1 got " << ret2 << " as a return from f2()" << std::endl;
-        double ret3 = manager->invokeFunctionR<double>(0, &f3, 0, 5.3f); // 5.3f should convert to a double
-        ret3 = manager->invokeFunctionR<decltype(&f3),&f3>(0, 5.3f);
+        double r = 5.3f;
+        double ret3 = manager->invokeFunctionR<double>(0, &f3, 0, r); // 5.3f should convert to a double
+        ret3 = manager->invokeFunctionR<decltype(&f3),&f3>(0, r);
         std::cout << "Rank 1 got " << ret3 << " as a return from f3()" << std::endl;
         std::string s("blah");
         const char* cz = "C string";
@@ -144,7 +161,11 @@ int main(int argc, char** argv)
         test3[2] = 3;
         test3[3] = 4;
         int b = 7;
-        manager->invokeFunction<void(*)(mpirpc::PointerWrapper<int,4>,int,int&,int&&),&f5>(0, mpirpc::PointerWrapper<int,4>(test3), 6, b, 8);
+        std::vector<int> vectest{5,4,3,2,1};
+        manager->invokeFunctionR<void(*)(mpirpc::PointerWrapper<int,4>,int,int&,int&&),&f5>(0, mpirpc::PointerWrapper<int,4>(test3), 6, b, 8);
+        std::cout << "b: " << b << std::endl;
+        manager->invokeFunction<decltype(&f6),&f6>(0, "test cstring");
+        manager->invokeFunction<decltype(&f7),&f7>(0, vectest);
         manager->invokeFunction<decltype(&Foo::bar1),&Foo::bar1>(foo_w);
         std::string ret4 = manager->invokeFunctionR<decltype(&Foo::bar2),&Foo::bar2>(foo_w);
         std::cout << "Rank 1 got \"" << ret4 << "\" as a return from Foo::bar2()" << std::endl;

@@ -7,8 +7,7 @@ option(USE_LTO "Build with Link Time Optimizations" OFF)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -O3 -march=native -g -ggdb")
 
-#set(CMAKE_CXX_COMPILER "clang++")
-#add_definitions(-fconcepts)
+add_definitions(-fconcepts)
 
 include(FindMPI REQUIRED)
 
@@ -30,7 +29,7 @@ if(MPI_FOUND)
     include_directories("${MPI_CXX_INCLUDE_PATH}")
 endif(MPI_FOUND)
 
-set(SRC_LIST manager.cpp objectwrapper.cpp parameterstream.cpp mpitype.cpp detail/manager/invoke.hpp)
+set(SRC_LIST manager.cpp objectwrapper.cpp parameterstream.cpp mpitype.cpp detail/manager/function.hpp detail/manager/invoke.hpp detail/manager/manager.hpp detail/manager/register.hpp)
 add_library(mpirpc STATIC ${SRC_LIST})
 target_link_libraries(mpirpc ${MPI_CXX_LIBRARIES})
 
@@ -63,8 +62,8 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "MPIRPC is library for remote procedure ca
 set(CPACK_PACKAGE_VENDOR "Colin MacLean")
 set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../README.md")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE")
-set(CPACK_PACKAGE_VERSION_MAJOR "0")
-set(CPACK_PACKAGE_VERSION_MINOR "1")
+set(CPACK_PACKAGE_VERSION_MAJOR "1")
+set(CPACK_PACKAGE_VERSION_MINOR "0")
 set(CPACK_PACKAGE_VERSION_PATCH "0")
 set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "x86_64")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Colin MacLean <cmaclean@illinois.edu>")

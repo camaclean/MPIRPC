@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <numeric>
 #include <thread>
+#include <numeric>
 
 #include <mpi.h>
 
@@ -278,7 +279,11 @@ public:
 
     template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
     auto invokeFunctionR(int rank, Args&&... args)
-        -> typename detail::marshaller_function_signature<F,Args...>::return_type;
+        -> typename detail::marshaller_function_signature<F,Args...>::void_return_type;
+
+    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    auto invokeFunctionR(int rank, Args&&... args)
+        -> typename detail::marshaller_function_signature<F,Args...>::non_void_return_type;
 
     /**
      * Specialized for void return type
@@ -557,7 +562,11 @@ protected:
         ParameterStream stream(buffer);
         stream << std::forward<R>(r);
         using swallow = int[];
-        (void)swallow{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
+        swallow s{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
+        std::cout << "swallow: " << sizeof...(Is) << ": ";
+        for(size_t i = 0; i < sizeof...(Is); i++)
+            std::cout << s[i];
+        std::cout << std::endl;
         MPI_Send((void*) stream.dataVector()->data(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
         delete buffer;
     }
@@ -568,7 +577,11 @@ protected:
         std::vector<char>* buffer = new std::vector<char>();
         ParameterStream stream(buffer);
         using swallow = int[];
-        (void)swallow{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
+        swallow s{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
+        std::cout << "swallow: " << sizeof...(Is) << ": ";
+        for(size_t i = 0; i < sizeof...(Is); i++)
+            std::cout << s[i];
+        std::cout << std::endl;
         MPI_Send((void*) stream.dataVector()->data(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
         delete buffer;
     }
@@ -606,8 +619,8 @@ protected:
      * Wait for the remote process to run an invocation and send that function's return value back to this process.
      * Unserialize the result and return it.
      */
-    template<typename R, typename... Args>
-    R processReturn(int rank) {
+    template<typename R, typename... Args, bool...PBs, std::size_t... Is>
+    processReturn(int rank, R& r, bool_tuple<PBs...>, std::index_sequence<Is...>, Args&&... args) {
         MPI_Status status;
         int len;
         int flag;
@@ -618,19 +631,18 @@ protected:
         } while (!flag && !shutdown);
         if (!shutdown)
             MPI_Get_count(&status, MPI_CHAR, &len);
-        R ret;
         if (!shutdown && len != MPI_UNDEFINED) {
             std::vector<char>* buffer = new std::vector<char>(len);
             ParameterStream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
-            ret = unmarshal<R>(stream);
+            r = unmarshal<R>(stream);
             delete buffer;
         }
         return ret;
     }
 
-    /*template<typename R, typename...Args>
-    R processReturn(int rank) {
+    template<typename...Args>
+    void processReturn(int rank, Args&&... args) {
         MPI_Status status;
         int len;
         int flag;
@@ -641,16 +653,13 @@ protected:
         } while (!flag && !shutdown);
         if (!shutdown)
             MPI_Get_count(&status, MPI_CHAR, &len);
-        R ret;
         if (!shutdown && len != MPI_UNDEFINED) {
             std::vector<char>* buffer = new std::vector<char>(len);
             ParameterStream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
-            ret = unmarshal<R>(stream);
             delete buffer;
         }
-        return ret;
-    }*/
+    }
 
     /**
      * @brief Handle a message indicating a remote process is registering a new object.

@@ -71,9 +71,9 @@ public:
     template<bool B = PassOwnership, typename std::enable_if<!B>::type* = nullptr>
     void free() {
         std::size_t size = detail::PointerWrapperSize<N>::size();
-        for (std::size_t i = 0; i < size; ++i)
-            m_allocator.destroy(&m_pointer[i]);
-        m_allocator.deallocate(m_pointer,size);
+        //for (std::size_t i = 0; i < size; ++i)
+        //    m_allocator.destroy(&m_pointer[i]);
+        //m_allocator.deallocate(m_pointer,size);
     }
 protected:
     Allocator m_allocator;

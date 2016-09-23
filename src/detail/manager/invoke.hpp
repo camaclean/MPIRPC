@@ -16,7 +16,7 @@
 template<typename MessageInterface>
 template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
 auto mpirpc::Manager<MessageInterface>::invokeFunctionR(int rank, Args&&... args)
-    -> typename detail::marshaller_function_signature<F,Args...>::return_type
+    -> typename detail::marshaller_function_signature<F,Args...>::non_void_return_type
 {
     if (rank == m_rank)
     {
@@ -24,6 +24,20 @@ auto mpirpc::Manager<MessageInterface>::invokeFunctionR(int rank, Args&&... args
     } else {
         sendFunctionInvocation<F,f>(rank, true, std::forward<Args>(args)...);
         return processReturn<typename detail::marshaller_function_signature<F,Args...>::return_type>(rank);
+    }
+}
+
+template<typename MessageInterface>
+template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+auto mpirpc::Manager<MessageInterface>::invokeFunctionR(int rank, Args&&... args)
+    -> typename detail::marshaller_function_signature<F,Args...>::void_return_type
+{
+    if (rank == m_rank)
+    {
+        f(std::forward<Args>(args)...);
+    } else {
+        sendFunctionInvocation<F,f>(rank, true, std::forward<Args>(args)...);
+        processReturn<typename detail::marshaller_function_signature<F,Args...>::return_type>(rank);
     }
 }
 
