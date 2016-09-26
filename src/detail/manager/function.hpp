@@ -17,21 +17,6 @@ decltype(auto) pass_back(F&& f, ParameterStream& p, Tuple&& t)
     return pass_back_impl(std::forward<F>(f), p, std::forward<Tuple>(t), Indices{});
 }
 
-template<typename T>
-struct is_pass_back
-{
-    constexpr static bool value = std::is_lvalue_reference<T>::value &&
-                                  !std::is_const<typename std::remove_reference<T>::type>::value &&
-                                  !std::is_pointer<typename std::remove_reference<T>::type>::value &&
-                                  !std::is_array<typename std::remove_reference<T>::type>::value;
-};
-
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct is_pass_back<PointerWrapper<T,N,PassOwnership,PassBack,Allocator>>
-{
-    constexpr static bool value = PassBack;
-};
-
 template<std::size_t Pos, bool Head, bool... Tails>
 struct bool_vartem_pos
 {
@@ -48,27 +33,27 @@ struct get_pass_back_at<Pos,bool_tuple<Vs...>>
 };
 
 template<class MessageInterface>
-class mpirpc::Manager<MessageInterface>::FunctionBase
+class mpirpc::manager<MessageInterface>::function_base
 {
 public:
     using generic_fp_type = void(*)();
 
-    FunctionBase() : m_id(make_id()), m_pointer(0) {}
+    function_base() : m_id(make_id()), m_pointer(0) {}
 
     /**
         * @brief execute Execute the function
         * @param params The serialized function parameters
         * @param sender_rank The rank requesting this function be invoked
-        * @param manager The Manager, when sending back the function return value
+        * @param manager The manager, when sending back the function return value
         * @param get_return Only send the function return value back to the sending rank when requested, as the return value may not be needed.
         * @param object When the function is a member function, use object as the <i>this</i> pointer.
         */
-    virtual void execute(ParameterStream& params, int sender_rank, Manager *manager, bool get_return = false, void* object = 0) = 0;
+    virtual void execute(ParameterStream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) = 0;
 
     FnHandle id() const { return m_id; }
     generic_fp_type pointer() const { return m_pointer; }
 
-    virtual ~FunctionBase() {};
+    virtual ~function_base() {};
 
 private:
     static FnHandle make_id() {
@@ -83,19 +68,19 @@ protected:
 };
 
 template<typename MessageInterface>
-FnHandle mpirpc::Manager<MessageInterface>::FunctionBase::id_counter_ = 0;
+FnHandle mpirpc::manager<MessageInterface>::function_base::id_counter_ = 0;
 
 template<class MessageInterface>
 template<typename R, typename... Args>
-class mpirpc::Manager<MessageInterface>::Function<R(*)(Args...)> : public FunctionBase
+class mpirpc::manager<MessageInterface>::function<R(*)(Args...)> : public function_base
 {
-    using mpirpc::Manager<MessageInterface>::FunctionBase::m_pointer;
+    using mpirpc::manager<MessageInterface>::function_base::m_pointer;
 public:
     using function_type = typename storage_function_parts<R(*)(Args...)>::function_type;
 
-    Function(function_type f) : FunctionBase(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
+    function(function_type f) : function_base(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
 
-    virtual void execute(ParameterStream& params, int sender_rank, Manager *manager, bool get_return = false, void* object = 0) override
+    virtual void execute(ParameterStream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
     {
         /*
             * func(convertData<Args>(data)...) does not work here
@@ -110,7 +95,7 @@ public:
         if (get_return)
         {
             R ret = call();
-            manager->functionReturn(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
         }
         else
         {
@@ -124,22 +109,21 @@ protected:
 
 template<class MessageInterface>
 template<typename... Args>
-class mpirpc::Manager<MessageInterface>::Function<void(*)(Args...)> : public FunctionBase
+class mpirpc::manager<MessageInterface>::function<void(*)(Args...)> : public function_base
 {
-    using mpirpc::Manager<MessageInterface>::FunctionBase::m_pointer;
+    using mpirpc::manager<MessageInterface>::function_base::m_pointer;
 public:
     using function_type = typename storage_function_parts<void(*)(Args...)>::function_type;//void(*)(Args...);
 
-    Function(function_type f) : FunctionBase(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
+    function(function_type f) : function_base(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
 
-    virtual void execute(ParameterStream& params, int sender_rank, Manager *manager, bool get_return = false, void* object = 0) override
+    virtual void execute(ParameterStream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
     {
         OrderedCall<function_type> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
         call();
 
-
         if (get_return)
-            manager->functionReturn(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
     }
 
 protected:
@@ -148,14 +132,14 @@ protected:
 
 template<typename MessageInterface>
 template<typename Class, typename R, typename... Args>
-class mpirpc::Manager<MessageInterface>::Function<R(Class::*)(Args...)> : public FunctionBase
+class mpirpc::manager<MessageInterface>::function<R(Class::*)(Args...)> : public function_base
 {
 public:
     using function_type = typename storage_function_parts<R(Class::*)(Args...)>::function_type;
 
-    Function(function_type f) : FunctionBase(), func(f) {  }
+    function(function_type f) : function_base(), func(f) {  }
 
-    virtual void execute(ParameterStream& params, int sender_rank, Manager *manager, bool get_return = false, void* object = 0) override
+    virtual void execute(ParameterStream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
     {
         assert(object);
         assert(manager);
@@ -163,7 +147,7 @@ public:
         if (get_return)
         {
             R ret = call();
-            manager->functionReturn(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
         }
         else
         {
@@ -176,20 +160,20 @@ public:
 
 template<typename MessageInterface>
 template<typename Class, typename... Args>
-class mpirpc::Manager<MessageInterface>::Function<void(Class::*)(Args...)> : public FunctionBase
+class mpirpc::manager<MessageInterface>::function<void(Class::*)(Args...)> : public function_base
 {
 public:
     using function_type = typename storage_function_parts<void(Class::*)(Args...)>::function_type;
 
-    Function(function_type f) : FunctionBase(), func(f) { }
+    function(function_type f) : function_base(), func(f) { }
 
-    virtual void execute(ParameterStream& params, int sender_rank, Manager *manager, bool get_return = false, void* object = 0) override
+    virtual void execute(ParameterStream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
     {
         assert(object);
         OrderedCall<function_type> call{func, static_cast<Class*>(object), unmarshal<typename remove_all_const<Args>::type>(params)...};
         call();
         if (get_return)
-            manager->functionReturn(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
     }
 
     function_type func;
@@ -197,14 +181,14 @@ public:
 
 template<typename MessageInterface>
 template<typename R, typename... Args>
-class mpirpc::Manager<MessageInterface>::Function<std::function<R(Args...)>> : public FunctionBase
+class mpirpc::manager<MessageInterface>::function<std::function<R(Args...)>> : public function_base
 {
 public:
     using function_type = std::function<R(Args...)>;
 
-    Function(function_type& f) : FunctionBase(), func(f) {}
+    function(function_type& f) : function_base(), func(f) {}
 
-    virtual void execute(ParameterStream &params, int sender_rank, Manager *manager, bool get_return, void *object = 0) override
+    virtual void execute(ParameterStream &params, int sender_rank, manager *manager, bool get_return, void *object = 0) override
     {
         assert(manager);
         OrderedCall<function_type> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
@@ -212,7 +196,7 @@ public:
         if (get_return)
         {
             R ret = call();
-            manager->functionReturn(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
         }
         else
         {
@@ -225,19 +209,19 @@ public:
 
 template<typename MessageInterface>
 template<typename... Args>
-class mpirpc::Manager<MessageInterface>::Function<std::function<void(Args...)>> : public FunctionBase
+class mpirpc::manager<MessageInterface>::function<std::function<void(Args...)>> : public function_base
 {
 public:
     using function_type = std::function<void(Args...)>;
 
-    Function(function_type& f) : FunctionBase(), func(f) {}
+    function(function_type& f) : function_base(), func(f) {}
 
-    virtual void execute(ParameterStream &params, int sender_rank, Manager *manager, bool get_return, void *object = 0) override
+    virtual void execute(ParameterStream &params, int sender_rank, manager *manager, bool get_return, void *object = 0) override
     {
         OrderedCall<function_type> call{func, unmarshal<typename remove_all_const<Args>::type>(params)...};
         call();
         if (get_return)
-            manager->functionReturn(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
     }
 
     function_type func;

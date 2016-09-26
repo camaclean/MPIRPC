@@ -61,100 +61,104 @@ int main(int argc, char** argv)
     t();
     std::cout << t2 << std::endl;
 
-    mpirpc::MpiManager* manager = new mpirpc::MpiManager();
+    mpirpc::mpi_manager* manager = new mpirpc::mpi_manager();
 
     std::cout << "Running example main. Rank: " << manager->rank() << std::endl;
 
     bool test = false;
     int test2 = 5;
-    int procsToGo = manager->numProcs();
+    int procsToGo = manager->num_pes();
 
-    manager->registerType<Foo>();
+    manager->register_type<Foo>();
 
-    mpirpc::FnHandle simple_lambda = manager->registerLambda([]() {
+    mpirpc::FnHandle simple_lambda = manager->register_lambda([]() {
         std::cout << "Running simple lambda" << std::endl;
     });
 
-    mpirpc::FnHandle reply = manager->registerLambda([](int r, std::string& s) {
-        std::cout << "Rank " << r << " replied with a message: " << s << std::endl;
-        s = "rewrote string";
-    });
+    std::string test3 = "test3";
+    auto rlambda = [test = std::move(test3)](int r, std::string& s) {
+            std::cout << "Rank " << r << " replied with a message: " << s << " " << test << std::endl;
+            s = "rewrote string";
+        };
+    mpirpc::FnHandle reply = manager->register_lambda(rlambda);
+    //mpirpc::FnHandle reply = manager->registerFunction<decltype(rlambda),rlambda>();
 
-    mpirpc::FnHandle set_test = manager->registerLambda([&]() {
+    mpirpc::FnHandle set_test = manager->register_lambda([&]() {
         std::cout << "Setting test to true" << std::endl;
         test = true;
         return 2.0f;
     });
 
-    mpirpc::FnHandle set_test2 = manager->registerLambda([&](int p) {
+    mpirpc::FnHandle set_test2 = manager->register_lambda([&](int p) {
         std::cout << "Setting test2 to " << p << std::endl; test2 = p;
         std::string s("Hello there!");
-        manager->invokeFunction(p, reply, manager->rank(), s);
+        //manager->invokeFunction(p, reply, manager->rank(), s);
+        manager->invoke_lambda_r(p, rlambda, reply, manager->rank(), s);
+        std::cout << "set_test2 got: " << s << std::endl;
     });
 
-    mpirpc::FnHandle done = manager->registerLambda([&](int r) {
+    mpirpc::FnHandle done = manager->register_lambda([&](int r) {
         --procsToGo;
         std::cout << "Done on rank " << r << ". Left: " << procsToGo << std::endl;
     });
 
-    mpirpc::FnHandle hf1 = manager->registerFunction<decltype(&f1),&f1>();
-    mpirpc::FnHandle hf2 = manager->registerFunction<decltype(&f2),&f2>();
-    mpirpc::FnHandle hf3 = manager->registerFunction<decltype(&f3),&f3>();
-    mpirpc::FnHandle hf4 = manager->registerFunction<decltype(&f4),&f4>();
-    //mpirpc::fnhandle_t hf5 = manager->registerFunction<decltype(&f5),&f5>();
-    mpirpc::FnHandle hf6 = manager->registerFunction<decltype(&f6),&f6>();
-    mpirpc::FnHandle hf7 = manager->registerFunction<decltype(&f7),&f7>();
+    mpirpc::FnHandle hf1 = manager->register_function<decltype(&f1),&f1>();
+    mpirpc::FnHandle hf2 = manager->register_function<decltype(&f2),&f2>();
+    mpirpc::FnHandle hf3 = manager->register_function<decltype(&f3),&f3>();
+    mpirpc::FnHandle hf4 = manager->register_function<decltype(&f4),&f4>();
+    mpirpc::FnHandle hf6 = manager->register_function<decltype(&f6),&f6>();
+    mpirpc::FnHandle hf7 = manager->register_function<decltype(&f7),&f7>();
     std::vector<char> buffer;
     mpirpc::ParameterStream s(&buffer);
     const char* testcstr[] = {"test", "blahblah"};
     std::cout << "cstrsize: " << sizeof(testcstr)/sizeof(testcstr[0]);
     s << testcstr;
     //mpirpc::unmarshal<mpirpc::PointerWrapper<int,0UL,false,std::allocator<int>>>(s);
-    mpirpc::FnHandle hf5 = manager->registerFunction<void(*)(mpirpc::PointerWrapper<int,4>,int,int&,int&&),&f5>();
-    mpirpc::FnHandle fooBar1 = manager->registerFunction<decltype(&Foo::bar1),&Foo::bar1>();
-    mpirpc::FnHandle fooBar2 = manager->registerFunction<decltype(&Foo::bar2),&Foo::bar2>();
-    mpirpc::FnHandle fooBar3 = manager->registerFunction<decltype(&Foo::bar3),&Foo::bar3>();
-    mpirpc::FnHandle fooBar4 = manager->registerFunction<decltype(&Foo::bar4<double,std::string>),&Foo::bar4<double,std::string>>();
-    //mpirpc::fnhandle_t fooBar5 = manager->registerFunction<decltype(&Foo::bar5<double,std::string>),&Foo::bar5<double,std::string>>();
-    mpirpc::FnHandle fooBar5 = manager->registerFunction<void(Foo::*)(mpirpc::PointerWrapper<std::map<double,std::string>,1>),&Foo::bar5<double,std::string>>();
-    mpirpc::FnHandle syscall = manager->registerFunction<decltype(&getuid),&getuid>();
+    mpirpc::FnHandle hf5 = manager->register_function<void(*)(mpirpc::PointerWrapper<int,4>,int,int&,int&&),&f5>();
+    mpirpc::FnHandle fooBar1 = manager->register_function<decltype(&Foo::bar1),&Foo::bar1>();
+    mpirpc::FnHandle fooBar2 = manager->register_function<decltype(&Foo::bar2),&Foo::bar2>();
+    mpirpc::FnHandle fooBar3 = manager->register_function<decltype(&Foo::bar3),&Foo::bar3>();
+    mpirpc::FnHandle fooBar4 = manager->register_function<decltype(&Foo::bar4<double,std::string>),&Foo::bar4<double,std::string>>();
+    mpirpc::FnHandle fooBar5 = manager->register_function<void(Foo::*)(mpirpc::PointerWrapper<std::map<double,std::string>,1>),&Foo::bar5<double,std::string>>();
+    mpirpc::FnHandle syscall = manager->register_function<decltype(&getuid),&getuid>();
 
     Foo *foo = nullptr;
     if (manager->rank() == 0) {
         foo = new Foo();
         foo->val = 7.1;
-        manager->registerObject(foo);
+        manager->register_object(foo);
         std::cout << "Foo::val is " << foo->val << std::endl;
     }
 
     manager->sync();
 
-    mpirpc::ObjectWrapperBase *foo_w = manager->getObjectOfType<Foo>();
+    mpirpc::object_wrapper_base *foo_w = manager->get_object_of_type<Foo>();
 
     std::map<double,std::string> testmap;
     testmap[0.4] = "string: 0.4";
     testmap[3.14] = "3 digit pi";
 
     if (manager->rank() == 0) {
-        manager->invokeFunction(1, simple_lambda);
+        manager->invoke_function(1, simple_lambda);
     }
     else if (manager->rank() == 1)
     {
-        manager->invokeFunction(0, simple_lambda);
-        float ret1 = manager->invokeFunctionR<float>(0, set_test);
+        manager->invoke_function(0, simple_lambda);
+        float ret1 = manager->invoke_function_r<float>(0, set_test);
         std::cout << "Rank 1 got " << ret1 << " as a return from set_test lambda" << std::endl;
-        manager->invokeFunction(0, set_test2, 1);
-        manager->invokeFunction(0, &f1, hf1);
-        manager->invokeFunction(0, &f1, 0); //handle lookup
-        int ret2 = manager->invokeFunctionR<int>(0, &f2, manager->get_fn_handle<decltype(&f2),&f2>());
+        manager->invoke_function(0, set_test2, 1);
+        manager->invoke_function(0, &f1, hf1);
+        manager->invoke_function(0, &f1, 0); //handle lookup
+        int ret2 = manager->invoke_function_r<int>(0, &f2, manager->get_fn_handle<decltype(&f2),&f2>());
         std::cout << "Rank 1 got " << ret2 << " as a return from f2()" << std::endl;
         double r = 5.3f;
-        double ret3 = manager->invokeFunctionR<double>(0, &f3, 0, r); // 5.3f should convert to a double
-        ret3 = manager->invokeFunctionR<decltype(&f3),&f3>(0, r);
+        double ret3 = manager->invoke_function_r<double>(0, &f3, 0, r); // 5.3f should convert to a double
+        ret3 = manager->invoke_function_r<decltype(&f3),&f3>(0, r);
         std::cout << "Rank 1 got " << ret3 << " as a return from f3()" << std::endl;
         std::string s("blah");
         const char* cz = "C string";
-        manager->invokeFunction<decltype(&f4),&f4>(0, s);
+        manager->invoke_function_r<decltype(&f4),&f4>(0, s);
+        std::cout << "edited std::string: " << s << std:: endl;
         int *test3 = new int[4];
         test3[0] = 1;
         test3[1] = 2;
@@ -162,28 +166,28 @@ int main(int argc, char** argv)
         test3[3] = 4;
         int b = 7;
         std::vector<int> vectest{5,4,3,2,1};
-        manager->invokeFunctionR<void(*)(mpirpc::PointerWrapper<int,4>,int,int&,int&&),&f5>(0, mpirpc::PointerWrapper<int,4>(test3), 6, b, 8);
+        manager->invoke_function_r<void(*)(mpirpc::PointerWrapper<int,4>,int,int&,int&&),&f5>(0, mpirpc::PointerWrapper<int,4>(test3), 6, b, 8);
         std::cout << "b: " << b << std::endl;
-        manager->invokeFunction<decltype(&f6),&f6>(0, "test cstring");
-        manager->invokeFunction<decltype(&f7),&f7>(0, vectest);
-        manager->invokeFunction<decltype(&Foo::bar1),&Foo::bar1>(foo_w);
-        std::string ret4 = manager->invokeFunctionR<decltype(&Foo::bar2),&Foo::bar2>(foo_w);
+        manager->invoke_function<decltype(&f6),&f6>(0, "test cstring");
+        manager->invoke_function<decltype(&f7),&f7>(0, vectest);
+        manager->invoke_function<decltype(&Foo::bar1),&Foo::bar1>(foo_w);
+        std::string ret4 = manager->invoke_function_r<decltype(&Foo::bar2),&Foo::bar2>(foo_w);
         std::cout << "Rank 1 got \"" << ret4 << "\" as a return from Foo::bar2()" << std::endl;
-        manager->invokeFunction<decltype(&Foo::bar3),&Foo::bar3>(foo_w, 1024, 64.23); //function with a return, but not grabbing return value
-        manager->invokeFunction<decltype(&Foo::bar4<double,std::string>),&Foo::bar4<double,std::string>>(foo_w, testmap);
-        manager->invokeFunction<void(Foo::*)(mpirpc::PointerWrapper<std::map<double,std::string>,1>), &Foo::bar5<double,std::string>>(foo_w, mpirpc::PointerWrapper<std::map<double,std::string>,1>(&testmap));
-        std::cout << "Rank 0 is running with UID: " << manager->invokeFunctionR<uid_t>(0, &getuid, syscall) << std::endl;
+        manager->invoke_function<decltype(&Foo::bar3),&Foo::bar3>(foo_w, 1024, 64.23); //function with a return, but not grabbing return value
+        manager->invoke_function<decltype(&Foo::bar4<double,std::string>),&Foo::bar4<double,std::string>>(foo_w, testmap);
+        manager->invoke_function<void(Foo::*)(mpirpc::PointerWrapper<std::map<double,std::string>,1>), &Foo::bar5<double,std::string>>(foo_w, mpirpc::PointerWrapper<std::map<double,std::string>,1>(&testmap));
+        std::cout << "Rank 0 is running with UID: " << manager->invoke_function_r<uid_t>(0, &getuid, syscall) << std::endl;
         std::cout << "any_true: " << mpirpc::any_true<false,true,true,false,false>::value << std::endl;
     }
 
-    manager->invokeFunction(0, done, manager->rank());
+    manager->invoke_function(0, done, manager->rank());
 
-    while (manager->checkMessages() && procsToGo > 0) {}
+    while (manager->check_messages() && procsToGo > 0) {}
 
 
     if (manager->rank() == 0)
     {
-        manager->shutdownAll();
+        manager->shutdown_all();
         std::cout << "Foo::val is now " << foo->val << std::endl;
     }
 

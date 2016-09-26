@@ -73,33 +73,33 @@
 namespace mpirpc {
 
 /**
- * @brief The Manager class
+ * @brief The mpirpc::manager class
  *
- * The Manager class provides remote procedure call functionality over MPI. It makes heavy usage of C++11 varidic
+ * The mpirpc::manager class provides remote procedure call functionality over MPI. It makes heavy usage of C++11 varidic
  * templates to automatically generate classes to serialize and unserialize function parameters and return values.
  *
  * To add support for serializing and unserializing a custom type, provide the following stream operators:
  * ParameterStream &operator<<(ParameterStream& stream, const Type &t);
  * ParameterStream &operator>>(ParameterStream& stream, Type &t);
  *
- * Currently, only one Manager per rank is permitted. However, a tag prefix could be implemented to allow for
- * multiple Managers, thus allowing multiple communicators to be used.
+ * Currently, only one manager per rank is permitted. However, a tag prefix could be implemented to allow for
+ * multiple managers, thus allowing multiple communicators to be used.
  *
  * @todo Allow function and type IDs to be specified by the user.
  */
 
 /*template<typename MessageInterface>
-class Manager;*/
+class manager;*/
 
 template<typename MessageInterface>
-class Manager
+class manager
 {
-    struct ObjectInfo;
+    struct object_info;
 
     /**
-     * @brief The FunctionBase class
+     * @brief The mpirpc::function_base class
      *
-     * Using template metaprogramming, Function<F> classes are created
+     * Using template metaprogramming, mpirpc::function<F> classes are created
      * for each function signature and std::function objects. Six specializations
      * are required, as each type must handle the special case of void return types.
      * This is because functions cannot be called passing a void argument.
@@ -109,112 +109,101 @@ class Manager
      * Static functions in a class behave as normal function pointers, not member
      * function pointers.
      */
-    class FunctionBase;
+    class function_base;
 
     /**
-     * The general Function<F> class, which is specialized to deduce additional typenames where required while only
+     * The general mpirpc::function<F> class, which is specialized to deduce additional typenames where required while only
      * requiring a single typename be passed when constructing a Function.
      */
     template<typename F>
-    class Function;
+    class function;
 
     /**
-     * Specialization of Function<F> for functions with non-void return types.
+     * Specialization of mpirpc::function<F> for functions with non-void return types.
      */
     template<typename R, typename... Args>
-    class Function<R(*)(Args...)>;
+    class function<R(*)(Args...)>;
 
     /**
-     * Specialization of Function<F> for functions with void return types.
+     * Specialization of mpirpc::function<F> for functions with void return types.
      */
     template<typename... Args>
-    class Function<void(*)(Args...)>;
+    class function<void(*)(Args...)>;
 
     /**
-     * Specialization of Function<F> for member functions witn non-void return types.
+     * Specialization of mpirpc::function<F> for member functions witn non-void return types.
      */
     template<typename Class, typename R, typename... Args>
-    class Function<R(Class::*)(Args...)>;
+    class function<R(Class::*)(Args...)>;
 
     /**
-     * Specialization of Function<F> for member functions with void return types.
+     * Specialization of mpirpc::function<F> for member functions with void return types.
      */
     template<typename Class, typename... Args>
-    class Function<void(Class::*)(Args...)>;
+    class function<void(Class::*)(Args...)>;
 
     /**
-     * Specialization of Function<F> for std::function objects with non-void return types.
+     * Specialization of mpirpc::function<F> for std::function objects with non-void return types.
      */
     template<typename R, typename... Args>
-    class Function<std::function<R(Args...)>>;
+    class function<std::function<R(Args...)>>;
 
     /**
-     * Specialization of Function<F> for std::function objects with void return types.
+     * Specialization of mpirpc::function<F> for std::function objects with void return types.
      */
     template<typename... Args>
-    class Function<std::function<void(Args...)>>;
+    class function<std::function<void(Args...)>>;
 
 public:
     using UserMessageHandler = void(*)(MPI_Status&&);
 
-    Manager(MPI_Comm comm = MPI_COMM_WORLD);
+    manager(MPI_Comm comm = MPI_COMM_WORLD);
 
     /**
-     * Register a type with the Manager. This assigns a unique ID to the type.
+     * Register a type with the manager. This assigns a unique ID to the type.
      *
-     * registerType<T>() must be called in the same order on all processes so that
+     * register_type<T>() must be called in the same order on all processes so that
      * the assigned IDs are consistent.
      *
      * @return The type ID
      */
     template<typename T>
-    TypeId registerType();
+    TypeId register_type();
 
     /**
      * @brief Query the type identifier for the class Class
      * @return The identifier associated with class Class
      */
     template<typename T>
-    TypeId getTypeId() const;
+    TypeId get_type_id() const;
 
     /**
-     * @brief Register a lambda with the Manager
+     * @brief Register a lambda with the manager
      * @return The handle for the lambda
      */
     template<typename Lambda>
-    FnHandle registerLambda(Lambda&& l);
-
-    /*template<typename F, typename StorageFunctionParts<F>::storage_function_type f>
-    fnhandle_t registerFunction()
-    {
-        return registerFunction<typename StorageFunctionParts<F>::storage_function_type, f>();
-    }*/
+    FnHandle register_lambda(Lambda&& l);
 
     /**
      * This compile-time version allows for fast (hash table) function ID lookups
      *
-     * @brief Register a function or member function with the Manager
+     * @brief Register a function or member function with the manager
      * @param f A function pointer to the function to register
      * @return The handle associated with function #f
      */
     template<typename F, typename storage_function_parts<F>::function_type f>
-    FnHandle registerFunction();
+    FnHandle register_function();
 
     /**
      * This run-time version is incompatible with fast (hash table) function ID lookups
      */
     template<typename F>
-    FnHandle registerFunction(F f);
+    FnHandle register_function(F f);
 
     /**
      * @brief Query the function handle for the member function pointer #f
      * @return The handle associated with the member function pointer #f
      */
-    /*template<typename F>
-    fnhandle_t get_fn_handle(F&& f)
-    {
-        return m_registered_function_typeids[std::type_index(typeid(function_identifier<typename storage_function_parts<F>::function_type,f>))];
-    }*/
 
     template<typename F, typename storage_function_parts<F>::function_type f>
     FnHandle get_fn_handle()
@@ -223,38 +212,22 @@ public:
     }
 
     /**
-     * @brief Query the function handle for the function pointer #f
-     * @return The identifier handle with the function pointer #f
-     */
-    /*template<typename F>
-    fnhandle_t get_fn_handle(F&& f)
-    {
-        static_assert(std::is_function<F>::value || std::is_member_function<F>::value, "mpirpc::Manager::get_fn_handle expects a function pointer as the first argument."
-        for (const auto &i : m_registered_functions)
-        {
-            if (i.second->pointer() == reinterpret_cast<void(*)()>(f))
-                return i.first;
-        }
-        throw UnregisteredFunctionException();
-    }*/
-
-    /**
-     * @brief Register an object with the Manager. Other ranks are informed of the existance of this object
+     * @brief Register an object with the manager. Other ranks are informed of the existance of this object
      * @return A wrapper for the object, containing a pointer to the object and the ids used to call its member functions
      */
     template<class Class>
-    ObjectWrapper<Class>* registerObject(Class *object);
+    object_wrapper<Class>* register_object(Class *object);
 
     template<class Class, typename... Args>
-    ObjectWrapperBase* constructGlobalObject(int rank, Args&&... args);
+    object_wrapper_base* construct_global_object(int rank, Args&&... args);
 
     /**
      * @brief invoke a function on rank #rank
      *
      * Note: An object's static functions behave as normal function pointers.
      *
-     * Note: function pointer versions of Manager::invokeFunction are slightly
-     * slower than fnhandle_t versions of Manager::invokeFunction when many functions
+     * Note: function pointer versions of manager::invoke_function are slightly
+     * slower than fnhandle_t versions of ,anager::invoke_function when many functions
      * are registered due to the need to search for the function id associated
      * with the function pointer.
      *
@@ -266,85 +239,80 @@ public:
      * Using function pointer: 136,878 per second
      *
      * @param rank The MPI rank to invoke the function on
-     * @param f The function pointer to invoke. This function pointer must be registered with the Manager. See: Manager::registerFunction.
-     * @param functionHandle The function handle for the registered function, f. If this value is 0, the function handle is searched for in the function map.
-     * @param args... The function's parameters. These parameters should be treated as being passed by value. However, it would be possible to
-     * use std::is_lvalue_reference to serialize the lvalue parameters and send back these potentially modified values. std::is_pointer could
-     * similarly be used for pointers with serializable types.
-     * @return The return value of the function if getReturn is true. Otherwise returns a default constructed R.
+     * @param f The function pointer to invoke. This function pointer must be registered with the manager. See: manager::register_function.
+     * @param function_handle The function handle for the registered function, f. If this value is 0, the function handle is searched for in the function map.
+     * @param args... The function's parameters.
+     * @return The return value of the function.
      */
     template<typename R, typename... FArgs, typename... Args>
-    auto invokeFunctionR(int rank, R(*f)(FArgs...), FnHandle functionHandle, Args&&... args)
+    auto invoke_function_r(int rank, R(*f)(FArgs...), FnHandle function_handle, Args&&... args)
         -> typename std::enable_if<!std::is_same<R, void>::value, R>::type;
 
     template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
-    auto invokeFunctionR(int rank, Args&&... args)
-        -> typename detail::marshaller_function_signature<F,Args...>::void_return_type;
-
-    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
-    auto invokeFunctionR(int rank, Args&&... args)
-        -> typename detail::marshaller_function_signature<F,Args...>::non_void_return_type;
+    auto invoke_function_r(int rank, Args&&... args)
+        -> typename detail::marshaller_function_signature<F,Args...>::return_type;
 
     /**
      * Specialized for void return type
      *
-     * @see Manager::invokeFunction()
+     * @see manager::invoke_function()
      */
     template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
-    void invokeFunction(int rank, Args&&... args);
+    void invoke_function(int rank, Args&&... args);
 
     template<typename R, typename... FArgs, typename...Args>
-    void invokeFunction(int rank, R(*f)(FArgs...), FnHandle functionHandle, Args&&... args);
+    void invoke_function(int rank, R(*f)(FArgs...), FnHandle function_handle, Args&&... args);
 
     /**
-     * @see Manager::invokeFunction()
+     * @see manager::invoke_function_r()
      *
-     * Note: this function assumes that the arguments passed are what the function uses.
+     * Note: this function assumes that the types of the arguments passed are the same as what the function uses. Only the function return value is
+     * passed back for looser type requirements.
      *
      * Local calls cannot be optimized to a simple function call because we don't know how to cast the Function object here
      */
     template<typename R, typename... Args>
-    R invokeFunctionR(int rank, FnHandle functionHandle, Args&&... args);
+    R invoke_function_r(int rank, FnHandle function_handle, Args&&... args);
+
+    /**
+     * Invoke a remote function, returning and updating non-const references. This expects the types of Args to match exactly, including const-ness and reference types.
+     */
+    template<typename R, typename... Args>
+    R invoke_function_pr(int rank, FnHandle function_handle, Args&&... args);
 
     /**
      * Specialized for void return type
      *
-     * @see Manager::invokeFunction()
+     * @see manager::invoke_function()
      *
      * @todo Optimize local calls
      */
     template<typename... Args>
-    void invokeFunction(int rank, FnHandle functionHandle, Args&&... args);
+    void invoke_function(int rank, FnHandle function_handle, Args&&... args);
 
     /**
      * @brief Call the member function of an object remotely
      *
      * @param a The object wrapper identifying the object and its location.
-     * @param f The member function pointer to invoke. This member function pointer must be registered with the Manager. See: Manager::registerFunction.
-     * @param getReturn If true, the remote process will send back the function's return value. Otherwise a default constructed R is returned.
-     * @param args... The function's parameters. These parameters should be treated as being passed by value. However, it would be possible to
-     * use std::is_lvalue_reference to serialize the lvalue parameters and send back these potentially modified values. std::is_pointer could
-     * similarly be used for pointers with serializable types.
-     * @return The return value of the function if getReturn is true. Otherwise returns a default constructed R.
+     * @param f The member function pointer to invoke. This member function pointer must be registered with the manager. See: manager::register_function.
+     * @param args... The function's parameters.
+     * @return The return value of the function.
      */
-    template<typename R, class Class, typename... FArgs, typename... Args>
-    [[deprecated]] auto invokeFunctionR(ObjectWrapperBase *a, R(Class::*f)(FArgs...), FnHandle functionHandle, Args&&... args)
-        -> typename std::enable_if<!std::is_same<R, void>::value, R>::type;
-
     template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
-    auto invokeFunctionR(ObjectWrapperBase *a, Args&&... args)
+    auto invoke_function_r(object_wrapper_base *a, Args&&... args)
         -> typename detail::marshaller_function_signature<F,Args...>::return_type;
+
+    template<typename Lambda, typename... Args>
+    auto invoke_lambda_r(int rank, Lambda&& l, FnHandle function_handle, Args&&... args)
+        -> typename LambdaTraits<Lambda>::return_type;
 
     /**
      * Version for void return type
      *
-     * @see Manager::invokeMemberFunction()
+     * @see manager::invoke_function()
      */
-    template<typename R, class Class, typename... FArgs, typename... Args>
-    [[deprecated]] void invokeFunction(ObjectWrapperBase *a, R(Class::*f)(FArgs...), FnHandle functionHandle, Args&&... args);
-
     template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
-    void invokeFunction(ObjectWrapperBase *a, Args&&... args);
+    void invoke_function(object_wrapper_base *a, Args&&... args);
 
     /**
      * @brief Get the MPI rank of this process
@@ -356,41 +324,41 @@ public:
      * @brief Get the total number of MPI processes in the communicator
      * @return The total number of MPI processes in the communicator
      */
-    int numProcs() const;
+    int num_pes() const;
 
     /**
-     * @brief Check for incoming commands. Also runs Manager::checkSends()
+     * @brief Check for incoming commands. Also runs manager::checkSends()
      * @return True to continue running. False indicates this process should shut down.
      */
-    bool checkMessages();
+    bool check_messages();
 
     /**
      * @brief Checks on the status of the non-blocking sends and frees resources of completed sends.
      * @return True to continue running. False indicates this process should shut down.
      */
-    bool checkSends();
+    bool check_sends();
 
     /**
-     * @brief Get the first wrapper to the object of type #typeId
-     * @param typeId The type identifier
+     * @brief Get the first wrapper to the object of type #type_id
+     * @param type_id The type identifier
      * @return A pointer to the object's wrapper
      */
-    ObjectWrapperBase* getObjectOfType(TypeId typeId) const;
+    object_wrapper_base* get_object_of_type(TypeId type_id) const;
 
     /**
      * @brief Get the first wrapper to the object of type Class
      * @return A pointer to the object's wrapper
      */
     template<class Class>
-    ObjectWrapperBase* getObjectOfType() const;
+    object_wrapper_base* get_object_of_type() const;
 
     /**
-     * @brief Get the first wrapper to the object of type #typeId which exists on rank #rank
+     * @brief Get the first wrapper to the object of type #type_id which exists on rank #rank
      * @param typeId The object's typeId
      * @param rank The rank on which the object exists
      * @return A pointer to the object's wrapper
      */
-    ObjectWrapperBase* getObjectOfType(TypeId typeId, int rank) const;
+    object_wrapper_base* get_object_of_type(TypeId type_id, int rank) const;
 
     /**
      * @brief Get the first wrapper to the object of type Class which exists on rank #rank
@@ -398,15 +366,15 @@ public:
      * @return A pointer to the object's wrapper
      */
     template<class Class>
-    ObjectWrapperBase* getObjectOfType(int rank) const;
+    object_wrapper_base* get_object_of_type(int rank) const;
 
     /**
      * @brief Get the set of all objects of type #typeId for rank #rank
-     * @param typeId The type identifier
+     * @param type_id The type identifier
      * @param rank The rank the objects exist on
      * @return A std::unordered_set of object wrapers for the type and rank
      */
-    std::unordered_set<ObjectWrapperBase*> getObjectsOfType(TypeId typeId, int rank) const;
+    std::unordered_set<object_wrapper_base*> get_objects_of_type(TypeId type_id, int rank) const;
 
     /**
      * @brief Get the set of all objects of type Class for rank #rank
@@ -414,28 +382,28 @@ public:
      * @return A std::unordered_set of object wrapers for the type and rank
      */
     template<class Class>
-    std::unordered_set<ObjectWrapperBase*> getObjectsOfType(int rank) const;
+    std::unordered_set<object_wrapper_base*> get_objects_of_type(int rank) const;
 
     /**
      * @brief Get the set of all objects of type #typeId
-     * @param typeId The type identifier
+     * @param type_id The type identifier
      * @return A std::unordered_set of object wrappers for the type
      */
-    std::unordered_set<ObjectWrapperBase*> getObjectsOfType(mpirpc::TypeId typeId) const;
+    std::unordered_set<object_wrapper_base*> get_objects_of_type(mpirpc::TypeId type_id) const;
 
     /**
      * @brief Get the set of all objects of type Class
      * @return A std::unordered_set of all object wrappers for the type
      */
     template<class Class>
-    std::unordered_set<ObjectWrapperBase*> getObjectsOfType() const;
+    std::unordered_set<object_wrapper_base*> get_objects_of_type() const;
 
     template<typename T>
     std::vector<T> reduce(std::vector<T>& vec, MPI_Op op, int root)
     {
         int vecsize = vec.size();
         std::vector<T> res(vecsize);
-        MPI_Reduce(vec.data(), res.data(), vecsize, mpiType<T>(), op, root, m_comm);
+        MPI_Reduce(vec.data(), res.data(), vecsize, mpi_type<T>(), op, root, m_comm);
         return res;
     }
 
@@ -444,34 +412,34 @@ public:
     {
         int vecsize = vec.size();
         std::vector<T> res(vecsize);
-        MPI_Allreduce(vec.data(), res.data(), vecsize, mpiType<T>(), op, m_comm);
+        MPI_Allreduce(vec.data(), res.data(), vecsize, mpi_type<T>(), op, m_comm);
         return res;
     }
 
     template<typename T>
-    T* reduce(T* first, T* last, MPI_Op mpiOp, int root)
+    T* reduce(T* first, T* last, MPI_Op op, int root)
     {
         std::size_t size = last-first;
         T* res = new T[size];
-        MPI_Reduce(first, res, size, mpiType<T>(), mpiOp, root, m_comm);
+        MPI_Reduce(first, res, size, mpi_type<T>(), op, root, m_comm);
         return res;
     }
 
     template<typename T>
-    T* allreduce(T* first, T* last, MPI_Op mpiOp)
+    T* allreduce(T* first, T* last, MPI_Op op)
     {
         std::size_t size = last-first;
         T* res = new T[size];
-        MPI_Allreduce(first, res, size, mpiType<T>(), mpiOp, m_comm);
+        MPI_Allreduce(first, res, size, mpi_type<T>(), op, m_comm);
         return res;
     }
 
     template<class InputIt, class T, class BinaryOperation>
-    T accumulate( InputIt first, InputIt last, T init, BinaryOperation op, MPI_Op mpiOp)
+    T accumulate( InputIt first, InputIt last, T init, BinaryOperation op, MPI_Op mpi_op)
     {
         T intermediate = std::accumulate(first, last, init, op);
         T res;
-        MPI_Allreduce(&intermediate, &res, 1, mpiType<T>(), mpiOp, m_comm);
+        MPI_Allreduce(&intermediate, &res, 1, mpi_type<T>(), mpi_op, m_comm);
         return res;
     }
 
@@ -481,7 +449,7 @@ public:
     {
         typename std::iterator_traits<InputIt>::value_type intermediate = std::accumulate(first, last, static_cast<typename std::iterator_traits<InputIt>::value_type>(0));
         typename std::iterator_traits<InputIt>::value_type res;
-        MPI_Allreduce(&intermediate, &res, 1, mpiType<typename std::iterator_traits<InputIt>::value_type>(), MPI_SUM, m_comm);
+        MPI_Allreduce(&intermediate, &res, 1, mpi_type<typename std::iterator_traits<InputIt>::value_type>(), MPI_SUM, m_comm);
         return res;
     }
 
@@ -490,46 +458,46 @@ public:
      * @param id The id of the object
      * @return The object wrapper
      */
-    ObjectWrapperBase* getObjectWrapper(int rank, TypeId tid, ObjectId oid) const;
+    object_wrapper_base* get_object_wrapper(int rank, TypeId tid, ObjectId oid) const;
 
     /**
      * @brief Register a custom message handler to be invoked when an MPI message has been probed with tag #tag.
      * @param tag The tag identifying this type of message.
      * @param callback A void(*)(MPI_Status&&) function pointer. This function should handle the MPI_Recv.
      */
-    void registerUserMessageHandler(int tag, UserMessageHandler callback);
+    void register_user_message_handler(int tag, UserMessageHandler callback);
 
     /**
      * @brief Send a buffer to rank #rank with tag #tag
      */
-    void sendRawMessage(int rank, const std::vector<char> *data, int tag = 0);
+    void send_raw_message(int rank, const std::vector<char> *data, int tag = 0);
 
     /**
      * @brief Send a buffer to every other rank with tag #tag
      *
      * Does not send to self.
      */
-    void sendRawMessageToAll(const std::vector<char> *data, int tag = 0);
+    void send_raw_message_world(const std::vector<char> *data, int tag = 0);
 
     /**
-     * @brief Executes an MPI_Barrier, then checks messages to ensure the state of all Managers are in a valid state.
+     * @brief Executes an MPI_Barrier, then checks messages to ensure the state of all managers are in a valid state.
      *
      * When registering objects that depend on remote objects, they must be initialized in order (so that their ids are propagated).
      */
     void sync();
 
     /**
-     * @brief Shut down all Managers on all processes. This must be called on only one rank.
+     * @brief Shut down all managers on all PEs. This must be called on only one rank.
      */
-    void shutdownAll();
+    void shutdown_all();
 
     /**
-     * @brief Shut down this Manager. This must be called on all ranks.
+     * @brief Shut down this manager. This must be called on all ranks.
      */
     void shutdown();
 
     /**
-     * @brief The number of function invocations this Manager has handled.
+     * @brief The number of function invocations this manager has handled.
      */
     unsigned long long stats() const;
 
@@ -541,12 +509,12 @@ public:
     /**
      * @brief The size of the message send queue. Can check mesages continuously while queue size >0 to ensure all messages have been sent.
      */
-    size_t queueSize() const;
+    size_t queue_size() const;
 
     /**
-     * Destroy this Manager
+     * Destroy this manager
      */
-    ~Manager();
+    ~manager();
 
 protected:
 
@@ -556,32 +524,24 @@ protected:
      * @param r The invoked functions return value
      */
     template<typename R, typename... Args,bool...PBs,std::size_t... Is>
-    void functionReturn(int rank, R&& r, std::tuple<Args...> args, bool_tuple<PBs...>, std::index_sequence<Is...>)
+    void function_return(int rank, R&& r, std::tuple<Args...> args, bool_tuple<PBs...>, std::index_sequence<Is...>)
     {
         std::vector<char>* buffer = new std::vector<char>();
         ParameterStream stream(buffer);
         stream << std::forward<R>(r);
         using swallow = int[];
-        swallow s{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
-        std::cout << "swallow: " << sizeof...(Is) << ": ";
-        for(size_t i = 0; i < sizeof...(Is); i++)
-            std::cout << s[i];
-        std::cout << std::endl;
+        (void)swallow{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
         MPI_Send((void*) stream.dataVector()->data(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
         delete buffer;
     }
 
     template<typename... Args,bool...PBs,std::size_t... Is>
-    void functionReturn(int rank, std::tuple<Args...> args, bool_tuple<PBs...>, std::index_sequence<Is...>)
+    void function_return(int rank, std::tuple<Args...> args, bool_tuple<PBs...>, std::index_sequence<Is...>)
     {
         std::vector<char>* buffer = new std::vector<char>();
         ParameterStream stream(buffer);
         using swallow = int[];
-        swallow s{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
-        std::cout << "swallow: " << sizeof...(Is) << ": ";
-        for(size_t i = 0; i < sizeof...(Is); i++)
-            std::cout << s[i];
-        std::cout << std::endl;
+        (void)swallow{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
         MPI_Send((void*) stream.dataVector()->data(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
         delete buffer;
     }
@@ -589,44 +549,43 @@ protected:
     /**
      * @brief Invoke a function on a remote process
      * @param rank The remote rank
-     * @param functionHandle The function's unique identifier
-     * @param getReturn Indicate to the remote process if this process will be expecting the function's return value
+     * @param function_handle The function's unique identifier
+     * @param get_return Indicate to the remote process if this process will be expecting the function's return value
      * @param args The parameter pack of the function's arguments
      *
-     * Internally, a dummy wrapper, Passer, uses uniform initilization to ensure the side efects of the stream operator
-     * occurr in the order in which they appear when the parameter pack is unpacked. GCC currently does this in reverse
-     * order due Bug #51253 (http://gcc.gnu.org/bugzilla/show_bug.cgi?id=51253). However, this is inconsequential since
-     * unpacking will be done in the same order.
      */
     template<typename... Args>
-    void sendFunctionInvocation(int rank, FnHandle functionHandle, bool getReturn, Args&&... args);
+    void send_function_invocation(int rank, FnHandle function_handle, bool get_return, Args&&... args);
 
     template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
-    void sendFunctionInvocation(int rank, bool getReturn, Args&&... args);
+    void send_function_invocation(int rank, bool get_return, Args&&... args);
+
+    template<typename R, typename...FArgs, typename...Args>
+    void send_lambda_invocation(int rank, FnHandle function_handle, bool get_return, R(*)(FArgs...), Args&&... args);
 
     /**
      * Invoke a member function on a remote process
      *
-     * @see Manager::sendFunctionInvocation(int,fnhandle_t,bool,Args...)
+     * @see manager::send_function_invocation(int,bool,Args...)
      */
-    template<typename... Args>
-    [[deprecated]] void sendMemberFunctionInvocation(ObjectWrapperBase *a, FnHandle functionHandle, bool getReturn, Args&&... args);
-
     template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
-    void sendMemberFunctionInvocation(ObjectWrapperBase* a, bool get_return, Args&&... args);
+    void send_member_function_invocation(object_wrapper_base* a, bool get_return, Args&&... args);
 
     /**
      * Wait for the remote process to run an invocation and send that function's return value back to this process.
      * Unserialize the result and return it.
      */
-    template<typename R, typename... Args, bool...PBs, std::size_t... Is>
-    processReturn(int rank, R& r, bool_tuple<PBs...>, std::index_sequence<Is...>, Args&&... args) {
+    template<typename R, bool...PB, typename... Args>
+    auto process_return(int rank, bool_tuple<PB...>, Args&&... args)
+        -> typename std::enable_if<!std::is_same<R,void>::value,R>::type
+    {
         MPI_Status status;
         int len;
         int flag;
         bool shutdown;
+        R ret;
         do {
-            shutdown = !checkMessages();
+            shutdown = !check_messages();
             MPI_Iprobe(rank, MPIRPC_TAG_RETURN, m_comm, &flag, &status);
         } while (!flag && !shutdown);
         if (!shutdown)
@@ -635,20 +594,24 @@ protected:
             std::vector<char>* buffer = new std::vector<char>(len);
             ParameterStream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
-            r = unmarshal<R>(stream);
+            ret = unmarshal<R>(stream);
+            using swallow = int[];
+            (void)swallow{((PB) ? (args = unmarshal<Args>(stream), 1) : 0)...};
             delete buffer;
         }
         return ret;
     }
 
-    template<typename...Args>
-    void processReturn(int rank, Args&&... args) {
+    template<typename R, bool...PB, typename...Args>
+    auto process_return(int rank, bool_tuple<PB...>, Args&&... args)
+        -> typename std::enable_if<std::is_same<R,void>::value,R>::type
+    {
         MPI_Status status;
         int len;
         int flag;
         bool shutdown;
         do {
-            shutdown = !checkMessages();
+            shutdown = !check_messages();
             MPI_Iprobe(rank, MPIRPC_TAG_RETURN, m_comm, &flag, &status);
         } while (!flag && !shutdown);
         if (!shutdown)
@@ -657,6 +620,8 @@ protected:
             std::vector<char>* buffer = new std::vector<char>(len);
             ParameterStream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
+            using swallow = int[];
+            (void)swallow{((PB) ? (args = unmarshal<Args>(stream), 1) : 0)...};
             delete buffer;
         }
     }
@@ -664,12 +629,12 @@ protected:
     /**
      * @brief Handle a message indicating a remote process is registering a new object.
      */
-    void registerRemoteObject();
+    void register_remote_object();
 
     /**
-     * @brief Notify other processes of an object registered on this Manager.
+     * @brief Notify other processes of an object registered on this manager.
      */
-    void notifyNewObject(mpirpc::TypeId type, mpirpc::ObjectId id);
+    void notify_new_object(mpirpc::TypeId type, mpirpc::ObjectId id);
 
     /**
      * @brief Handle a message to execute a function
@@ -682,41 +647,40 @@ protected:
     void receivedMemberInvocationCommand(MPI_Status &&);
 
     /**
-     * @brief Handle a message indicating this Manager should shut down.
+     * @brief Handle a message indicating this manager should shut down.
      */
     void handleShutdown();
 
     /**
-     * @brief Record a remote object with this Manager
+     * @brief Record a remote object with this manager
      */
-    void registerRemoteObject(int rank, mpirpc::TypeId type, mpirpc::ObjectId id);
+    void register_remote_object(int rank, mpirpc::TypeId type, mpirpc::ObjectId id);
 
-    std::unordered_map<std::type_index, TypeId> m_registeredTypeIds;
-    std::unordered_map<std::type_index, TypeId> m_registeredMemoryManagers;
+    std::unordered_map<std::type_index, TypeId> m_registered_type_ids;
+    std::unordered_map<std::type_index, TypeId> m_registered_memory_managers;
 
-    std::map<FnHandle, FunctionBase*> m_registered_functions;
+    std::map<FnHandle, function_base*> m_registered_functions;
     std::unordered_map<std::type_index, FnHandle> m_registered_function_typeids;
-    std::vector<ObjectWrapperBase*> m_registeredObjects;
+    std::vector<object_wrapper_base*> m_registered_objects;
 
-    std::unordered_map<MPI_Request, const std::vector<char>*> m_mpiMessages;
-    std::unordered_map<MPI_Request, std::shared_ptr<ObjectInfo>> m_mpiObjectMessages;
+    std::unordered_map<MPI_Request, const std::vector<char>*> m_mpi_messages;
+    std::unordered_map<MPI_Request, std::shared_ptr<object_info>> m_mpi_object_messages;
 
-    std::unordered_map<int, UserMessageHandler> m_userMessageHandlers;
+    std::unordered_map<int, UserMessageHandler> m_user_message_handlers;
 
     MPI_Comm m_comm;
-    TypeId m_nextTypeId;
-    TypeId m_nextDeleterId;
+    TypeId m_next_type_id;
     int m_rank;
-    int m_numProcs;
+    int m_num_pes;
     unsigned long long m_count;
     bool m_shutdown;
-    MPI_Datatype MpiObjectInfo;
+    MPI_Datatype m_mpi_object_info;
 };
 
 template<class MessageInterface>
-struct Manager<MessageInterface>::ObjectInfo {
-    ObjectInfo() {}
-    ObjectInfo(TypeId t, ObjectId i) : type(t), id(i) {}
+struct manager<MessageInterface>::object_info {
+    object_info() {}
+    object_info(TypeId t, ObjectId i) : type(t), id(i) {}
     TypeId type;
     TypeId id;
 };
@@ -727,46 +691,46 @@ struct Manager<MessageInterface>::ObjectInfo {
 #include "detail/manager/invoke.hpp"
 
 template<typename MessageInterface>
-int Manager<MessageInterface>::rank() const
+int manager<MessageInterface>::rank() const
 {
     return m_rank;
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::notifyNewObject(TypeId type, ObjectId id)
+void manager<MessageInterface>::notify_new_object(TypeId type, ObjectId id)
 {
     if (m_shutdown)
         return;
-    std::shared_ptr<ObjectInfo> info(new ObjectInfo(type, id));
-    for(int i = 0; i < m_numProcs; ++i)
+    std::shared_ptr<object_info> info(new object_info(type, id));
+    for(int i = 0; i < m_num_pes; ++i)
     {
         if (i != m_rank)
         {
             MPI_Request req;
-            MPI_Issend(info.get(), 1, MpiObjectInfo, i, MPIRPC_TAG_NEW, m_comm, &req);
-            m_mpiObjectMessages[req] = info;
+            MPI_Issend(info.get(), 1, m_mpi_object_info, i, MPIRPC_TAG_NEW, m_comm, &req);
+            m_mpi_object_messages[req] = info;
         }
     }
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::sendRawMessage(int rank, const std::vector<char> *data, int tag)
+void manager<MessageInterface>::send_raw_message(int rank, const std::vector<char> *data, int tag)
 {
-    if (checkSends() && !m_shutdown) {
+    if (check_sends() && !m_shutdown) {
         MPI_Request req;
         MPI_Issend((void*) data->data(), data->size(), MPI_CHAR, rank, tag, m_comm, &req);
-        m_mpiMessages[req] = data;
+        m_mpi_messages[req] = data;
     }
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::sendRawMessageToAll(const std::vector<char>* data, int tag)
+void manager<MessageInterface>::send_raw_message_world(const std::vector<char>* data, int tag)
 {
-    for (int i = 0; i < m_numProcs; ++i) {
+    for (int i = 0; i < m_num_pes; ++i) {
 #ifndef USE_MPI_LOCALLY
         if (i != m_rank) {
 #endif
-            sendRawMessage(i, data, tag);
+            send_raw_message(i, data, tag);
 #ifndef USE_MPI_LOCALLY
         }
 #endif
@@ -774,40 +738,40 @@ void Manager<MessageInterface>::sendRawMessageToAll(const std::vector<char>* dat
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::registerUserMessageHandler(int tag, UserMessageHandler callback)
+void manager<MessageInterface>::register_user_message_handler(int tag, UserMessageHandler callback)
 {
-    m_userMessageHandlers[tag] = callback;
+    m_user_message_handlers[tag] = callback;
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::registerRemoteObject()
+void manager<MessageInterface>::register_remote_object()
 {
-    ObjectInfo info;
+    object_info info;
     MPI_Status status;
-    MPI_Recv(&info, 1, MpiObjectInfo, MPI_ANY_SOURCE, MPIRPC_TAG_NEW, m_comm, &status);
-    registerRemoteObject(status.MPI_SOURCE, info.type, info.id);
+    MPI_Recv(&info, 1, m_mpi_object_info, MPI_ANY_SOURCE, MPIRPC_TAG_NEW, m_comm, &status);
+    register_remote_object(status.MPI_SOURCE, info.type, info.id);
 }
 
 template<typename MessageInterface>
-bool Manager<MessageInterface>::checkSends() {
-    for (auto i = m_mpiObjectMessages.begin(); i != m_mpiObjectMessages.end();) {
+bool manager<MessageInterface>::check_sends() {
+    for (auto i = m_mpi_object_messages.begin(); i != m_mpi_object_messages.end();) {
         MPI_Request req = i->first;
         int flag;
         MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
         if (flag) {
             i->second.reset();
-            m_mpiObjectMessages.erase(i++);
+            m_mpi_object_messages.erase(i++);
         } else {
             ++i;
         }
     }
-    for (auto i = m_mpiMessages.begin(); i != m_mpiMessages.end();) {
+    for (auto i = m_mpi_messages.begin(); i != m_mpi_messages.end();) {
         MPI_Request req = i->first;
         int flag;
         MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
         if (flag) {
             delete i->second;
-            m_mpiMessages.erase(i++);
+            m_mpi_messages.erase(i++);
         } else {
             ++i;
         }
@@ -819,10 +783,10 @@ bool Manager<MessageInterface>::checkSends() {
 }
 
 template<typename MessageInterface>
-bool Manager<MessageInterface>::checkMessages() {
+bool manager<MessageInterface>::check_messages() {
     if (m_shutdown)
         return false;
-    checkSends();
+    check_sends();
     int flag = 1;
     while (flag) {
         MPI_Status status;
@@ -832,10 +796,10 @@ bool Manager<MessageInterface>::checkMessages() {
                 case MPIRPC_TAG_SHUTDOWN:
                     m_shutdown = true;
                     handleShutdown();
-                    checkSends();
+                    check_sends();
                     return false;
                 case MPIRPC_TAG_NEW:
-                    registerRemoteObject();
+                    register_remote_object();
                     break;
                 case MPIRPC_TAG_INVOKE:
                     receivedInvocationCommand(std::move(status));
@@ -846,7 +810,7 @@ bool Manager<MessageInterface>::checkMessages() {
                 case MPIRPC_TAG_RETURN:
                     return true;
                 default:
-                    UserMessageHandler func = m_userMessageHandlers.at(status.MPI_TAG);
+                    UserMessageHandler func = m_user_message_handlers.at(status.MPI_TAG);
                     func(std::move(status));
             }
         }
@@ -855,22 +819,22 @@ bool Manager<MessageInterface>::checkMessages() {
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::sync() {
-    while (queueSize() > 0) { checkMessages(); } //block until this rank's queue is processed
+void manager<MessageInterface>::sync() {
+    while (queue_size() > 0) { check_messages(); } //block until this rank's queue is processed
     MPI_Request req;
     int flag;
     MPI_Ibarrier(m_comm, &req);
     do
     {
         MPI_Test(&req, &flag, MPI_STATUS_IGNORE);
-        checkMessages();
+        check_messages();
     } while (!flag); //wait until all other ranks queues have been processed
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::shutdownAll() {
+void manager<MessageInterface>::shutdown_all() {
     int buf = 0;
-    for (int i = 0; i < m_numProcs; ++i)
+    for (int i = 0; i < m_num_pes; ++i)
     {
         if (i != m_rank) {
             MPI_Bsend((void*) &buf, 1, MPI_INT, i, MPIRPC_TAG_SHUTDOWN, m_comm);
@@ -881,14 +845,14 @@ void Manager<MessageInterface>::shutdownAll() {
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::shutdown()
+void manager<MessageInterface>::shutdown()
 {
     sync();
     m_shutdown = true;
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::handleShutdown()
+void manager<MessageInterface>::handleShutdown()
 {
     int buf;
     MPI_Status status;
@@ -898,7 +862,7 @@ void Manager<MessageInterface>::handleShutdown()
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::receivedInvocationCommand(MPI_Status&& status)
+void manager<MessageInterface>::receivedInvocationCommand(MPI_Status&& status)
 {
     m_count++;
     int len;
@@ -911,60 +875,60 @@ void Manager<MessageInterface>::receivedInvocationCommand(MPI_Status&& status)
         FnHandle function_handle;
         bool get_return;
         stream >> function_handle >> get_return;
-        FunctionBase *f = m_registered_functions[function_handle];
+        function_base *f = m_registered_functions[function_handle];
         f->execute(stream, recv_status.MPI_SOURCE, this, get_return);
         delete buffer;
     }
 }
 
 template<typename MessageInterface>
-void Manager<MessageInterface>::receivedMemberInvocationCommand(MPI_Status&& status) {
+void manager<MessageInterface>::receivedMemberInvocationCommand(MPI_Status&& status) {
     m_count++;
     int len;
     MPI_Get_count(&status, MPI_CHAR, &len);
     if (len != MPI_UNDEFINED) {
         std::vector<char>* buffer = new std::vector<char>(len);
         ParameterStream stream(buffer);
-        MPI_Status recvStatus;
-        MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recvStatus);
-        FnHandle functionHandle;
-        ObjectId objectId;
-        TypeId typeId;
-        bool getReturn;
-        stream >> typeId >> objectId >> functionHandle >> getReturn;
-        FunctionBase *f = m_registered_functions[functionHandle];
-        f->execute(stream, recvStatus.MPI_SOURCE, this, getReturn, getObjectWrapper(m_rank, typeId, objectId)->object());
+        MPI_Status recv_status;
+        MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recv_status);
+        FnHandle function_handle;
+        ObjectId object_id;
+        TypeId type_id;
+        bool get_return;
+        stream >> type_id >> object_id >> function_handle >> get_return;
+        function_base *f = m_registered_functions[function_handle];
+        f->execute(stream, recv_status.MPI_SOURCE, this, get_return, get_object_wrapper(m_rank, type_id, object_id)->object());
         delete buffer;
     }
 }
 
 template<typename MessageInterface>
-MPI_Comm Manager<MessageInterface>::comm() const
+MPI_Comm manager<MessageInterface>::comm() const
 {
     return m_comm;
 }
 
 template<typename MessageInterface>
-unsigned long long Manager<MessageInterface>::stats() const
+unsigned long long manager<MessageInterface>::stats() const
 {
     return m_count;
 }
 
 template<typename MessageInterface>
-int Manager<MessageInterface>::numProcs() const
+int manager<MessageInterface>::num_pes() const
 {
-    return m_numProcs;
+    return m_num_pes;
 }
 
 template<typename MessageInterface>
-size_t Manager<MessageInterface>::queueSize() const
+size_t manager<MessageInterface>::queue_size() const
 {
-    return m_mpiObjectMessages.size() + m_mpiMessages.size();
+    return m_mpi_object_messages.size() + m_mpi_messages.size();
 }
 
 class MpiMessageInterface {};
 
-using MpiManager = Manager<MpiMessageInterface>;
+using mpi_manager = manager<MpiMessageInterface>;
 
 }
 

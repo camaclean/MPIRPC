@@ -24,45 +24,45 @@
 #include <cstdint>
 
 template<typename T>
-MPI_Datatype mpiType();
+MPI_Datatype mpi_type();
 
 template<>
-MPI_Datatype mpiType<double>();
+MPI_Datatype mpi_type<double>();
 
 template<>
-MPI_Datatype mpiType<long double>();
+MPI_Datatype mpi_type<long double>();
 
 template<>
-MPI_Datatype mpiType<float>();
+MPI_Datatype mpi_type<float>();
 
 template<>
-MPI_Datatype mpiType<char>();
+MPI_Datatype mpi_type<char>();
 
 template<>
-MPI_Datatype mpiType<unsigned char>();
+MPI_Datatype mpi_type<unsigned char>();
 
 template<>
-MPI_Datatype mpiType<short>();
+MPI_Datatype mpi_type<short>();
 
 template<>
-MPI_Datatype mpiType<unsigned short>();
+MPI_Datatype mpi_type<unsigned short>();
 
 template<>
-MPI_Datatype mpiType<int>();
+MPI_Datatype mpi_type<int>();
 
 template<>
-MPI_Datatype mpiType<unsigned int>();
+MPI_Datatype mpi_type<unsigned int>();
 
 template<>
-MPI_Datatype mpiType<long>();
+MPI_Datatype mpi_type<long>();
 
 template<>
-MPI_Datatype mpiType<unsigned long>();
+MPI_Datatype mpi_type<unsigned long>();
 
 template<>
-MPI_Datatype mpiType<long long>();
+MPI_Datatype mpi_type<long long>();
 
 template<>
-MPI_Datatype mpiType<unsigned long long>();
+MPI_Datatype mpi_type<unsigned long long>();
 
 #endif /* MPITYPE_H */

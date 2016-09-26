@@ -21,6 +21,6 @@
 
 namespace mpirpc {
 
-ObjectId ObjectWrapperBase::objectIdCounter = 0;
+ObjectId object_wrapper_base::objectIdCounter = 0;
 
 }

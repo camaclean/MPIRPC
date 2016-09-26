@@ -14,16 +14,16 @@
 
 template<typename MessageInterface>
 template<typename Lambda>
-FnHandle mpirpc::Manager<MessageInterface>::registerLambda(Lambda&& l)
+FnHandle mpirpc::manager<MessageInterface>::register_lambda(Lambda&& l)
 {
-    return registerFunction(static_cast<typename LambdaTraits<Lambda>::lambda_stdfunction>(l));
+    return register_function(static_cast<typename LambdaTraits<Lambda>::lambda_stdfunction>(l));
 }
 
 template<typename MessageInterface>
 template<typename F, typename storage_function_parts<F>::function_type f>
-FnHandle mpirpc::Manager<MessageInterface>::registerFunction()
+FnHandle mpirpc::manager<MessageInterface>::register_function()
 {
-    FunctionBase *b = new Function<F>(f);
+    function_base *b = new function<F>(f);
     m_registered_functions[b->id()] = b;
     m_registered_function_typeids[std::type_index(typeid(function_identifier<F,f>))] = b->id();
     return b->id();
@@ -31,9 +31,9 @@ FnHandle mpirpc::Manager<MessageInterface>::registerFunction()
 
 template<typename MessageInterface>
 template<typename F>
-FnHandle mpirpc::Manager<MessageInterface>::registerFunction(F f)
+FnHandle mpirpc::manager<MessageInterface>::register_function(F f)
 {
-    FunctionBase *b = new Function<F>(f);
+    function_base *b = new function<F>(f);
     m_registered_functions[b->id()] = b;
     //m_registered_function_typeids[std::type_index(typeid(function_identifier<typename storage_function_parts<F>::function_type,f>))] = b->id();
     return b->id();
@@ -45,18 +45,18 @@ FnHandle mpirpc::Manager<MessageInterface>::registerFunction(F f)
 
 template<typename MessageInterface>
 template<typename T>
-TypeId mpirpc::Manager<MessageInterface>::registerType()
+TypeId mpirpc::manager<MessageInterface>::register_type()
 {
-    TypeId id = ++m_nextTypeId;
-    m_registeredTypeIds[std::type_index(typeid(typename std::decay<T>::type))] = id;
+    TypeId id = ++m_next_type_id;
+    m_registered_type_ids[std::type_index(typeid(typename std::decay<T>::type))] = id;
     return id;
 }
 
 template<typename MessageInterface>
 template<typename T>
-TypeId mpirpc::Manager<MessageInterface>::getTypeId() const
+TypeId mpirpc::manager<MessageInterface>::get_type_id() const
 {
-    return m_registeredTypeIds.at(std::type_index(typeid(typename std::decay<T>::type)));
+    return m_registered_type_ids.at(std::type_index(typeid(typename std::decay<T>::type)));
 }
 
 /*************************************************************************************/
@@ -65,51 +65,51 @@ TypeId mpirpc::Manager<MessageInterface>::getTypeId() const
 
 template<typename MessageInterface>
 template<class Class>
-ObjectWrapper<Class>* mpirpc::Manager<MessageInterface>::registerObject(Class *object) {
-    ObjectWrapper<Class> *wrapper = new ObjectWrapper<Class>(object);
+object_wrapper<Class>* mpirpc::manager<MessageInterface>::register_object(Class *object) {
+    object_wrapper<Class> *wrapper = new object_wrapper<Class>(object);
     wrapper->m_rank = m_rank;
-    wrapper->m_type = getTypeId<Class>();
-    m_registeredObjects.push_back(wrapper);
-    notifyNewObject(wrapper->type(), wrapper->id());
+    wrapper->m_type = get_type_id<Class>();
+    m_registered_objects.push_back(wrapper);
+    notify_new_object(wrapper->type(), wrapper->id());
     return wrapper;
 }
 
 template<typename MessageInterface>
 template<class Class, typename... Args>
-ObjectWrapperBase* mpirpc::Manager<MessageInterface>::constructGlobalObject(int rank, Args&&... args)
+object_wrapper_base* mpirpc::manager<MessageInterface>::construct_global_object(int rank, Args&&... args)
 {
-    ObjectWrapperBase *wrapper;
+    object_wrapper_base *wrapper;
     if (rank == m_rank)
     {
         Class *object = new Class(std::forward<Args>(args)...);
-        wrapper = new ObjectWrapper<Class>(object);
+        wrapper = new object_wrapper<Class>(object);
         wrapper->m_rank = m_rank;
-        wrapper->m_type = getTypeId<Class>();
+        wrapper->m_type = get_type_id<Class>();
     }
     else
     {
-        wrapper = new ObjectWrapperBase();
+        wrapper = new object_wrapper_base();
         wrapper->m_rank = rank;
-        wrapper->m_type = getTypeId<Class>();
+        wrapper->m_type = get_type_id<Class>();
     }
-    m_registeredObjects.push_back(wrapper);
+    m_registered_objects.push_back(wrapper);
     return wrapper;
 }
 
 template<typename MessageInterface>
-void mpirpc::Manager<MessageInterface>::registerRemoteObject(int rank, TypeId type, ObjectId id)
+void mpirpc::manager<MessageInterface>::register_remote_object(int rank, TypeId type, ObjectId id)
 {
-    ObjectWrapper<void> *a = new ObjectWrapper<void>();
+    object_wrapper<void> *a = new object_wrapper<void>();
     a->m_id = id;
     a->m_type = type;
     a->m_rank = rank;
-    m_registeredObjects.push_back(a);
+    m_registered_objects.push_back(a);
 }
 
 template<typename MessageInterface>
-ObjectWrapperBase* mpirpc::Manager<MessageInterface>::getObjectOfType(mpirpc::TypeId typeId) const
+object_wrapper_base* mpirpc::manager<MessageInterface>::get_object_of_type(mpirpc::TypeId typeId) const
 {
-    for (ObjectWrapperBase* i : m_registeredObjects)
+    for (object_wrapper_base* i : m_registered_objects)
     {
         if (i->type() == typeId)
             return i;
@@ -119,29 +119,29 @@ ObjectWrapperBase* mpirpc::Manager<MessageInterface>::getObjectOfType(mpirpc::Ty
 
 template<typename MessageInterface>
 template<class Class>
-std::unordered_set<ObjectWrapperBase*> mpirpc::Manager<MessageInterface>::getObjectsOfType() const
+std::unordered_set<object_wrapper_base*> mpirpc::manager<MessageInterface>::get_objects_of_type() const
 {
-    return getObjectsOfType(getTypeId<Class>());
+    return get_objects_of_type(get_type_id<Class>());
 }
 
 template<typename MessageInterface>
 template<class Class>
-ObjectWrapperBase* mpirpc::Manager<MessageInterface>::getObjectOfType() const
+object_wrapper_base* mpirpc::manager<MessageInterface>::get_object_of_type() const
 {
-    return getObjectOfType(getTypeId<Class>());
+    return get_object_of_type(get_type_id<Class>());
 }
 
 template<typename MessageInterface>
 template<class Class>
-ObjectWrapperBase* mpirpc::Manager<MessageInterface>::getObjectOfType(int rank) const
+object_wrapper_base* mpirpc::manager<MessageInterface>::get_object_of_type(int rank) const
 {
-    return getObjectOfType(getTypeId<Class>(), rank);
+    return get_object_of_type(get_type_id<Class>(), rank);
 }
 
 template<typename MessageInterface>
-ObjectWrapperBase* mpirpc::Manager<MessageInterface>::getObjectOfType(TypeId typeId, int rank) const
+object_wrapper_base* mpirpc::manager<MessageInterface>::get_object_of_type(TypeId typeId, int rank) const
 {
-    for (ObjectWrapperBase* i : m_registeredObjects)
+    for (object_wrapper_base* i : m_registered_objects)
     {
         if (i->type() == typeId && i->rank() == rank)
             return i;
@@ -151,16 +151,16 @@ ObjectWrapperBase* mpirpc::Manager<MessageInterface>::getObjectOfType(TypeId typ
 
 template<typename MessageInterface>
 template<class Class>
-std::unordered_set<ObjectWrapperBase*> mpirpc::Manager<MessageInterface>::getObjectsOfType(int rank) const
+std::unordered_set<object_wrapper_base*> mpirpc::manager<MessageInterface>::get_objects_of_type(int rank) const
 {
-    return getObjectsOfType(getTypeId<Class>(), rank);
+    return get_objects_of_type(get_type_id<Class>(), rank);
 }
 
 template<typename MessageInterface>
-std::unordered_set<ObjectWrapperBase*> mpirpc::Manager<MessageInterface>::getObjectsOfType(TypeId typeId) const
+std::unordered_set<object_wrapper_base*> mpirpc::manager<MessageInterface>::get_objects_of_type(TypeId typeId) const
 {
-    std::unordered_set<ObjectWrapperBase*> ret;
-    for (ObjectWrapperBase* i : m_registeredObjects)
+    std::unordered_set<object_wrapper_base*> ret;
+    for (object_wrapper_base* i : m_registered_objects)
     {
         if (i->type() == typeId)
             ret.insert(i);
@@ -169,10 +169,10 @@ std::unordered_set<ObjectWrapperBase*> mpirpc::Manager<MessageInterface>::getObj
 }
 
 template<typename MessageInterface>
-std::unordered_set<ObjectWrapperBase*> mpirpc::Manager<MessageInterface>::getObjectsOfType(TypeId typeId, int rank) const
+std::unordered_set<object_wrapper_base*> mpirpc::manager<MessageInterface>::get_objects_of_type(TypeId typeId, int rank) const
 {
-    std::unordered_set<ObjectWrapperBase*> ret;
-    for (ObjectWrapperBase* i : m_registeredObjects)
+    std::unordered_set<object_wrapper_base*> ret;
+    for (object_wrapper_base* i : m_registered_objects)
     {
         if (i->type() == typeId && i->rank() == rank)
             ret.insert(i);
@@ -181,8 +181,8 @@ std::unordered_set<ObjectWrapperBase*> mpirpc::Manager<MessageInterface>::getObj
 }
 
 template<typename MessageInterface>
-ObjectWrapperBase* mpirpc::Manager<MessageInterface>::getObjectWrapper(int rank, TypeId tid, ObjectId oid) const {
-    for (ObjectWrapperBase* i : m_registeredObjects)
+object_wrapper_base* mpirpc::manager<MessageInterface>::get_object_wrapper(int rank, TypeId tid, ObjectId oid) const {
+    for (object_wrapper_base* i : m_registered_objects)
         if (i->type() == tid && i->id() == oid && i->rank() == rank)
             return i;
     throw UnregisteredObjectException();

@@ -79,6 +79,7 @@ struct marshaller_function_signature<R(*)(FArgs...), Args...>
     using storage_tuple = std::tuple<typename std::remove_reference<typename choose_storage_type<FArgs,Args>::type>::type...>;
     using applier = std::function<void(typename choose_reference_type<FArgs,Args>::type...)>;
     using type = R(*)(typename choose_reference_type<FArgs,Args>::type...);
+    using pass_backs = bool_tuple<is_pass_back<FArgs>::value...>;
 };
 
 template<typename... FArgs, typename... Args>
@@ -92,6 +93,7 @@ struct marshaller_function_signature<void(*)(FArgs...), Args...>
     using storage_tuple = std::tuple<typename std::remove_reference<typename choose_storage_type<FArgs,Args>::type>::type...>;
     using applier = std::function<void(typename choose_reference_type<FArgs,Args>::type...)>;
     using type = void(*)(typename choose_reference_type<FArgs,Args>::type...);
+    using pass_backs = bool_tuple<is_pass_back<FArgs>::value...>;
 };
 
 template<typename R, class C, typename... FArgs, typename... Args>
@@ -101,11 +103,11 @@ struct marshaller_function_signature<R(C::*)(FArgs...), Args...>
     static constexpr std::size_t num_fargs = sizeof...(FArgs);
     using return_type = R;
     using non_void_return_type = R;
-    //static constexpr bool void_return_type = std::is_same<R,void>::value;
     using parameter_types = std::tuple<typename choose_reference_type<FArgs,Args>::type...>;
     using storage_tuple = std::tuple<typename std::remove_reference<typename choose_storage_type<FArgs,Args>::type>::type...>;
     using applier = std::function<void(typename choose_reference_type<FArgs,Args>::type...)>;
     using type = R(C::*)(typename choose_reference_type<FArgs,Args>::type...);
+    using pass_backs = bool_tuple<is_pass_back<FArgs>::value...>;
 };
 
 template<class C, typename... FArgs, typename... Args>
@@ -115,11 +117,11 @@ struct marshaller_function_signature<void(C::*)(FArgs...), Args...>
     static constexpr std::size_t num_fargs = sizeof...(FArgs);
     using return_type = void;
     using void_return_type = void;
-    //static constexpr bool void_return_type = std::is_same<R,void>::value;
     using parameter_types = std::tuple<typename choose_reference_type<FArgs,Args>::type...>;
     using storage_tuple = std::tuple<typename std::remove_reference<typename choose_storage_type<FArgs,Args>::type>::type...>;
     using applier = std::function<void(typename choose_reference_type<FArgs,Args>::type...)>;
     using type = void(C::*)(typename choose_reference_type<FArgs,Args>::type...);
+    using pass_backs = bool_tuple<is_pass_back<FArgs>::value...>;
 };
 
 template<typename R, typename... FArgs, typename... Args>
@@ -128,14 +130,26 @@ struct marshaller_function_signature<std::function<R(FArgs...)>, Args...>
     static constexpr std::size_t num_args  = sizeof...(Args );
     static constexpr std::size_t num_fargs = sizeof...(FArgs);
     using return_type = R;
-    template<std::enable_if_t<!std::is_same<R,void>::value>* = nullptr>
     using non_void_return_type = R;
-    template<std::enable_if_t<std::is_same<R,void>::value>* = nullptr>
-    using void_return_type = void;
     using parameter_types = std::tuple<typename choose_reference_type<FArgs,Args>::type...>;
     using storage_tuple = std::tuple<typename std::remove_reference<typename choose_storage_type<FArgs,Args>::type>::type...>;
     using applier = std::function<void(typename choose_reference_type<FArgs,Args>::type...)>;
     using type = std::function<R(typename choose_reference_type<FArgs,Args>::type...)>;
+    using pass_backs = bool_tuple<is_pass_back<FArgs>::value...>;
+};
+
+template<typename... FArgs, typename... Args>
+struct marshaller_function_signature<std::function<void(FArgs...)>, Args...>
+{
+    static constexpr std::size_t num_args  = sizeof...(Args );
+    static constexpr std::size_t num_fargs = sizeof...(FArgs);
+    using return_type = void;
+    using void_return_type = void;
+    using parameter_types = std::tuple<typename choose_reference_type<FArgs,Args>::type...>;
+    using storage_tuple = std::tuple<typename std::remove_reference<typename choose_storage_type<FArgs,Args>::type>::type...>;
+    using applier = std::function<void(typename choose_reference_type<FArgs,Args>::type...)>;
+    using type = std::function<void(typename choose_reference_type<FArgs,Args>::type...)>;
+    using pass_backs = bool_tuple<is_pass_back<FArgs>::value...>;
 };
 
 template<std::size_t N, typename FTuple, typename Tuple>

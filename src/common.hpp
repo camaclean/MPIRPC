@@ -167,6 +167,27 @@ struct any_true<B>
 template<bool...Vs>
 struct bool_tuple{};
 
+template<typename T>
+struct is_pass_back
+{
+    constexpr static bool value = std::is_lvalue_reference<T>::value &&
+                                  !std::is_const<typename std::remove_reference<T>::type>::value &&
+                                  !std::is_pointer<typename std::remove_reference<T>::type>::value &&
+                                  !std::is_array<typename std::remove_reference<T>::type>::value;
+};
+
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+struct is_pass_back<PointerWrapper<T,N,PassOwnership,PassBack,Allocator>>
+{
+    constexpr static bool value = PassBack;
+};
+
+template<typename T>
+struct pass_back_false
+{
+    constexpr static bool value = false;
+};
+
 /*template<typename T>
 constexpr std::size_t array_elements(const T&) noexcept
 {
