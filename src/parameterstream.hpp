@@ -141,14 +141,6 @@ struct pointer_wrapper_factory<T,0,PassOwnership,PassBack,Allocator>
 
 }
 
-template<typename T>
-inline void marshal(mpirpc::parameter_stream& s, T&& val)
-{
-    s << val;
-}
-
-
-
 /*template<typename T>
 struct unmarshaller;*/
 
@@ -767,6 +759,20 @@ mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const mpirpc
         out << wrapper[i];
     return out;
 }
+
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
+{
+    std::size_t size;
+    in >> size;
+    std::cout << "getting returned pointer of size " << size << std::endl;
+    for (std::size_t i = 0; i < size; ++i)
+    {
+        in >> wrapper[i];
+    }
+    return in;
+}
+
 
 namespace detail
 {

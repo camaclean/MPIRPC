@@ -54,6 +54,8 @@
 #include "forwarders.hpp"
 #include "mpitype.hpp"
 #include "exceptions.hpp"
+#include "marshalling.hpp"
+#include "unmarshalling.hpp"
 
 #include "internal/marshalling.hpp"
 #include "internal/function_attributes.hpp"
@@ -211,7 +213,7 @@ public:
     template<typename F, internal::unwrapped_function_type<F> f>
     FnHandle get_fn_handle()
     {
-        return m_registered_function_typeids[std::type_index(typeid(internal::function_identifier<F,f>))];
+        return m_registered_function_typeids[std::type_index(typeid(internal::function_identifier<internal::wrapped_function_type<F>,f>))];
     }
 
     /**
@@ -527,7 +529,7 @@ protected:
      * @param r The invoked functions return value
      */
     template<typename R, typename... Args,bool...PBs,std::size_t... Is>
-    void function_return(int rank, R&& r, std::tuple<Args...> args, bool_tuple<PBs...>, std::index_sequence<Is...>)
+    void function_return(int rank, R&& r, std::tuple<Args...> args, internal::bool_template_list<PBs...>, std::index_sequence<Is...>)
     {
         std::vector<char>* buffer = new std::vector<char>();
         parameter_stream stream(buffer);
@@ -539,8 +541,10 @@ protected:
     }
 
     template<typename... Args,bool...PBs,std::size_t... Is>
-    void function_return(int rank, std::tuple<Args...> args, bool_tuple<PBs...>, std::index_sequence<Is...>)
+    void function_return(int rank, std::tuple<Args...> args, internal::bool_template_list<PBs...>, std::index_sequence<Is...>)
     {
+        if (!internal::any_true<PBs...>::value)
+            return;
         std::vector<char>* buffer = new std::vector<char>();
         parameter_stream stream(buffer);
         using swallow = int[];
@@ -579,7 +583,7 @@ protected:
      * Unserialize the result and return it.
      */
     template<typename R, bool...PB, typename... Args>
-    auto process_return(int rank, bool_tuple<PB...>, Args&&... args)
+    auto process_return(int rank, internal::bool_template_list<PB...>, Args&&... args)
         -> typename std::enable_if<!std::is_same<R,void>::value,R>::type
     {
         MPI_Status status;
@@ -606,9 +610,11 @@ protected:
     }
 
     template<typename R, bool...PB, typename...Args>
-    auto process_return(int rank, bool_tuple<PB...>, Args&&... args)
+    auto process_return(int rank, internal::bool_template_list<PB...>, Args&&... args)
         -> typename std::enable_if<std::is_same<R,void>::value,R>::type
     {
+        if (!internal::any_true<PB...>::value && std::is_void<R>::value)
+            return;
         MPI_Status status;
         int len;
         int flag;
@@ -624,7 +630,7 @@ protected:
             parameter_stream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
             using swallow = int[];
-            (void)swallow{((PB) ? (args = unmarshal<Args,Allocator<Args>>(stream), 1) : 0)...};
+            (void)swallow{((PB) ? (stream >> args /* = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
             delete buffer;
         }
     }

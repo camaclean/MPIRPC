@@ -10,7 +10,7 @@ namespace mpirpc
 namespace detail
 {
 
-template<typename FArg, typename Arg>
+/*template<typename FArg, typename Arg>
 struct choose_marshaller_reference_type
 {
     using type = FArg;
@@ -20,7 +20,7 @@ template<typename FArg, typename T, std::size_t N, bool PassOwnership, bool Pass
 struct choose_marshaller_reference_type<FArg, ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
 {
     using type = ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>;
-};
+};*/
 
 /*template<typename FArg, typename T, std::size_t N, bool PassOwnership, typename Allocator>
 struct forward_parameter_type_helper<FArg, ::mpirpc::PointerWrapper<T,N,PassOwnership,Allocator>>

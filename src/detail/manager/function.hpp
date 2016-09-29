@@ -3,35 +3,7 @@
 
 #include "../../manager.hpp"
 #include "../../internal/function_attributes.hpp"
-
-template <typename Stream, typename Tuple, size_t... I>
-decltype(auto) pass_back_impl(Stream& p, Tuple&& t, std::index_sequence<I...>)
-{
-    using swallow = int[];
-    (void)swallow{(marshal(p,std::get<I>(std::forward<Tuple>(t))), 0)...};
-}
-
-template <typename Stream, typename F, typename Tuple>
-decltype(auto) pass_back(F&& f, Stream& p, Tuple&& t)
-{
-    using Indices = std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>;
-    return pass_back_impl(std::forward<F>(f), p, std::forward<Tuple>(t), Indices{});
-}
-
-template<std::size_t Pos, bool Head, bool... Tails>
-struct bool_vartem_pos
-{
-    static constexpr bool value = (Pos == sizeof...(Tails)+1) ? Head : bool_vartem_pos<Pos,Tails...>::value;
-};
-
-template<std::size_t Pos, typename T>
-struct get_pass_back_at;
-
-template<std::size_t Pos, bool...Vs>
-struct get_pass_back_at<Pos,bool_tuple<Vs...>>
-{
-    static constexpr bool value = bool_vartem_pos<Pos,Vs...>::value;
-};
+#include "../../internal/pass_back.hpp"
 
 template<class MessageInterface, template<typename> typename Allocator>
 class mpirpc::manager<MessageInterface, Allocator>::function_base
@@ -96,7 +68,7 @@ public:
         if (get_return)
         {
             R ret(call());
-            manager->function_return(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, std::move(ret), call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
         }
         else
         {
@@ -124,7 +96,7 @@ public:
         call();
 
         if (get_return)
-            manager->function_return(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
     }
 
 protected:
@@ -148,7 +120,7 @@ public:
         if (get_return)
         {
             R ret(call());
-            manager->function_return(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, std::move(ret), call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
         }
         else
         {
@@ -174,7 +146,7 @@ public:
         ordered_call<void(Class::*)(Args...)> call{func, static_cast<Class*>(object), unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
         call();
         if (get_return)
-            manager->function_return(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
     }
 
     function_type func;
@@ -197,7 +169,7 @@ public:
         if (get_return)
         {
             R ret(call());
-            manager->function_return(sender_rank, std::move(ret), call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, std::move(ret), call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
         }
         else
         {
@@ -222,7 +194,7 @@ public:
         ordered_call<std::function<void(Args...)>> call{func, unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
         call();
         if (get_return)
-            manager->function_return(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
     }
 
     function_type func;

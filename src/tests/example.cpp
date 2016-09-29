@@ -35,9 +35,10 @@ void f7(const std::vector<int>& v)
     std::cout << v[0] << v[0] << "v0" << std::endl;
 }
 
-void f8(const int (&c)[2])
+void f8(int (&c)[2])
 {
     std::cout << "f8(int (&)[2]: " << c[0] << " " << c[1] << std::endl;
+    c[0] = 42;
 }
 
 void f9(std::size_t x, int (*c)[3])
@@ -49,6 +50,7 @@ void f9(std::size_t x, int (*c)[3])
         if (i < x-1)
             std::cout << ",";
     }
+    c[0][0] = 974;
     std::cout << std::endl;
 }
 
@@ -201,9 +203,11 @@ int main(int argc, char** argv)
         manager->invoke_function<decltype(&f6),&f6>(0, (const char*) "test cstring");
         manager->invoke_function<decltype(&f7),&f7>(0, vectest);
         int c[2] = {1,2};
-        manager->invoke_function<decltype(&f8),&f8>(0, c);
+        manager->invoke_function_r<decltype(&f8),&f8>(0, c);
+        std::cout << "c[0] and c[1]" << c[0] << " " << c[1] << std::endl;
         int c2[2][3] = {1,2,3,4,5,6};
-        manager->invoke_function<decltype(&f9),&f9>(0,2, c2);
+        manager->invoke_function_r<decltype(&f9),&f9>(0,2, c2);
+        std::cout << "c2[0][0]: " << c2[0][0] << std::endl;
         manager->invoke_function<decltype(&Foo::bar1),&Foo::bar1>(foo_w);
         std::string ret4 = manager->invoke_function_r<decltype(&Foo::bar2),&Foo::bar2>(foo_w);
         std::cout << "Rank 1 got \"" << ret4 << "\" as a return from Foo::bar2()" << std::endl;
@@ -212,17 +216,18 @@ int main(int argc, char** argv)
         //manager->invoke_function<void(Foo::*)(mpirpc::pointer_wrapper<std::map<double,std::string>,1>), &Foo::bar5<double,std::string>>(foo_w, mpirpc::pointer_wrapper<std::map<double,std::string>,1>(&testmap));
         manager->invoke_function<decltype(&Foo::bar5<double,std::string>), &Foo::bar5<double,std::string>>(foo_w, mpirpc::pointer_wrapper<std::map<double,std::string>,1>(&testmap));
         std::cout << "Rank 0 is running with UID: " << manager->invoke_function_r<uid_t>(0, &getuid, syscall) << std::endl;
-        std::cout << "any_true: " << mpirpc::any_true<false,true,true,false,false>::value << std::endl;
+        //std::cout << "any_true: " << mpirpc::any_true<false,true,true,false,false>::value << std::endl;
     }
 
-    manager->invoke_function(0, done, manager->rank());
+    //manager->invoke_function(0, done, manager->rank());
 
-    while (manager->check_messages() && procsToGo > 0) {}
+    manager->sync();
+    //while (manager->check_messages() && procsToGo > 0) {}
 
 
     if (manager->rank() == 0)
     {
-        manager->shutdown_all();
+        //manager->shutdown_all();
         std::cout << "Foo::val is now " << foo->val << std::endl;
     }
 

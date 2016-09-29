@@ -48,45 +48,6 @@ using FnHandle = unsigned long long;
 using TypeId = unsigned long long;
 using ObjectId = unsigned long long;
 
-template<bool... Bs>
-struct any_true;
-
-template<bool B1, bool... Bs>
-struct any_true<B1, Bs...>
-{
-    constexpr static bool value = B1 || any_true<Bs...>::value;
-};
-
-template<bool B>
-struct any_true<B>
-{
-    constexpr static bool value = B;
-};
-
-template<bool...Vs>
-struct bool_tuple{};
-
-template<typename T>
-struct is_pass_back
-{
-    constexpr static bool value = std::is_lvalue_reference<T>::value &&
-                                  !std::is_const<typename std::remove_reference<T>::type>::value &&
-                                  !std::is_pointer<typename std::remove_reference<T>::type>::value &&
-                                  !std::is_array<typename std::remove_reference<T>::type>::value;
-};
-
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct is_pass_back<pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
-{
-    constexpr static bool value = PassBack;
-};
-
-template<typename T>
-struct pass_back_false
-{
-    constexpr static bool value = false;
-};
-
 }
 
 #endif // COMMON_HPP
