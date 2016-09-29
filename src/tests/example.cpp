@@ -19,7 +19,11 @@ void f4( std::string s2)
     s2 = "edited string";
 }
 
-void f5(int p[], int t1, int& t2, int&& t3) { std::cout << "basic pointer type: " << p[0] << " " << p[1] << " " << p[2] << " " << p[3] << " , int: " << t1 << " int&: " << t2 << " int&&: " << t3 << std::endl; t2 = -1; }
+void f5(int * p, int t1, int& t2, int&& t3) {
+    std::cout << "basic pointer type: " << p[0] << " " << p[1] << " " << p[2] << " " << p[3] << " , int: " << t1 << " int&: " << t2 << " int&&: " << t3 << std::endl;
+    t2 = -1;
+    p[0] = -5;
+}
 
 void f6(const char* str) { std::cout << "f6(const char*): " << str << std::endl; }
 
@@ -192,6 +196,7 @@ int main(int argc, char** argv)
         std::vector<int> vectest{10,9,8,7,6,5,4,3,2,1};
         //manager->invoke_function_r<void(*)(mpirpc::pointer_wrapper<int,4>,int,int&,int&&),&f5>(0, mpirpc::pointer_wrapper<int,4>(test3), 6, b, 8);
         manager->invoke_function_r<decltype(&f5),&f5>(0, mpirpc::pointer_wrapper<int,4>(test3), 6, b, 8);
+        std::cout << "test3[0]: " << test3[0] << std::endl;
         std::cout << "b: " << b << std::endl;
         manager->invoke_function<decltype(&f6),&f6>(0, (const char*) "test cstring");
         manager->invoke_function<decltype(&f7),&f7>(0, vectest);

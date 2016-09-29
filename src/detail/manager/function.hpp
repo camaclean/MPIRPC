@@ -92,7 +92,7 @@ public:
             * but the commas cannot be used as comma operators.
             */
         assert(manager);
-        ordered_call<R(*)(Args...)> call{func, unmarshal<internal::remove_all_const_type<Args>, Allocator>(params)...};
+        ordered_call<R(*)(Args...)> call{func, unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
         if (get_return)
         {
             R ret(call());
@@ -120,7 +120,7 @@ public:
 
     virtual void execute(::mpirpc::parameter_stream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
     {
-        ordered_call<void(*)(Args...)> call{func, unmarshal<internal::remove_all_const_type<Args>, Allocator>(params)...};
+        ordered_call<void(*)(Args...)> call{func, unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
         call();
 
         if (get_return)
@@ -144,7 +144,7 @@ public:
     {
         assert(object);
         assert(manager);
-        ordered_call<R(Class::*)(Args...)> call{func, static_cast<Class*>(object), unmarshal<internal::remove_all_const_type<Args>, Allocator>(params)...};
+        ordered_call<R(Class::*)(Args...)> call{func, static_cast<Class*>(object), unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
         if (get_return)
         {
             R ret(call());
@@ -171,7 +171,7 @@ public:
     virtual void execute(::mpirpc::parameter_stream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
     {
         assert(object);
-        ordered_call<void(Class::*)(Args...)> call{func, static_cast<Class*>(object), unmarshal<internal::remove_all_const_type<Args>, Allocator>(params)...};
+        ordered_call<void(Class::*)(Args...)> call{func, static_cast<Class*>(object), unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
         call();
         if (get_return)
             manager->function_return(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
@@ -192,7 +192,7 @@ public:
     virtual void execute(::mpirpc::parameter_stream &params, int sender_rank, manager *manager, bool get_return, void *object = 0) override
     {
         assert(manager);
-        ordered_call<std::function<R(Args...)>> call{func, unmarshal<internal::remove_all_const_type<Args>>(params)...};
+        ordered_call<std::function<R(Args...)>> call{func, unmarshal<internal::remove_all_const_type<Args>,Allocator<Args>>(params)...};
 
         if (get_return)
         {
@@ -219,7 +219,7 @@ public:
 
     virtual void execute(::mpirpc::parameter_stream &params, int sender_rank, manager *manager, bool get_return, void *object = 0) override
     {
-        ordered_call<std::function<void(Args...)>> call{func, unmarshal<internal::remove_all_const_type<Args>, Allocator>(params)...};
+        ordered_call<std::function<void(Args...)>> call{func, unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
         call();
         if (get_return)
             manager->function_return(sender_rank, call.args_tuple, bool_tuple<is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());

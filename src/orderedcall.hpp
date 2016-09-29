@@ -44,6 +44,17 @@ struct arg_cleanup<pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
     static void apply(pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>&& t) { std::cout << "cleaned up C Array of " << typeid(T).name() << std::endl; t.free(); }
 };
 
+template<typename T, std::size_t N>
+struct arg_cleanup<T(&)[N]>
+{
+    static void apply(T(&v)[N])
+    {
+        std::cout << "cleaning up reference to array" << std::endl;
+        std::allocator<std::remove_cv_t<T>> a;
+        a.deallocate((std::remove_cv_t<T>*)&v,N);
+    }
+};
+
 template<bool C, typename T>
 struct reapply_const_helper;
 

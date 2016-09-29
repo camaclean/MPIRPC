@@ -597,9 +597,9 @@ protected:
             std::vector<char>* buffer = new std::vector<char>(len);
             parameter_stream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
-            ret = unmarshal<R,Allocator>(stream);
+            ret = unmarshal<R,Allocator<R>>(stream);
             using swallow = int[];
-            (void)swallow{((PB) ? (args = unmarshal<Args,Allocator>(stream), 1) : 0)...};
+            (void)swallow{((PB) ? (args = unmarshal<Args,Allocator<Args>>(stream), 1) : 0)...};
             delete buffer;
         }
         return ret;
@@ -624,7 +624,7 @@ protected:
             parameter_stream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
             using swallow = int[];
-            (void)swallow{((PB) ? (args = unmarshal<Args,Allocator>(stream), 1) : 0)...};
+            (void)swallow{((PB) ? (args = unmarshal<Args,Allocator<Args>>(stream), 1) : 0)...};
             delete buffer;
         }
     }

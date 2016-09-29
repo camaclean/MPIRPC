@@ -22,7 +22,7 @@ auto mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(int rank, A
     {
         return f(std::forward<Args>(args)...);
     } else {
-        send_function_invocation<internal::wrapped_function_type<F>,f>(rank, true, std::forward<Args>(args)...);
+        send_function_invocation<internal::wrapped_function_type<F>,f>(rank, true, internal::autowrap<Args>(args)...);
         return process_return<internal::function_return_type<F>>(rank, typename internal::marshaller_function_signature<internal::wrapped_function_type<F>,Args...>::pass_backs{}, std::forward<Args>(args)...);
     }
 }
@@ -101,7 +101,7 @@ template<typename MessageInterface, template<typename> typename Allocator>
 template<typename R, typename... Args>
 R mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(int rank, FnHandle functionHandle, Args&&... args)
 {
-    send_function_invocation(rank, functionHandle, true, std::forward<Args>(args)...);
+    send_function_invocation(rank, functionHandle, true, internal::autowrap<Args>(args)...);
     return process_return<R>(rank, bool_tuple<pass_back_false<Args>::value...>{}, std::forward<Args>(args)...);
 }
 
@@ -109,7 +109,7 @@ template<typename MessageInterface, template<typename> typename Allocator>
 template<typename R, typename... Args>
 R mpirpc::manager<MessageInterface, Allocator>::invoke_function_pr(int rank, FnHandle functionHandle, Args&&... args)
 {
-    send_function_invocation(rank, functionHandle, true, std::forward<Args>(args)...);
+    send_function_invocation(rank, functionHandle, true, internal::autowrap<Args>(args)...);
     return process_return<R>(rank, bool_tuple<is_pass_back<Args>::value...>{}, std::forward<Args>(args)...);
 }
 
@@ -121,7 +121,7 @@ template<typename MessageInterface, template<typename> typename Allocator>
 template<typename... Args>
 void mpirpc::manager<MessageInterface, Allocator>::invoke_function(int rank, FnHandle functionHandle, Args&&... args)
 {
-    send_function_invocation(rank, functionHandle, false, std::forward<Args>(args)...);
+    send_function_invocation(rank, functionHandle, false, internal::autowrap<Args>(args)...);
 }
 
 /*************************************************************************************/
@@ -150,7 +150,7 @@ auto mpirpc::manager<MessageInterface, Allocator>::invoke_lambda_r(int rank, Lam
 
     using pass_backs = typename internal::lambda_traits<Lambda>::pass_backs;
     assert(function_handle != 0);
-    send_lambda_invocation(rank, function_handle, true, (internal::lambda_fn_ptr_type<Lambda>)nullptr, std::forward<Args>(args)...);
+    send_lambda_invocation(rank, function_handle, true, (internal::lambda_fn_ptr_type<Lambda>)nullptr, internal::autowrap<Args>(args)...);
     return process_return<R>(rank, pass_backs{}, std::forward<Args>(args)...);
 }
 
@@ -165,7 +165,7 @@ auto mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(object_wrap
         object_wrapper<Class> *o = static_cast<object_wrapper<Class>*>(a);
         return CALL_MEMBER_FN(*o->object(),f)(std::forward<Args>(args)...);
     } else {
-        send_member_function_invocation<internal::wrapped_function_type<F>,f>(a, true, std::forward<Args>(args)...);
+        send_member_function_invocation<internal::wrapped_function_type<F>,f>(a, true, internal::autowrap<Args>(args)...);
         return process_return<internal::function_return_type<F>>(a->rank(), typename internal::marshaller_function_signature<F,Args...>::pass_backs{}, std::forward<Args>(args)...);
     }
 }
@@ -184,7 +184,7 @@ void mpirpc::manager<MessageInterface, Allocator>::invoke_function(object_wrappe
         object_wrapper<Class> *o = static_cast<object_wrapper<Class>*>(a);
         CALL_MEMBER_FN(*o->object(),f)(std::forward<Args>(args)...);
     } else {
-        send_member_function_invocation<internal::wrapped_function_type<F>,f>(a, false, std::forward<Args>(args)...);
+        send_member_function_invocation<internal::wrapped_function_type<F>,f>(a, false, internal::autowrap<Args>(args)...);
     }
 }
 

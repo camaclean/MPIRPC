@@ -178,7 +178,7 @@ struct unmarshaller<typename std::enable_if<(!std::is_same<std::decay_t<T>,std::
 // if T, P*, if T*, P*
 // Unmarshall non-pointer types and char* types
 template<typename T,
-         template<typename> typename ManagerAllocator,
+         typename ManagerAllocator,
          typename R = std::remove_reference_t<T>,
          typename B = std::remove_pointer_t<R>,
          std::enable_if_t<(!std::is_pointer<R>::value) || std::is_same<R,char*>::value>* = nullptr,
@@ -188,10 +188,20 @@ inline R unmarshal(parameter_stream& s)
     return unmarshaller<R>::unmarshal(s);
 }
 
-template<typename Allocator, typename T,template<typename> typename ManagerAllocator>
+template<typename A>
+struct allocator_identifier;
+
+template<template<typename> typename A, typename T>
+struct allocator_identifier<A<T>>
+{
+    template<typename U>
+    using type = A<U>;
+};
+
+template<typename Allocator, typename T>
 struct unmarshal_array_helper
 {
-    template<typename U = T,
+    /*template<typename U = T,
              std::enable_if_t<std::is_same<U,int>::value>* = nullptr,
              std::enable_if_t<!std::is_array<U>::value>* = nullptr>
     static void unmarshal(Allocator& a, ::mpirpc::parameter_stream &s, U* v)
@@ -202,16 +212,16 @@ struct unmarshal_array_helper
         typename std::allocator_traits<Allocator>::template rebind_alloc<int> na(a);
         std::allocator_traits<decltype(na)>::construct(na,v,tmp);
         //new(v) B(tmp);
-    }
+    }*/
 
     template<typename U = T,
-             std::enable_if_t<!std::is_same<U,int>::value>* = nullptr,
              std::enable_if_t<!std::is_array<U>::value>* = nullptr>
     static void unmarshal(Allocator& a, ::mpirpc::parameter_stream &s, U* v)
     {
         using B = std::remove_extent_t<std::remove_reference_t<U>>;
-        typename std::allocator_traits<Allocator>::template rebind_alloc<B> na(a);
-        std::allocator_traits<decltype(na)>::construct(na,v,::mpirpc::unmarshal<B,ManagerAllocator>(s));
+        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<B>;
+        NewAllocatorType na(a);
+        std::allocator_traits<decltype(na)>::construct(na,v,::mpirpc::unmarshal<B,NewAllocatorType>(s));
         //new(v) B(::mpirpc::unmarshal<B,ManagerAllocator>(s));
     }
 
@@ -228,9 +238,8 @@ struct unmarshal_array_helper
 
 template<typename Allocator,
          typename T,
-         std::size_t N,
-         template<typename> typename ManagerAllocator>
-struct unmarshal_array_helper<Allocator, T[N], ManagerAllocator>
+         std::size_t N>
+struct unmarshal_array_helper<Allocator, T[N]>
 {
     /*static void unmarshal(::mpirpc::parameter_stream &s, T(*arr)[N])
     {
@@ -246,13 +255,13 @@ struct unmarshal_array_helper<Allocator, T[N], ManagerAllocator>
         for(std::size_t i = 0; i < N; ++i)
         {
             std::cout << N << " " << i << " " << arr << " " << typeid(T).name() << " " << typeid(decltype(&arr[i])).name() << std::endl;
-            unmarshal_array_helper<Allocator,T,ManagerAllocator>::unmarshal(a, s, &arr[0][i]);
+            unmarshal_array_helper<Allocator,T>::unmarshal(a, s, &arr[0][i]);
         }
     }
 };
 
 template<typename T,
-         template<typename> typename ManagerAllocator,
+         typename Allocator,
          typename B = std::remove_extent_t<std::remove_reference_t<T>>,
          std::enable_if_t<std::is_reference<T>::value>* = nullptr,
          std::enable_if_t<std::is_array<std::remove_reference_t<T>>::value>* = nullptr, //enable if reference to array
@@ -261,22 +270,24 @@ template<typename T,
 decltype(auto) unmarshal(mpirpc::parameter_stream &s)
 {
     constexpr std::size_t extent = std::extent<std::remove_reference_t<T>>();
-    ManagerAllocator<std::remove_reference_t<T>> a;
+    //typename std::allocator_traits<Allocator>::template rebind_alloc<B> a;
+    using CorrectedAllocatorType = typename allocator_identifier<Allocator>::template type<B>;
+    CorrectedAllocatorType a;
     std::size_t e;
     s >> e;
-    B(*t)[extent] = a.allocate(extent);
+    B(*t)[extent] = (B(*)[extent]) a.allocate(extent);
     T r = *t;
     for (std::size_t i = 0; i < extent; ++i)
     {
         std::cout << "extent: " << extent << std::endl;
-        unmarshal_array_helper<decltype(a),std::remove_pointer_t<decltype(&r[i])>,ManagerAllocator>::unmarshal(a,s,&r[i]);
+        unmarshal_array_helper<decltype(a),std::remove_pointer_t<decltype(&r[i])>>::unmarshal(a,s,&r[i]);
         //std::allocator_traits<decltype(a)>::construct(a,&t[i],unmarshal_array_helper(s,a,t[i]));
         //s >> t[i];
     }
     return static_cast<T>(r);
 }
 
-template<class PW, template<typename> typename ManagerAllocator>
+template<class PW, typename ManagerAllocator>
 auto unmarshal(mpirpc::parameter_stream& s)
      -> pointer_wrapper<typename PW::type,
                         PW::count,
@@ -298,7 +309,7 @@ auto unmarshal(mpirpc::parameter_stream& s)
     std::cout << "pointer: " << data << " " << size << " " << typeid(typename Allocator::value_type).name() << " " << typeid(Allocator).name() << " " << typeid(T).name() << std::endl;
     for (std::size_t i = 0; i < size; ++i)
     {
-        unmarshal_array_helper<Allocator,T,ManagerAllocator>::unmarshal(a, s, (T*) &data[i]);
+        unmarshal_array_helper<Allocator,T>::unmarshal(a, s, (T*) &data[i]);
         //std::allocator_traits<Allocator>::construct(a,&data[i],unmarshal<T&,ManagerAllocator>(s));
         //new(&data[i]) T(unmarshal<T>(s));
     }
@@ -577,7 +588,7 @@ mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T& c) require
     {
         //Because array types are not CopyConstructable, Container requires CopyConstructable elements,
         //and the allocator is only used for unmarshalling array types, just pass std::allocator
-        typename T::value_type tmp = unmarshal<typename T::value_type, std::allocator>(in);
+        typename T::value_type tmp = unmarshal<typename T::value_type, typename T::allocator_type>(in);
         it = tmp;
         std::cout << tmp << ",";
     }
