@@ -104,7 +104,9 @@ struct pointer_wrapper_stream_size
     static std::size_t get(parameter_stream& s)
     {
         std::cout << "static size" << std::endl;
-        return N;
+        std::size_t size;
+        s >> size;
+        return size;
     }
 };
 
@@ -177,11 +179,10 @@ struct unmarshaller<typename std::enable_if<(!std::is_same<std::decay_t<T>,std::
 // Unmarshall non-pointer types and char* types
 template<typename T,
          template<typename> typename ManagerAllocator,
-         typename R = typename std::decay<T>::type,
-         typename B = typename std::remove_pointer<R>::type,
-         typename P = B*,
-         typename std::enable_if<!std::is_same<R,P>::value || std::is_same<R,char*>::value>::type* = nullptr,
-         typename std::enable_if<std::is_default_constructible<typename std::remove_reference<T>::type>::value>::type* = nullptr>
+         typename R = std::remove_reference_t<T>,
+         typename B = std::remove_pointer_t<R>,
+         std::enable_if_t<(!std::is_pointer<R>::value) || std::is_same<R,char*>::value>* = nullptr,
+         std::enable_if_t<std::is_default_constructible<typename std::remove_reference<T>::type>::value>* = nullptr>
 inline R unmarshal(parameter_stream& s)
 {
     return unmarshaller<R>::unmarshal(s);
@@ -261,6 +262,8 @@ decltype(auto) unmarshal(mpirpc::parameter_stream &s)
 {
     constexpr std::size_t extent = std::extent<std::remove_reference_t<T>>();
     ManagerAllocator<std::remove_reference_t<T>> a;
+    std::size_t e;
+    s >> e;
     B(*t)[extent] = a.allocate(extent);
     T r = *t;
     for (std::size_t i = 0; i < extent; ++i)
@@ -301,6 +304,22 @@ auto unmarshal(mpirpc::parameter_stream& s)
     }
     return detail::pointer_wrapper_factory<T,N,PassOwnership,PassBack,Allocator>::create(data,size);
 };
+
+/*template<typename T,
+         std::enable_if_t<std::is_pointer<std::remove_reference_t<T>>::value>* = nullptr,
+         template<typename> typename ManagerAllocator>
+auto unmarshal(mpirpc::parameter_stream& in)
+    -> T*
+{
+    T* v;
+    std::allocator<T> a;
+    std::size_t size;
+    in >> size;
+    v = a.allocate(size);
+    for (std::size_t i = 0; i < size; ++i)
+        unmarshal_array_helper<std::allocator<T>,T,std::allocator>::unmarshal(a, in, (T*) &v[i]);
+    return v;
+}*/
 
 template<typename Key, typename T>
 struct unmarshaller<std::pair<Key,T>>
@@ -732,8 +751,7 @@ template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename 
 mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
 {
     std::cout << "streaming PointerWrapper" << std::endl;
-    if (N == 0)
-        out << wrapper.size();
+    out << wrapper.size();
     for (std::size_t i = 0; i < wrapper.size(); ++i)
         out << wrapper[i];
     return out;

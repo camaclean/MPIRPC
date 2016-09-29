@@ -136,12 +136,14 @@ int main(int argc, char** argv)
     std::cout << "cstrsize: " << sizeof(testcstr)/sizeof(testcstr[0]);
     s << testcstr;
     //mpirpc::unmarshal<mpirpc::PointerWrapper<int,0UL,false,std::allocator<int>>>(s);
-    mpirpc::FnHandle hf5 = manager->register_function<void(*)(mpirpc::pointer_wrapper<int,4>,int,int&,int&&),&f5>();
+    //mpirpc::FnHandle hf5 = manager->register_function<void(*)(mpirpc::pointer_wrapper<int,4>,int,int&,int&&),&f5>();
+    mpirpc::FnHandle hf5 = manager->register_function<decltype(&f5),&f5>();
     mpirpc::FnHandle fooBar1 = manager->register_function<decltype(&Foo::bar1),&Foo::bar1>();
     mpirpc::FnHandle fooBar2 = manager->register_function<decltype(&Foo::bar2),&Foo::bar2>();
     mpirpc::FnHandle fooBar3 = manager->register_function<decltype(&Foo::bar3),&Foo::bar3>();
     mpirpc::FnHandle fooBar4 = manager->register_function<decltype(&Foo::bar4<double,std::string>),&Foo::bar4<double,std::string>>();
-    mpirpc::FnHandle fooBar5 = manager->register_function<void(Foo::*)(mpirpc::pointer_wrapper<std::map<double,std::string>,1>),&Foo::bar5<double,std::string>>();
+    //mpirpc::FnHandle fooBar5 = manager->register_function<void(Foo::*)(mpirpc::pointer_wrapper<std::map<double,std::string>,1>),&Foo::bar5<double,std::string>>();
+    mpirpc::FnHandle fooBar5 = manager->register_function<decltype(&Foo::bar5<double,std::string>),&Foo::bar5<double,std::string>>();
     mpirpc::FnHandle syscall = manager->register_function<decltype(&getuid),&getuid>();
 
     Foo *foo = nullptr;
@@ -188,20 +190,22 @@ int main(int argc, char** argv)
         test3[3] = 4;
         int b = 7;
         std::vector<int> vectest{10,9,8,7,6,5,4,3,2,1};
-        manager->invoke_function_r<void(*)(mpirpc::pointer_wrapper<int,4>,int,int&,int&&),&f5>(0, mpirpc::pointer_wrapper<int,4>(test3), 6, b, 8);
+        //manager->invoke_function_r<void(*)(mpirpc::pointer_wrapper<int,4>,int,int&,int&&),&f5>(0, mpirpc::pointer_wrapper<int,4>(test3), 6, b, 8);
+        manager->invoke_function_r<decltype(&f5),&f5>(0, mpirpc::pointer_wrapper<int,4>(test3), 6, b, 8);
         std::cout << "b: " << b << std::endl;
         manager->invoke_function<decltype(&f6),&f6>(0, (const char*) "test cstring");
         manager->invoke_function<decltype(&f7),&f7>(0, vectest);
         int c[2] = {1,2};
         manager->invoke_function<decltype(&f8),&f8>(0, c);
         int c2[2][3] = {1,2,3,4,5,6};
-        manager->invoke_function<decltype(&f9),&f9>(0,2, mpirpc::pointer_wrapper<int[3],2>(c2));
+        manager->invoke_function<decltype(&f9),&f9>(0,2, c2);
         manager->invoke_function<decltype(&Foo::bar1),&Foo::bar1>(foo_w);
         std::string ret4 = manager->invoke_function_r<decltype(&Foo::bar2),&Foo::bar2>(foo_w);
         std::cout << "Rank 1 got \"" << ret4 << "\" as a return from Foo::bar2()" << std::endl;
         manager->invoke_function<decltype(&Foo::bar3),&Foo::bar3>(foo_w, 1024, 64.23); //function with a return, but not grabbing return value
         manager->invoke_function<decltype(&Foo::bar4<double,std::string>),&Foo::bar4<double,std::string>>(foo_w, testmap);
-        manager->invoke_function<void(Foo::*)(mpirpc::pointer_wrapper<std::map<double,std::string>,1>), &Foo::bar5<double,std::string>>(foo_w, mpirpc::pointer_wrapper<std::map<double,std::string>,1>(&testmap));
+        //manager->invoke_function<void(Foo::*)(mpirpc::pointer_wrapper<std::map<double,std::string>,1>), &Foo::bar5<double,std::string>>(foo_w, mpirpc::pointer_wrapper<std::map<double,std::string>,1>(&testmap));
+        manager->invoke_function<decltype(&Foo::bar5<double,std::string>), &Foo::bar5<double,std::string>>(foo_w, mpirpc::pointer_wrapper<std::map<double,std::string>,1>(&testmap));
         std::cout << "Rank 0 is running with UID: " << manager->invoke_function_r<uid_t>(0, &getuid, syscall) << std::endl;
         std::cout << "any_true: " << mpirpc::any_true<false,true,true,false,false>::value << std::endl;
     }
