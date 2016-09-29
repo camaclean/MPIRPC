@@ -55,6 +55,9 @@
 #include "mpitype.hpp"
 #include "exceptions.hpp"
 
+#include "internal/marshalling.hpp"
+#include "internal/function_attributes.hpp"
+
 #define ERR_ASSERT     1
 #define ERR_MAX_ACTORS 2
 #define MAX_GENERIC_ARGUMENTS 20
@@ -79,8 +82,8 @@ namespace mpirpc {
  * templates to automatically generate classes to serialize and unserialize function parameters and return values.
  *
  * To add support for serializing and unserializing a custom type, provide the following stream operators:
- * ParameterStream &operator<<(ParameterStream& stream, const Type &t);
- * ParameterStream &operator>>(ParameterStream& stream, Type &t);
+ * mpirpc::parameter_stream &operator<<(mpirpc::parameter_stream& stream, const Type &t);
+ * mpirpc::parameter_stream &operator>>(mpirpc::parameter_stream& stream, Type &t);
  *
  * Currently, only one manager per rank is permitted. However, a tag prefix could be implemented to allow for
  * multiple managers, thus allowing multiple communicators to be used.
@@ -88,10 +91,10 @@ namespace mpirpc {
  * @todo Allow function and type IDs to be specified by the user.
  */
 
-/*template<typename MessageInterface>
-class manager;*/
+template<typename MessageInterface, template<typename T> typename Allocator>
+class manager;
 
-template<typename MessageInterface>
+template<typename MessageInterface, template<typename T> typename Allocator>
 class manager
 {
     struct object_info;
@@ -191,7 +194,7 @@ public:
      * @param f A function pointer to the function to register
      * @return The handle associated with function #f
      */
-    template<typename F, typename storage_function_parts<F>::function_type f>
+    template<typename F, internal::unwrapped_function_type<F> f>
     FnHandle register_function();
 
     /**
@@ -205,10 +208,10 @@ public:
      * @return The handle associated with the member function pointer #f
      */
 
-    template<typename F, typename storage_function_parts<F>::function_type f>
+    template<typename F, internal::unwrapped_function_type<F> f>
     FnHandle get_fn_handle()
     {
-        return m_registered_function_typeids[std::type_index(typeid(function_identifier<F,f>))];
+        return m_registered_function_typeids[std::type_index(typeid(internal::function_identifier<F,f>))];
     }
 
     /**
@@ -248,16 +251,16 @@ public:
     auto invoke_function_r(int rank, R(*f)(FArgs...), FnHandle function_handle, Args&&... args)
         -> typename std::enable_if<!std::is_same<R, void>::value, R>::type;
 
-    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
     auto invoke_function_r(int rank, Args&&... args)
-        -> typename detail::marshaller_function_signature<F,Args...>::return_type;
+        -> internal::function_return_type<F>;
 
     /**
      * Specialized for void return type
      *
      * @see manager::invoke_function()
      */
-    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
     void invoke_function(int rank, Args&&... args);
 
     template<typename R, typename... FArgs, typename...Args>
@@ -298,20 +301,20 @@ public:
      * @param args... The function's parameters.
      * @return The return value of the function.
      */
-    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
     auto invoke_function_r(object_wrapper_base *a, Args&&... args)
-        -> typename detail::marshaller_function_signature<F,Args...>::return_type;
+        -> internal::function_return_type<F>;
 
     template<typename Lambda, typename... Args>
     auto invoke_lambda_r(int rank, Lambda&& l, FnHandle function_handle, Args&&... args)
-        -> typename LambdaTraits<Lambda>::return_type;
+        -> internal::lambda_return_type<Lambda>;
 
     /**
      * Version for void return type
      *
      * @see manager::invoke_function()
      */
-    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
     void invoke_function(object_wrapper_base *a, Args&&... args);
 
     /**
@@ -527,7 +530,7 @@ protected:
     void function_return(int rank, R&& r, std::tuple<Args...> args, bool_tuple<PBs...>, std::index_sequence<Is...>)
     {
         std::vector<char>* buffer = new std::vector<char>();
-        ParameterStream stream(buffer);
+        parameter_stream stream(buffer);
         stream << std::forward<R>(r);
         using swallow = int[];
         (void)swallow{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
@@ -539,7 +542,7 @@ protected:
     void function_return(int rank, std::tuple<Args...> args, bool_tuple<PBs...>, std::index_sequence<Is...>)
     {
         std::vector<char>* buffer = new std::vector<char>();
-        ParameterStream stream(buffer);
+        parameter_stream stream(buffer);
         using swallow = int[];
         (void)swallow{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
         MPI_Send((void*) stream.dataVector()->data(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
@@ -557,7 +560,7 @@ protected:
     template<typename... Args>
     void send_function_invocation(int rank, FnHandle function_handle, bool get_return, Args&&... args);
 
-    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
     void send_function_invocation(int rank, bool get_return, Args&&... args);
 
     template<typename R, typename...FArgs, typename...Args>
@@ -568,7 +571,7 @@ protected:
      *
      * @see manager::send_function_invocation(int,bool,Args...)
      */
-    template<typename F, typename storage_function_parts<F>::function_type f, typename... Args>
+    template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
     void send_member_function_invocation(object_wrapper_base* a, bool get_return, Args&&... args);
 
     /**
@@ -592,11 +595,11 @@ protected:
             MPI_Get_count(&status, MPI_CHAR, &len);
         if (!shutdown && len != MPI_UNDEFINED) {
             std::vector<char>* buffer = new std::vector<char>(len);
-            ParameterStream stream(buffer);
+            parameter_stream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
-            ret = unmarshal<R>(stream);
+            ret = unmarshal<R,Allocator>(stream);
             using swallow = int[];
-            (void)swallow{((PB) ? (args = unmarshal<Args>(stream), 1) : 0)...};
+            (void)swallow{((PB) ? (args = unmarshal<Args,Allocator>(stream), 1) : 0)...};
             delete buffer;
         }
         return ret;
@@ -618,10 +621,10 @@ protected:
             MPI_Get_count(&status, MPI_CHAR, &len);
         if (!shutdown && len != MPI_UNDEFINED) {
             std::vector<char>* buffer = new std::vector<char>(len);
-            ParameterStream stream(buffer);
+            parameter_stream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
             using swallow = int[];
-            (void)swallow{((PB) ? (args = unmarshal<Args>(stream), 1) : 0)...};
+            (void)swallow{((PB) ? (args = unmarshal<Args,Allocator>(stream), 1) : 0)...};
             delete buffer;
         }
     }
@@ -677,8 +680,8 @@ protected:
     MPI_Datatype m_mpi_object_info;
 };
 
-template<class MessageInterface>
-struct manager<MessageInterface>::object_info {
+template<class MessageInterface, template<typename> typename Allocator>
+struct manager<MessageInterface, Allocator>::object_info {
     object_info() {}
     object_info(TypeId t, ObjectId i) : type(t), id(i) {}
     TypeId type;
@@ -690,14 +693,14 @@ struct manager<MessageInterface>::object_info {
 #include "detail/manager/register.hpp"
 #include "detail/manager/invoke.hpp"
 
-template<typename MessageInterface>
-int manager<MessageInterface>::rank() const
+template<typename MessageInterface, template<typename> typename Allocator>
+int manager<MessageInterface, Allocator>::rank() const
 {
     return m_rank;
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::notify_new_object(TypeId type, ObjectId id)
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::notify_new_object(TypeId type, ObjectId id)
 {
     if (m_shutdown)
         return;
@@ -713,8 +716,8 @@ void manager<MessageInterface>::notify_new_object(TypeId type, ObjectId id)
     }
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::send_raw_message(int rank, const std::vector<char> *data, int tag)
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::send_raw_message(int rank, const std::vector<char> *data, int tag)
 {
     if (check_sends() && !m_shutdown) {
         MPI_Request req;
@@ -723,8 +726,8 @@ void manager<MessageInterface>::send_raw_message(int rank, const std::vector<cha
     }
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::send_raw_message_world(const std::vector<char>* data, int tag)
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::send_raw_message_world(const std::vector<char>* data, int tag)
 {
     for (int i = 0; i < m_num_pes; ++i) {
 #ifndef USE_MPI_LOCALLY
@@ -737,14 +740,14 @@ void manager<MessageInterface>::send_raw_message_world(const std::vector<char>* 
     }
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::register_user_message_handler(int tag, UserMessageHandler callback)
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::register_user_message_handler(int tag, UserMessageHandler callback)
 {
     m_user_message_handlers[tag] = callback;
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::register_remote_object()
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::register_remote_object()
 {
     object_info info;
     MPI_Status status;
@@ -752,8 +755,8 @@ void manager<MessageInterface>::register_remote_object()
     register_remote_object(status.MPI_SOURCE, info.type, info.id);
 }
 
-template<typename MessageInterface>
-bool manager<MessageInterface>::check_sends() {
+template<typename MessageInterface, template<typename> typename Allocator>
+bool manager<MessageInterface, Allocator>::check_sends() {
     for (auto i = m_mpi_object_messages.begin(); i != m_mpi_object_messages.end();) {
         MPI_Request req = i->first;
         int flag;
@@ -782,8 +785,8 @@ bool manager<MessageInterface>::check_sends() {
     return true;
 }
 
-template<typename MessageInterface>
-bool manager<MessageInterface>::check_messages() {
+template<typename MessageInterface, template<typename> typename Allocator>
+bool manager<MessageInterface, Allocator>::check_messages() {
     if (m_shutdown)
         return false;
     check_sends();
@@ -818,8 +821,8 @@ bool manager<MessageInterface>::check_messages() {
     return true;
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::sync() {
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::sync() {
     while (queue_size() > 0) { check_messages(); } //block until this rank's queue is processed
     MPI_Request req;
     int flag;
@@ -831,8 +834,8 @@ void manager<MessageInterface>::sync() {
     } while (!flag); //wait until all other ranks queues have been processed
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::shutdown_all() {
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::shutdown_all() {
     int buf = 0;
     for (int i = 0; i < m_num_pes; ++i)
     {
@@ -844,15 +847,15 @@ void manager<MessageInterface>::shutdown_all() {
     m_shutdown = true;
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::shutdown()
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::shutdown()
 {
     sync();
     m_shutdown = true;
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::handleShutdown()
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::handleShutdown()
 {
     int buf;
     MPI_Status status;
@@ -861,15 +864,15 @@ void manager<MessageInterface>::handleShutdown()
     m_shutdown = true;
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::receivedInvocationCommand(MPI_Status&& status)
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::receivedInvocationCommand(MPI_Status&& status)
 {
     m_count++;
     int len;
     MPI_Get_count(&status, MPI_CHAR, &len);
     if (len != MPI_UNDEFINED) {
         std::vector<char>* buffer = new std::vector<char>(len);
-        ParameterStream stream(buffer);
+        parameter_stream stream(buffer);
         MPI_Status recv_status;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recv_status);
         FnHandle function_handle;
@@ -881,14 +884,14 @@ void manager<MessageInterface>::receivedInvocationCommand(MPI_Status&& status)
     }
 }
 
-template<typename MessageInterface>
-void manager<MessageInterface>::receivedMemberInvocationCommand(MPI_Status&& status) {
+template<typename MessageInterface, template<typename> typename Allocator>
+void manager<MessageInterface, Allocator>::receivedMemberInvocationCommand(MPI_Status&& status) {
     m_count++;
     int len;
     MPI_Get_count(&status, MPI_CHAR, &len);
     if (len != MPI_UNDEFINED) {
         std::vector<char>* buffer = new std::vector<char>(len);
-        ParameterStream stream(buffer);
+        parameter_stream stream(buffer);
         MPI_Status recv_status;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recv_status);
         FnHandle function_handle;
@@ -902,33 +905,33 @@ void manager<MessageInterface>::receivedMemberInvocationCommand(MPI_Status&& sta
     }
 }
 
-template<typename MessageInterface>
-MPI_Comm manager<MessageInterface>::comm() const
+template<typename MessageInterface, template<typename> typename Allocator>
+MPI_Comm manager<MessageInterface, Allocator>::comm() const
 {
     return m_comm;
 }
 
-template<typename MessageInterface>
-unsigned long long manager<MessageInterface>::stats() const
+template<typename MessageInterface, template<typename> typename Allocator>
+unsigned long long manager<MessageInterface, Allocator>::stats() const
 {
     return m_count;
 }
 
-template<typename MessageInterface>
-int manager<MessageInterface>::num_pes() const
+template<typename MessageInterface, template<typename> typename Allocator>
+int manager<MessageInterface, Allocator>::num_pes() const
 {
     return m_num_pes;
 }
 
-template<typename MessageInterface>
-size_t manager<MessageInterface>::queue_size() const
+template<typename MessageInterface, template<typename> typename Allocator>
+size_t manager<MessageInterface, Allocator>::queue_size() const
 {
     return m_mpi_object_messages.size() + m_mpi_messages.size();
 }
 
 class MpiMessageInterface {};
 
-using mpi_manager = manager<MpiMessageInterface>;
+using mpi_manager = manager<MpiMessageInterface,std::allocator>;
 
 }
 

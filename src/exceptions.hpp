@@ -4,7 +4,7 @@
 namespace mpirpc
 {
 
-struct UnregisteredFunctionException : std::exception
+struct unregistered_function_exception : std::exception
 {
     const char* what() const noexcept override
     {
@@ -12,7 +12,7 @@ struct UnregisteredFunctionException : std::exception
     }
 };
 
-struct UnregisteredObjectException : std::exception
+struct unregistered_object_exception : std::exception
 {
     const char* what() const noexcept override
     {

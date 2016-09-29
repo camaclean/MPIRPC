@@ -31,11 +31,11 @@ namespace mpirpc {
  * Used to reference objects on remote ranks
  */
 
-template<typename MessageInterface>
+template<typename MessageInterface, template<typename> typename Allocator>
 class manager;
 
 class object_wrapper_base {
-    template<typename MessageInterface>
+    template<typename MessageInterface, template<typename> typename Allocator>
     friend class manager;
 public:
     object_wrapper_base(void* object = nullptr) : m_object(object), m_type(0) {
@@ -65,7 +65,7 @@ protected:
 template<typename T>
 class object_wrapper : public object_wrapper_base
 {
-    template<typename MessageInterface>
+    template<typename MessageInterface, template<typename> typename Allocator>
     friend class manager;
 public:
     object_wrapper(T* object = nullptr) :  object_wrapper_base(object) {}

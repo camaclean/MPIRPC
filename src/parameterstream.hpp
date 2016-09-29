@@ -23,6 +23,8 @@
 #include "common.hpp"
 #include "pointerwrapper.hpp"
 #include "forwarders.hpp"
+#include "internal/function_attributes.hpp"
+#include "internal/utility.hpp"
 
 #include<vector>
 #include<cstddef>
@@ -36,12 +38,12 @@
 
 namespace mpirpc {
 
-class ParameterStream
+class parameter_stream
 {
 public:
-    ParameterStream() = delete;
-    ParameterStream(std::vector<char>* buffer = new std::vector<char>());
-    //ParameterStream(const char* data, size_t length);
+    parameter_stream() = delete;
+    parameter_stream(std::vector<char>* buffer = new std::vector<char>());
+    //parameter_stream(const char* data, size_t length);
 
     void seek(std::size_t pos);
     std::size_t pos() const { return m_pos; }
@@ -53,41 +55,41 @@ public:
     std::vector<char>* dataVector() const;
     size_t size() const;
 
-    ParameterStream& operator<<(const int8_t val);
-    ParameterStream& operator<<(const int16_t val);
-    ParameterStream& operator<<(const int32_t val);
-    ParameterStream& operator<<(const int64_t val);
-    ParameterStream& operator<<(const uint8_t val);
-    ParameterStream& operator<<(const uint16_t val);
-    ParameterStream& operator<<(const uint32_t val);
-    ParameterStream& operator<<(const uint64_t val);
-    ParameterStream& operator<<(const long long val);
-    ParameterStream& operator<<(const unsigned long long val);
+    parameter_stream& operator<<(const int8_t val);
+    parameter_stream& operator<<(const int16_t val);
+    parameter_stream& operator<<(const int32_t val);
+    parameter_stream& operator<<(const int64_t val);
+    parameter_stream& operator<<(const uint8_t val);
+    parameter_stream& operator<<(const uint16_t val);
+    parameter_stream& operator<<(const uint32_t val);
+    parameter_stream& operator<<(const uint64_t val);
+    parameter_stream& operator<<(const long long val);
+    parameter_stream& operator<<(const unsigned long long val);
 
-    ParameterStream& operator>>(int8_t& val);
-    ParameterStream& operator>>(int16_t& val);
-    ParameterStream& operator>>(int32_t& val);
-    ParameterStream& operator>>(int64_t& val);
-    ParameterStream& operator>>(uint8_t& val);
-    ParameterStream& operator>>(uint16_t& val);
-    ParameterStream& operator>>(uint32_t& val);
-    ParameterStream& operator>>(uint64_t& val);
-    ParameterStream& operator>>(long long& val);
-    ParameterStream& operator>>(unsigned long long& val);
+    parameter_stream& operator>>(int8_t& val);
+    parameter_stream& operator>>(int16_t& val);
+    parameter_stream& operator>>(int32_t& val);
+    parameter_stream& operator>>(int64_t& val);
+    parameter_stream& operator>>(uint8_t& val);
+    parameter_stream& operator>>(uint16_t& val);
+    parameter_stream& operator>>(uint32_t& val);
+    parameter_stream& operator>>(uint64_t& val);
+    parameter_stream& operator>>(long long& val);
+    parameter_stream& operator>>(unsigned long long& val);
 
-    ParameterStream& operator<<(const float val);
-    ParameterStream& operator<<(const double val);
-    ParameterStream& operator>>(float& val);
-    ParameterStream& operator>>(double& val);
+    parameter_stream& operator<<(const float val);
+    parameter_stream& operator<<(const double val);
+    parameter_stream& operator>>(float& val);
+    parameter_stream& operator>>(double& val);
 
-    ParameterStream& operator<<(const bool val);
-    ParameterStream& operator>>(bool& val);
+    parameter_stream& operator<<(const bool val);
+    parameter_stream& operator>>(bool& val);
 
-    ParameterStream& operator<<(const char* s);
-    ParameterStream& operator>>(char *& s);
+    parameter_stream& operator<<(const char* s);
+    parameter_stream& operator>>(char *& s);
 
-    ParameterStream& operator<<(const std::string& val);
-    ParameterStream& operator>>(std::string& val);
+    parameter_stream& operator<<(const std::string& val);
+    parameter_stream& operator>>(std::string& val);
 
 protected:
     std::vector<char> *m_data;
@@ -97,9 +99,9 @@ protected:
 namespace detail
 {
 template<std::size_t N>
-struct PointerWrapperStreamSize
+struct pointer_wrapper_stream_size
 {
-    static std::size_t get(ParameterStream& s)
+    static std::size_t get(parameter_stream& s)
     {
         std::cout << "static size" << std::endl;
         return N;
@@ -107,9 +109,9 @@ struct PointerWrapperStreamSize
 };
 
 template<>
-struct PointerWrapperStreamSize<0>
+struct pointer_wrapper_stream_size<0>
 {
-    static std::size_t get(ParameterStream& s)
+    static std::size_t get(parameter_stream& s)
     {
         std::size_t size;
         s >> size;
@@ -118,27 +120,27 @@ struct PointerWrapperStreamSize<0>
 };
 
 template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct PointerWrapperFactory
+struct pointer_wrapper_factory
 {
-    static ::mpirpc::PointerWrapper<T,N,PassOwnership,PassBack,Allocator> create(T* data, std::size_t size)
+    static ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator> create(T* data, std::size_t size)
     {
-        return ::mpirpc::PointerWrapper<T,N,PassOwnership,PassBack,Allocator>(data);
+        return ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>(data);
     }
 };
 
 template<typename T, bool PassOwnership, bool PassBack, typename Allocator>
-struct PointerWrapperFactory<T,0,PassOwnership,PassBack,Allocator>
+struct pointer_wrapper_factory<T,0,PassOwnership,PassBack,Allocator>
 {
-    static ::mpirpc::PointerWrapper<T,0,PassOwnership,PassBack,Allocator> create(T* data, std::size_t size)
+    static ::mpirpc::pointer_wrapper<T,0,PassOwnership,PassBack,Allocator> create(T* data, std::size_t size)
     {
-        return ::mpirpc::PointerWrapper<T,0,PassOwnership,PassBack,Allocator>(data,size);
+        return ::mpirpc::pointer_wrapper<T,0,PassOwnership,PassBack,Allocator>(data,size);
     }
 };
 
 }
 
 template<typename T>
-inline void marshal(ParameterStream& s, T&& val)
+inline void marshal(mpirpc::parameter_stream& s, T&& val)
 {
     s << val;
 }
@@ -151,7 +153,7 @@ struct unmarshaller;*/
 template<typename T>
 struct unmarshaller
 {
-    static inline T unmarshal(ParameterStream &s)
+    static inline T unmarshal(mpirpc::parameter_stream &s)
     {
         T ret;
         s >> ret;
@@ -174,50 +176,137 @@ struct unmarshaller<typename std::enable_if<(!std::is_same<std::decay_t<T>,std::
 // if T, P*, if T*, P*
 // Unmarshall non-pointer types and char* types
 template<typename T,
+         template<typename> typename ManagerAllocator,
          typename R = typename std::decay<T>::type,
          typename B = typename std::remove_pointer<R>::type,
          typename P = B*,
          typename std::enable_if<!std::is_same<R,P>::value || std::is_same<R,char*>::value>::type* = nullptr,
-         typename std::enable_if<std::is_default_constructible<typename std::decay<T>::type>::value>::type* = nullptr>
-inline R unmarshal(ParameterStream& s)
+         typename std::enable_if<std::is_default_constructible<typename std::remove_reference<T>::type>::value>::type* = nullptr>
+inline R unmarshal(parameter_stream& s)
 {
     return unmarshaller<R>::unmarshal(s);
 }
 
-template<class PW>
-auto unmarshal(ParameterStream& s)
-     -> PointerWrapper<typename PW::type,
-                       PW::count,
-                       PW::pass_ownership,
-                       PW::pass_back,
-                       typename PW::allocator_t>
+template<typename Allocator, typename T,template<typename> typename ManagerAllocator>
+struct unmarshal_array_helper
+{
+    template<typename U = T,
+             std::enable_if_t<std::is_same<U,int>::value>* = nullptr,
+             std::enable_if_t<!std::is_array<U>::value>* = nullptr>
+    static void unmarshal(Allocator& a, ::mpirpc::parameter_stream &s, U* v)
+    {
+        using B = std::remove_extent_t<std::remove_reference_t<T>>;
+        U tmp = ::mpirpc::unmarshal<B,ManagerAllocator>(s);
+        std::cout << "unmarshalling_array_helper got: " << tmp << std::endl;
+        typename std::allocator_traits<Allocator>::template rebind_alloc<int> na(a);
+        std::allocator_traits<decltype(na)>::construct(na,v,tmp);
+        //new(v) B(tmp);
+    }
+
+    template<typename U = T,
+             std::enable_if_t<!std::is_same<U,int>::value>* = nullptr,
+             std::enable_if_t<!std::is_array<U>::value>* = nullptr>
+    static void unmarshal(Allocator& a, ::mpirpc::parameter_stream &s, U* v)
+    {
+        using B = std::remove_extent_t<std::remove_reference_t<U>>;
+        typename std::allocator_traits<Allocator>::template rebind_alloc<B> na(a);
+        std::allocator_traits<decltype(na)>::construct(na,v,::mpirpc::unmarshal<B,ManagerAllocator>(s));
+        //new(v) B(::mpirpc::unmarshal<B,ManagerAllocator>(s));
+    }
+
+    /*template<typename U = T, std::enable_if_t<std::is_array<U>::value>* = nullptr>
+    static void unmarshal(Allocator& a, ::mpirpc::parameter_stream &s, U* arr)
+    {
+        for(std::size_t i = 0; i < std::extent<U>::value; ++i)
+        {
+            //std::cout << std::extent<U>::value << " " << i << " " << arr << " " << typeid(U).name() << " " << typeid(decltype(&arr[i])).name() << std::endl;
+            unmarshal_array_helper<Allocator,U,ManagerAllocator>::unmarshal(a, s, &arr[0][i]);
+        }
+    }*/
+};
+
+template<typename Allocator,
+         typename T,
+         std::size_t N,
+         template<typename> typename ManagerAllocator>
+struct unmarshal_array_helper<Allocator, T[N], ManagerAllocator>
+{
+    /*static void unmarshal(::mpirpc::parameter_stream &s, T(*arr)[N])
+    {
+        for(std::size_t i = 0; i < N; ++i)
+        {
+            std::cout << arr << std::endl;
+            unmarshal_array_helper<T,ManagerAllocator>::unmarshal(s, (T*) &arr[N]);
+            //std::allocator_traits<Allocator>::construct(a,&arr[i],unmarshal_array_helper(s,a))
+        }
+    }*/
+    static void unmarshal(Allocator& a, ::mpirpc::parameter_stream &s, T(*arr)[N])
+    {
+        for(std::size_t i = 0; i < N; ++i)
+        {
+            std::cout << N << " " << i << " " << arr << " " << typeid(T).name() << " " << typeid(decltype(&arr[i])).name() << std::endl;
+            unmarshal_array_helper<Allocator,T,ManagerAllocator>::unmarshal(a, s, &arr[0][i]);
+        }
+    }
+};
+
+template<typename T,
+         template<typename> typename ManagerAllocator,
+         typename B = std::remove_extent_t<std::remove_reference_t<T>>,
+         std::enable_if_t<std::is_reference<T>::value>* = nullptr,
+         std::enable_if_t<std::is_array<std::remove_reference_t<T>>::value>* = nullptr, //enable if reference to array
+         std::enable_if_t<(std::extent<std::remove_reference_t<T>>() > 0)>* = nullptr //only known bounds
+        >
+decltype(auto) unmarshal(mpirpc::parameter_stream &s)
+{
+    constexpr std::size_t extent = std::extent<std::remove_reference_t<T>>();
+    ManagerAllocator<std::remove_reference_t<T>> a;
+    B(*t)[extent] = a.allocate(extent);
+    T r = *t;
+    for (std::size_t i = 0; i < extent; ++i)
+    {
+        std::cout << "extent: " << extent << std::endl;
+        unmarshal_array_helper<decltype(a),std::remove_pointer_t<decltype(&r[i])>,ManagerAllocator>::unmarshal(a,s,&r[i]);
+        //std::allocator_traits<decltype(a)>::construct(a,&t[i],unmarshal_array_helper(s,a,t[i]));
+        //s >> t[i];
+    }
+    return static_cast<T>(r);
+}
+
+template<class PW, template<typename> typename ManagerAllocator>
+auto unmarshal(mpirpc::parameter_stream& s)
+     -> pointer_wrapper<typename PW::type,
+                        PW::count,
+                        PW::pass_ownership,
+                        PW::pass_back,
+                        typename PW::allocator_type
+                       >
 {
     using T = typename PW::type;
     constexpr auto N = PW::count;
     constexpr auto PassOwnership = PW::pass_ownership;
     constexpr auto PassBack = PW::pass_back;
-    using Allocator = typename PW::allocator_t;
+    using Allocator = typename PW::allocator_type;
     Allocator a;
-    std::size_t size = detail::PointerWrapperStreamSize<N>::get(s);
+    std::size_t size = detail::pointer_wrapper_stream_size<N>::get(s);
     std::cout << "creating array for object. " << size << " objects. " << typeid(T).name() << " " << N << std::endl;
     T* data = a.allocate(size);
     //T* data = new T[size];
-    //std::cout << "pointer: " << data << " " << size << " " << typeid(typename Allocator::value_type).name() << " " << typeid(Allocator).name() << " " << typeid(T).name() << std::endl;
+    std::cout << "pointer: " << data << " " << size << " " << typeid(typename Allocator::value_type).name() << " " << typeid(Allocator).name() << " " << typeid(T).name() << std::endl;
     for (std::size_t i = 0; i < size; ++i)
     {
-        //data[i] = unmarshal<T>(s);
-        //data[i] = T();
-        std::allocator_traits<Allocator>::construct(a,&data[i],unmarshal<T>(s));
+        unmarshal_array_helper<Allocator,T,ManagerAllocator>::unmarshal(a, s, (T*) &data[i]);
+        //std::allocator_traits<Allocator>::construct(a,&data[i],unmarshal<T&,ManagerAllocator>(s));
         //new(&data[i]) T(unmarshal<T>(s));
     }
-    return detail::PointerWrapperFactory<T,N,PassOwnership,PassBack,Allocator>::create(data,size);
+    return detail::pointer_wrapper_factory<T,N,PassOwnership,PassBack,Allocator>::create(data,size);
 };
 
 template<typename Key, typename T>
 struct unmarshaller<std::pair<Key,T>>
 {
     using R = std::pair<Key,T>;
-    static inline R unmarshal(ParameterStream &s)
+    static inline R unmarshal(parameter_stream &s)
     {
         std::remove_cv_t<Key> k;
         std::remove_cv_t<T> t;
@@ -425,25 +514,27 @@ concept bool AssociativeContainer = requires(C a)
 };
 
 template<typename Key, typename T>
-ParameterStream& operator<<(ParameterStream& out, const std::pair<Key,T>& p)
+mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const std::pair<Key,T>& p)
 {
     out << p.first << p.second;
     return out;
 }
 
 template<typename Key, typename T>
-ParameterStream& operator>>(ParameterStream& in, std::pair<Key,T>& p)
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, std::pair<Key,T>& p)
 {
     in >> p.first >> p.second;
     return in;
 }
 
 template<typename T>
-ParameterStream& operator<<(ParameterStream& out, const T& c) requires Container<T>
+mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const T& c) requires Container<T>
 {
     out << c.size();
+    std::cout << typeid(T).name() << " container has size (streaming): " << c.size() << std::endl;
     for (const auto& i : c)
     {
+        std::cout << i << std::endl;
         out << i;
     }
     return out;
@@ -452,18 +543,28 @@ ParameterStream& operator<<(ParameterStream& out, const T& c) requires Container
 template<typename Key, typename T>
 std::ostream& operator<<(std::ostream& s, const std::pair<Key,T>& p)
 {
+    std::cout << "[" << p.first << "," << p.second << "]";
     return s;
 }
 
 template<typename T>
-ParameterStream& operator>>(ParameterStream& in, T& c) requires Container<T>
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T& c) requires Container<T>
 {
     std::size_t size;
     in >> size;
     auto it = std::inserter(c,c.begin());
+    std::cout << typeid(T).name() << " container has size: " << size << std::endl;
     for (std::size_t i = 0; i < size; ++i)
     {
-        it = unmarshal<typename T::value_type>(in);
+        //Because array types are not CopyConstructable, Container requires CopyConstructable elements,
+        //and the allocator is only used for unmarshalling array types, just pass std::allocator
+        typename T::value_type tmp = unmarshal<typename T::value_type, std::allocator>(in);
+        it = tmp;
+        std::cout << tmp << ",";
+    }
+    for (auto &i : c)
+    {
+        std::cout << "after getting: " << i << std::endl;
     }
     return in;
 }
@@ -551,7 +652,7 @@ ParameterStream& operator>>(ParameterStream& in, std::map<T, U, O...>& map)
 #else
 
 template<typename T, typename... O>
-ParameterStream& operator<<(ParameterStream& out, const std::vector<T,O...>& vector)
+mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const std::vector<T,O...>& vector)
 {
     out << vector.size();
     for (std::size_t i = 0; i < vector.size(); ++i)
@@ -562,7 +663,7 @@ ParameterStream& operator<<(ParameterStream& out, const std::vector<T,O...>& vec
 }
 
 template <typename T, typename... O>
-ParameterStream& operator>>(ParameterStream& in, std::vector<T,O...>& vector)
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, std::vector<T,O...>& vector)
 {
     std::size_t size;
     in >> size;
@@ -577,7 +678,7 @@ ParameterStream& operator>>(ParameterStream& in, std::vector<T,O...>& vector)
 }
 
 template<typename T, typename U, typename... O>
-ParameterStream& operator<<(ParameterStream& out, const std::map<T, U, O...>& map)
+mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const std::map<T, U, O...>& map)
 {
     out <<  map.size();
     for (auto& pair : map)
@@ -589,7 +690,7 @@ ParameterStream& operator<<(ParameterStream& out, const std::map<T, U, O...>& ma
 }
 
 template<typename T, typename U, typename... O>
-ParameterStream& operator>>(ParameterStream& in, std::map<T, U, O...>& map)
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, std::map<T, U, O...>& map)
 {
     std::size_t size;
     in >> size;
@@ -607,15 +708,20 @@ ParameterStream& operator>>(ParameterStream& in, std::map<T, U, O...>& map)
 #endif
 
 template<typename T, std::size_t N>
-ParameterStream& operator<<(ParameterStream& out, const T (&a)[N])
+mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const T (&a)[N])
 {
+    std::cout << "streaming c array: ";
     for (auto& v : a)
+    {
+        std::cout << v;
         out << v;
+    }
+    std::cout << std::endl;
     return out;
 }
 
 template<typename T, std::size_t N>
-ParameterStream& operator>>(ParameterStream& in, T (&a)[N])
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T (&a)[N])
 {
     for (std::size_t i = 0; i < N; ++i)
         in >> a[i];
@@ -623,7 +729,7 @@ ParameterStream& operator>>(ParameterStream& in, T (&a)[N])
 }
 
 template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
+mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
 {
     std::cout << "streaming PointerWrapper" << std::endl;
     if (N == 0)
@@ -636,31 +742,19 @@ ParameterStream& operator<<(ParameterStream& out, const PointerWrapper<T,N,PassO
 namespace detail
 {
 
-template<typename FT, typename IS, typename... Args>
+/*template<typename FT, typename IS, typename... Args>
 struct fn_type_marshaller_impl;
 
 template<typename... FArgs, std::size_t... Is, typename... Args>
 struct fn_type_marshaller_impl<std::tuple<FArgs...>, std::index_sequence<Is...>, Args...>
 {
-    static void marshal(ParameterStream& ps, Args... args)
+    static void marshal(mpirpc::parameter_stream& ps, Args... args)
     {
         static_assert(sizeof...(FArgs) == sizeof...(Args), "Wrong number of arguments for function.");
         using swallow = int[];
-        (void)swallow{(marshal(ps, static_cast<typename detail::types_at_index<Is,std::tuple<FArgs...>,std::tuple<Args...>>::type>(args)), 0)...};
+        (void)swallow{(marshal(ps, static_cast<internal::choose_wrapped_at_index_type<Is,std::tuple<FArgs...>,std::tuple<Args...>>>(args)), 0)...};
     }
-};
-
-template<typename FA, typename A>
-struct test;
-
-template<typename... FArgs, typename... Args>
-struct test<std::tuple<FArgs...>, std::tuple<Args...>>
-{
-    static void marshal(ParameterStream& ps, Args... args)
-    {
-        Passer p{(marshal(ps, detail::forward_parameter_type<FArgs,Args>(args)), std::cout << "blah" << std::endl, 0)...};
-    }
-};
+};*/
 
 /*template<typename F>
 struct fn_type_marshaller;
@@ -697,18 +791,6 @@ struct fn_type_marshaller<std::function<R(FArgs...)>>
         detail::fn_type_marshaller_impl<std::tuple<FArgs...>, std::index_sequence_for<Args...>, decltype(std::forward<Args>(args))...>::marshal(ps, std::forward<Args>(args)...);
     }
 };*/
-
-template<typename F>
-struct fn_type_marshaller
-{
-    template<class Stream, typename... Args>
-    static void marshal(Stream& ps, Args&&... args)
-    {
-        using Applier = typename detail::marshaller_function_signature<F,Args...>::applier;
-        Applier apply = [&](auto&&... a) { Passer p{(mpirpc::marshal(ps, std::forward<decltype(a)>(a)), 0)...}; };
-        apply(std::forward<Args>(args)...);
-    }
-};
 
 }
 

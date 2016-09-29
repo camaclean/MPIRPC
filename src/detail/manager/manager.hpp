@@ -3,8 +3,8 @@
 
 #include "../../manager.hpp"
 
-template<typename MessageInterface>
-mpirpc::manager<MessageInterface>::manager(MPI_Comm comm) : m_comm(comm), m_next_type_id(0), m_count(0), m_shutdown(false)
+template<typename MessageInterface, template<typename> typename Allocator>
+mpirpc::manager<MessageInterface, Allocator>::manager(MPI_Comm comm) : m_comm(comm), m_next_type_id(0), m_count(0), m_shutdown(false)
 {
     MPI_Comm_rank(m_comm, &m_rank);
     MPI_Comm_size(comm, &m_num_pes);
@@ -22,8 +22,8 @@ mpirpc::manager<MessageInterface>::manager(MPI_Comm comm) : m_comm(comm), m_next
     MPI_Barrier(m_comm);
 }
 
-template<typename MessageInterface>
-mpirpc::manager<MessageInterface>::~manager<MessageInterface>()
+template<typename MessageInterface, template<typename> typename Allocator>
+mpirpc::manager<MessageInterface, Allocator>::~manager<MessageInterface, Allocator>()
 {
     MPI_Type_free(&m_mpi_object_info);
     for (auto i : m_mpi_messages)

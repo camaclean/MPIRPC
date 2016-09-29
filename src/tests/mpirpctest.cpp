@@ -8,7 +8,7 @@ template<typename T>
 T testParamStream(T t)
 {
     std::vector<char> buffer;
-    mpirpc::ParameterStream s(&buffer);
+    mpirpc::parameter_stream s(&buffer);
     s << t;
     s.seek(0);
     T tmp;
@@ -53,7 +53,7 @@ void MpirpcTest::stream_charp_test()
 {
     QFETCH(std::string, val);
     std::vector<char> buffer;
-    mpirpc::ParameterStream s(&buffer);;
+    mpirpc::parameter_stream s(&buffer);;
     s << val.c_str();
     s.seek(0);
     char* tmp;
@@ -143,7 +143,7 @@ void MpirpcTest::stream_int8_t_test() {
 
 void MpirpcTest::stream_combo() {
     std::vector<char> buffer;
-    mpirpc::ParameterStream s(&buffer);
+    mpirpc::parameter_stream s(&buffer);
     float a = 1.1f, a2;
     double b = 2.2, b2;
     uint32_t c = 1234, c2;

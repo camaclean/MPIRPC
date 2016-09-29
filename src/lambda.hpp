@@ -26,19 +26,7 @@
 
 namespace mpirpc {
 
-template <typename F>
-struct LambdaTraits : public LambdaTraits<decltype(&std::remove_reference_t<F>::operator())>
-{};
 
-template <typename C, typename R, typename... Args>
-struct LambdaTraits<R(C::*)(Args...) const>
-{
-    using lambda_fnPtr       = R(*)(Args...);
-    using lambda_stdfunction = std::function<R(Args...)>;
-    using return_type = R;
-    using pass_backs = bool_tuple<is_pass_back<Args>::value...>;
-    using args_tuple = std::tuple<Args...>;
-};
 
 }
 

@@ -29,7 +29,23 @@ if(MPI_FOUND)
     include_directories("${MPI_CXX_INCLUDE_PATH}")
 endif(MPI_FOUND)
 
-set(SRC_LIST manager.cpp forwarders.hpp objectwrapper.cpp parameterstream.cpp mpitype.cpp detail/manager/function.hpp detail/manager/invoke.hpp detail/manager/manager.hpp detail/manager/register.hpp)
+set(SRC_LIST common.hpp exceptions.hpp forwarders.hpp
+             function_attributes.hpp lambda.hpp
+             manager.cpp manager.hpp mpitype.cpp mpitype.hpp
+             objectwrapper.cpp objectwrapper.cpp
+             parameterstream.cpp parameterstream.hpp
+             pointerwrapper.hpp reduce.cpp reduce.hpp
+             detail/manager/function.hpp
+             detail/manager/invoke.hpp
+             detail/manager/manager.hpp
+             detail/manager/register.hpp
+             internal/function_attributes.hpp
+             internal/marshalling.hpp
+             internal/type_massaging.hpp
+             internal/utility.hpp
+             internal/detail/function_attributes.hpp
+             internal/detail/utility.hpp
+    )
 add_library(mpirpc STATIC ${SRC_LIST})
 target_link_libraries(mpirpc ${MPI_CXX_LIBRARIES})
 
