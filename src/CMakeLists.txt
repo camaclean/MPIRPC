@@ -43,11 +43,13 @@ set(SRC_LIST common.hpp exceptions.hpp
              detail/manager/register.hpp
              internal/function_attributes.hpp
              internal/marshalling.hpp
+             internal/orderedcall.hpp
              internal/parameterstream.hpp
              internal/pass_back.hpp
              internal/type_massaging.hpp
              internal/unmarshalling.hpp
              internal/utility.hpp
+             internal/detail/orderedcall.hpp
              internal/detail/utility.hpp
     )
 add_library(mpirpc STATIC ${SRC_LIST})

@@ -47,7 +47,6 @@
 #include <mpi.h>
 
 #include "objectwrapper.hpp"
-#include "orderedcall.hpp"
 #include "common.hpp"
 #include "parameterstream.hpp"
 #include "marshalling.hpp"
@@ -58,6 +57,7 @@
 #include "unmarshalling.hpp"
 
 #include "internal/marshalling.hpp"
+#include "internal/orderedcall.hpp"
 #include "internal/function_attributes.hpp"
 
 #define ERR_ASSERT     1
@@ -606,7 +606,7 @@ protected:
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
             ret = unmarshal<R,Allocator<R>>(stream);
             using swallow = int[];
-            (void)swallow{((internal::is_pass_back<FArgs>::value) ? ( stream >> args /*args = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
+            (void)swallow{((internal::is_pass_back<FArgs>::value) ? ( internal::pass_back_unmarshaller<FArgs,Args>::unmarshal(stream,args) /*args = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
             delete buffer;
         }
         return ret;
@@ -634,7 +634,7 @@ protected:
             parameter_stream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
             using swallow = int[];
-            (void)swallow{((internal::is_pass_back<FArgs>::value) ? (stream >> args /* = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
+            (void)swallow{((internal::is_pass_back<FArgs>::value) ? (internal::pass_back_unmarshaller<FArgs,Args>::unmarshal(stream,args) /* = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
             delete buffer;
         }
     }

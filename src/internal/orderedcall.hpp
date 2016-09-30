@@ -17,20 +17,25 @@
  *
  */
 
-#ifndef MPIRPC__ORDEREDCALL_HPP
-#define MPIRPC__ORDEREDCALL_HPP
+#ifndef MPIRPC__INTERNAL__ORDEREDCALL_HPP
+#define MPIRPC__INTERNAL__ORDEREDCALL_HPP
 
-#include "common.hpp"
-#include "pointerwrapper.hpp"
-#include "internal/function_attributes.hpp"
-#include "internal/utility.hpp"
+#include "../common.hpp"
+#include "../pointerwrapper.hpp"
+#include "detail/orderedcall.hpp"
+#include "function_attributes.hpp"
+#include "utility.hpp"
 
 #include <tuple>
 #include <iostream>
 
-namespace mpirpc {
+namespace mpirpc
+{
 
-template<typename T>
+namespace internal
+{
+
+/*template<typename T>
 struct arg_cleanup
 {
     static void apply(typename std::remove_reference<T>::type& t) { std::cout << "blank clean up for " << typeid(t).name() << std::endl; }
@@ -54,31 +59,6 @@ struct arg_cleanup<T(&)[N]>
     }
 };
 
-template<bool C, typename T>
-struct reapply_const_helper;
-
-template<typename T>
-struct reapply_const_helper<true,T>
-{
-    using type = const T;
-};
-
-template<typename T>
-struct reapply_const_helper<false,T>
-{
-    using type = T;
-};
-
-template<typename FT, typename T>
-using reapply_const_t = typename reapply_const_helper<std::is_const<FT>::value && !std::is_pointer<FT>::value,T>::type;
-
-template<typename FT, typename T>
-auto reapply_const(T&& t)
-    -> typename reapply_const_helper<std::is_const<FT>::value && !std::is_pointer<FT>::value,T>::type
-{
-    return static_cast<typename reapply_const_helper<std::is_const<FT>::value && !std::is_pointer<FT>::value,T>::type>(t);
-};
-
 template<>
 struct arg_cleanup<char*>
 {
@@ -91,57 +71,11 @@ struct arg_cleanup<const char*>
     static void apply(const char*&& s) { delete[] s; std::cout << "deleted const char*" << std::endl; }
 };
 
-/*template<bool PassBack>
-struct pass_back_helper;
-
-template<>
-struct pass_back_helper<true>
-{
-    template<typename T>
-    static void process(T&& t)
-    {
-        std::cout << "Passing back " << typeid(t).name() << " " << t << std::endl;
-    }
-};
-
-template<>
-struct pass_back_helper<false>
-{
-    template<typename T>
-    static void process(T&& t) {}
-};
-
-template<typename...FArgs>
-struct pass_back
-{
-    template<typename... Args>
-    static void do_pass_back(Args&&... args)
-    {
-        [](...){}( (pass_back_helper<is_pass_back<FArgs>::value>::process(std::forward<Args>(args)), 0)...);
-    }
-
-    static void pass(FArgs&... args)
-    {
-        [](...){}( (pass_back_helper<is_pass_back<FArgs>::value>::process(args), 0)...);
-    }
-
-};*/
-
-/*template<typename F>
-struct post_function_types;
-
-template<typename R, class C, typename... Args>
-struct post_function_types<R(C::*)(Args...)>
-{
-    using pass_back = pass_back<Args...>;
-    //using cleanup = do_post_exec<Args...>;
-};*/
-
 template<typename... Args>
 void do_post_exec(Args&&... args)
 {
     [](...){}( (arg_cleanup<Args>::apply(std::forward<Args>(args)), 0)...);
-}
+}*/
 
 /**
  * @brief The mpirpc::ordered_call<F> class
@@ -176,7 +110,7 @@ struct ordered_call<R(*)(FArgs...)>
 
     ~ordered_call()
     {
-        internal::apply(&do_post_exec<FArgs...>, args_tuple);
+        internal::apply(&internal::detail::do_post_exec<FArgs...>, args_tuple);
     }
 
     internal::unwrapped_function_type<function_type> function;
@@ -204,7 +138,7 @@ struct ordered_call<R(Class::*)(FArgs...)>
 
     ~ordered_call()
     {
-        internal::apply(&do_post_exec<FArgs...>, args_tuple);
+        internal::apply(&internal::detail::do_post_exec<FArgs...>, args_tuple);
     }
 
     internal::unwrapped_function_type<function_type> function;
@@ -233,7 +167,7 @@ struct ordered_call<std::function<R(FArgs...)>>
 
     ~ordered_call()
     {
-        internal::apply(&do_post_exec<FArgs...>, args_tuple);
+        internal::apply(&internal::detail::do_post_exec<FArgs...>, args_tuple);
     }
 
     internal::unwrapped_function_type<function_type> function;
@@ -242,6 +176,8 @@ struct ordered_call<std::function<R(FArgs...)>>
 
 }
 
-#endif // MPIRPC__ORDEREDCALL_HPP
+}
+
+#endif // MPIRPC__INTERNAL__ORDEREDCALL_HPP
 
 // kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;

@@ -2,7 +2,7 @@ include_directories(${Qt5Core_INCLUDE_DIRS} ${Qt5Test_INCLUDE_DIRS} ${CMAKE_CURR
 set(CMAKE_EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
 set(streamtest_SRCS mpirpctest.cpp ../manager.hpp ../common.hpp
-    ../objectwrapper.hpp ../objectwrapper.cpp ../orderedcall.hpp ../reduce.hpp ../reduce.cpp
+    ../objectwrapper.hpp ../objectwrapper.cpp ../reduce.hpp ../reduce.cpp
     ../parameterstream.cpp ../parameterstream.hpp)
 add_executable(streamTest ${streamtest_SRCS})
 add_test(streamTest streamTest)

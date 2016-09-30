@@ -84,6 +84,28 @@ struct any_true<>
     constexpr static bool value = false;
 };
 
+template<typename FArg, typename Arg>
+struct pass_back_unmarshaller
+{
+    template<typename Stream>
+    inline static void unmarshal(Stream &s, Arg& arg)
+    {
+        s >> arg;
+    }
+};
+
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator, typename T2, std::size_t N2>
+struct pass_back_unmarshaller<::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>,T2(&)[N2]>
+{
+    template<typename Stream>
+    inline static void unmarshal(Stream &s, T2(&arg)[N2])
+    {
+        std::size_t size;
+        s >> size;
+        s >> arg;
+    }
+};
+
 /*template <typename Stream, typename Tuple, size_t... I>
 decltype(auto) pass_back_impl(Stream& p, Tuple&& t, std::index_sequence<I...>)
 {
