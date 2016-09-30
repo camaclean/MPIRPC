@@ -219,7 +219,7 @@ int main(int argc, char** argv)
         manager->invoke_function_r<decltype(&f5),&f5>(0, mpirpc::pointer_wrapper<int,4>(test3), 6, b, 8);
         std::cout << "test3[0]: " << test3[0] << std::endl;
         std::cout << "b: " << b << std::endl;
-        manager->invoke_function<decltype(&f6),&f6>(0, (const char*) "test cstring");
+        manager->invoke_function<decltype(&f6),&f6>(0, "test cstring");
         manager->invoke_function<decltype(&f7),&f7>(0, vectest);
         int c[2] = {1,2};
         manager->invoke_function_r<decltype(&f8),&f8>(0, c);

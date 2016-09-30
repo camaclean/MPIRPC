@@ -155,6 +155,12 @@ struct unwrapped<T[N]>
     using type = T*;
 };
 
+/*template<std::size_t N>
+struct unwrapped<const char (&)[N]>
+{
+    using type = const char*;
+};*/
+
 /*************************************************************************************/
 /*                            mpirpc::internal::autowrapped                          */
 /*************************************************************************************/
@@ -170,6 +176,12 @@ struct autowrapped<T[N]>
 {
     using type = ::mpirpc::pointer_wrapper<T,N,false,std::is_const<T>::value,std::allocator<T>>;
 };
+
+/*template<::size_t N>
+struct autowrapped<const char (&)[N]>
+{
+    using type = const char*;
+};*/
 
 template<typename T>
 struct autowrapped<T*>
@@ -258,6 +270,12 @@ template<typename FArg, typename T, std::size_t N>
 struct choose_reference<FArg, T(*)[N]>
 {
     using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<T>::value,std::allocator<T>>;
+};
+
+template<typename FArg, std::size_t N>
+struct choose_reference<FArg, const char (&)[N]>
+{
+    using type = const char*;
 };
 
 /*************************************************************************************/
