@@ -1,6 +1,6 @@
 /*
  * MPIRPC: MPI based invocation of functions on other ranks
- * Copyright (C) 2014  Colin MacLean <s0838159@sms.ed.ac.uk>
+ * Copyright (C) 2014-2016 Colin MacLean <cmaclean@illinois.edu>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef REDUCE_HPP
-#define REDUCE_HPP
+#ifndef MPIRPC__REDUCE_HPP
+#define MPIRPC__REDUCE_HPP
 
 #include <type_traits>
 #include <mpi.h>
@@ -48,4 +48,6 @@ double allreduce(double value, MPI_Op op, int count, MPI_Comm comm);
 
 }
 
-#endif // REDUCE_HPP
+#endif // MPIRPC__REDUCE_HPP
+
+// kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;

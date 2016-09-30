@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef MPIRPCMANAGER_H
-#define MPIRPCMANAGER_H
+#ifndef MPIRPC__MANAGER_HPP
+#define MPIRPC__MANAGER_HPP
 
 #include <iostream>
 #include <utility>
@@ -47,11 +47,11 @@
 #include <mpi.h>
 
 #include "objectwrapper.hpp"
-#include "lambda.hpp"
 #include "orderedcall.hpp"
 #include "common.hpp"
 #include "parameterstream.hpp"
-#include "forwarders.hpp"
+#include "marshalling.hpp"
+#include "unmarshalling.hpp"
 #include "mpitype.hpp"
 #include "exceptions.hpp"
 #include "marshalling.hpp"
@@ -531,6 +531,7 @@ protected:
     template<typename R, typename... Args,bool...PBs,std::size_t... Is>
     void function_return(int rank, R&& r, std::tuple<Args...> args, internal::bool_template_list<PBs...>, std::index_sequence<Is...>)
     {
+        std::cout << "sending back: " << typeid(decltype(args)).name() << " " << typeid(internal::bool_template_list<PBs...>).name() << std::endl;
         std::vector<char>* buffer = new std::vector<char>();
         parameter_stream stream(buffer);
         stream << std::forward<R>(r);
@@ -543,6 +544,7 @@ protected:
     template<typename... Args,bool...PBs,std::size_t... Is>
     void function_return(int rank, std::tuple<Args...> args, internal::bool_template_list<PBs...>, std::index_sequence<Is...>)
     {
+        std::cout << "sending back: " << typeid(decltype(args)).name() << " " << typeid(internal::bool_template_list<PBs...>).name() << std::endl;
         if (!internal::any_true<PBs...>::value)
             return;
         std::vector<char>* buffer = new std::vector<char>();
@@ -582,10 +584,11 @@ protected:
      * Wait for the remote process to run an invocation and send that function's return value back to this process.
      * Unserialize the result and return it.
      */
-    template<typename R, bool...PB, typename... Args>
-    auto process_return(int rank, internal::bool_template_list<PB...>, Args&&... args)
+    template<typename R, typename...FArgs, typename... Args>
+    auto process_return(int rank, internal::argument_types<FArgs...>, Args&&... args)
         -> typename std::enable_if<!std::is_same<R,void>::value,R>::type
     {
+        std::cout << "processing return: " << typeid(internal::argument_types<FArgs...>).name() << " " << typeid(internal::bool_template_list<internal::is_pass_back<FArgs>::value...>).name() << std::endl;
         MPI_Status status;
         int len;
         int flag;
@@ -603,17 +606,18 @@ protected:
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
             ret = unmarshal<R,Allocator<R>>(stream);
             using swallow = int[];
-            (void)swallow{((PB) ? (args = unmarshal<Args,Allocator<Args>>(stream), 1) : 0)...};
+            (void)swallow{((internal::is_pass_back<FArgs>::value) ? ( stream >> args /*args = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
             delete buffer;
         }
         return ret;
     }
 
-    template<typename R, bool...PB, typename...Args>
-    auto process_return(int rank, internal::bool_template_list<PB...>, Args&&... args)
+    template<typename R, typename...FArgs, typename...Args>
+    auto process_return(int rank, internal::argument_types<FArgs...>, Args&&... args)
         -> typename std::enable_if<std::is_same<R,void>::value,R>::type
     {
-        if (!internal::any_true<PB...>::value && std::is_void<R>::value)
+        std::cout << "processing return: " << typeid(internal::argument_types<FArgs...>).name() << " " << typeid(internal::bool_template_list<internal::is_pass_back<FArgs>::value...>).name() << std::endl;
+        if (!internal::any_true<internal::is_pass_back<FArgs>::value...>::value && std::is_void<R>::value)
             return;
         MPI_Status status;
         int len;
@@ -630,7 +634,7 @@ protected:
             parameter_stream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
             using swallow = int[];
-            (void)swallow{((PB) ? (stream >> args /* = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
+            (void)swallow{((internal::is_pass_back<FArgs>::value) ? (stream >> args /* = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
             delete buffer;
         }
     }
@@ -941,6 +945,6 @@ using mpi_manager = manager<MpiMessageInterface,std::allocator>;
 
 }
 
-#endif // MPIRPCMANAGER_H
+#endif // MPIRPC__MANAGER_HPP
 
 // kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;

@@ -1,5 +1,24 @@
-#ifndef MANAGER_REGISTER_H
-#define MANAGER_REGISTER_H
+/*
+ * MPIRPC: MPI based invocation of functions on other ranks
+ * Copyright (C) 2014-2016 Colin MacLean <cmaclean@illinois.edu>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef MPIRPC__DETAIL__MANAGER_REGISTER_HPP
+#define MPIRPC__DETAIL__MANAGER_REGISTER_HPP
 
 #include "../../manager.hpp"
 #include "../../internal/function_attributes.hpp"
@@ -25,6 +44,7 @@ template<typename F, internal::unwrapped_function_type<F> f>
 FnHandle mpirpc::manager<MessageInterface, Allocator>::register_function()
 {
     function_base *b = new function<internal::wrapped_function_type<F>>(f);
+    std::cout << "registered function: " << typeid(internal::wrapped_function_type<F>(f)).name() << std::endl;
     m_registered_functions[b->id()] = b;
     m_registered_function_typeids[std::type_index(typeid(internal::function_identifier<internal::wrapped_function_type<F>,f>))] = b->id();
     return b->id();
@@ -189,4 +209,6 @@ object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::get_object_wr
     throw unregistered_object_exception();
 }
 
-#endif /* MANAGER_REGISTER_H */
+#endif /* MPIRPC__DETAIL__MANAGER_REGISTER_HPP */
+
+// kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;

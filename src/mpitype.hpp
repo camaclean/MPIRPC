@@ -1,6 +1,6 @@
 /*
  * MPIRPC: MPI based invocation of functions on other ranks
- * Copyright (C) 2014  Colin MacLean <s0838159@sms.ed.ac.uk>
+ * Copyright (C) 2014-2016 Colin MacLean <cmaclean@illinois.edu>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
  *
  */
  
-#ifndef MPITYPE_H
-#define MPITYPE_H
+#ifndef MPIRPC__MPITYPE_HPP
+#define MPIRPC__MPITYPE_HPP
 
 #include <mpi.h>
 #include <cstdint>
@@ -65,4 +65,6 @@ MPI_Datatype mpi_type<long long>();
 template<>
 MPI_Datatype mpi_type<unsigned long long>();
 
-#endif /* MPITYPE_H */
+#endif /* MPIRPC__MPITYPE_HPP */
+
+// kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;

@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef COMMON_HPP
-#define COMMON_HPP
+#ifndef MPIRPC__COMMON_HPP
+#define MPIRPC__COMMON_HPP
 
 #include<cstddef>
 #include<type_traits>
@@ -50,6 +50,6 @@ using ObjectId = unsigned long long;
 
 }
 
-#endif // COMMON_HPP
+#endif // MPIRPC__COMMON_HPP
 
 // kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;

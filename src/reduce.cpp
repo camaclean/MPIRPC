@@ -1,6 +1,6 @@
 /*
  * MPIRPC: MPI based invocation of functions on other ranks
- * Copyright (C) 2014  Colin MacLean <s0838159@sms.ed.ac.uk>
+ * Copyright (C) 2014-2016 Colin MacLean <cmaclean@illinois.edu>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -149,6 +149,6 @@ double allreduce(double value, MPI_Op op, int count, MPI_Comm comm)
     return ret;
 }
 
-
-
 }
+
+// kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;
