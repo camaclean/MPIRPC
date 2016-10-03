@@ -96,57 +96,6 @@ protected:
     std::size_t  m_pos;
 };
 
-/*<<<<<<< Updated upstream
-namespace detail
-{
-template<std::size_t N>
-struct pointer_wrapper_stream_size
-{
-    static std::size_t get(parameter_stream& s)
-    {
-        std::cout << "static size" << std::endl;
-        std::size_t size;
-        s >> size;
-        return size;
-    }
-};
-
-template<>
-struct pointer_wrapper_stream_size<0>
-{
-    static std::size_t get(parameter_stream& s)
-    {
-        std::size_t size;
-        s >> size;
-        return size;
-    }
-};
-
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct pointer_wrapper_factory
-{
-    static ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator> create(T* data, std::size_t size)
-    {
-        return ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>(data);
-    }
-};
-
-template<typename T, bool PassOwnership, bool PassBack, typename Allocator>
-struct pointer_wrapper_factory<T,0,PassOwnership,PassBack,Allocator>
-{
-    static ::mpirpc::pointer_wrapper<T,0,PassOwnership,PassBack,Allocator> create(T* data, std::size_t size)
-    {
-        return ::mpirpc::pointer_wrapper<T,0,PassOwnership,PassBack,Allocator>(data,size);
-    }
-};
-
-}*/
-
-/*template<typename T>
-struct unmarshaller;*/
-
-
-
 template<typename A>
 struct allocator_identifier;
 
@@ -172,50 +121,6 @@ mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, std::pair<Key
 }
 
 #if defined(__cpp_concepts) || 1
-
-/*template<typename T, typename I>
-concept bool HasArraySubscriptOperator = requires(T t, I i) {
-        t[i];
-};
-
-template<typename T>
-concept bool HasIntegralArraySubscriptOperator = HasArraySubscriptOperator<T,size_t>;
-
-template<typename T>
-concept bool HasSizeFunction = requires(T t)
-{
-    t.size();
-};*/
-
-/*template<typename T>
-mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const T& c) requires Container<T>
-{
-    out << c.size();
-    std::cout << typeid(T).name() << " container has size (streaming): " << c.size() << std::endl;
-    for (const auto& i : c)
-    {
-        std::cout << i << std::endl;
-        out << i;
-    }
-    return out;
-}
-
-template<typename T>
-mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T& c) requires Container<T>
-{
-    std::size_t size;
-    in >> size;
-    auto it = std::inserter(c,c.begin());
-    std::cout << typeid(T).name() << " container has size: " << size << std::endl;
-    for (std::size_t i = 0; i < size; ++i)
-    {
-        //Because array types are not CopyConstructable, Container requires CopyConstructable elements,
-        //and the allocator is only used for unmarshalling array types, just pass std::allocator
-        it = unmarshal<typename T::value_type, typename T::allocator_type>(in);
-        std::cout << tmp << ",";
-    }
-    return in;
-}*/
 
 #else
 
@@ -303,74 +208,6 @@ mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T (&a)[N])
     std::cout << std::endl;
     return in;
 }
-
-
-/*
-namespace detail
-{
-
-/*template<typename FT, typename IS, typename... Args>
-struct fn_type_marshaller_impl;
-
-template<typename... FArgs, std::size_t... Is, typename... Args>
-struct fn_type_marshaller_impl<std::tuple<FArgs...>, std::index_sequence<Is...>, Args...>
-{
-    static void marshal(mpirpc::parameter_stream& ps, Args... args)
-    {
-        static_assert(sizeof...(FArgs) == sizeof...(Args), "Wrong number of arguments for function.");
-        using swallow = int[];
-        (void)swallow{(marshal(ps, static_cast<internal::choose_wrapped_at_index_type<Is,std::tuple<FArgs...>,std::tuple<Args...>>>(args)), 0)...};
-    }
-};*/
-
-/*template<typename F>
-struct fn_type_marshaller;
-
-template<typename R, typename... FArgs>
-struct fn_type_marshaller<R(*)(FArgs...)>
-{
-    template<class Stream, typename... Args, std::size_t... Is>
-    static void marshal(Stream& ps, Args&&... args)
-    {
-        //test<std::tuple<FArgs...>,std::tuple<Args...>>::marshal(ps, args...);
-        detail::fn_type_marshaller_impl<std::tuple<FArgs...>, std::index_sequence_for<Args...>, decltype(std::forward<Args>(args))...>::marshal(ps, std::forward<Args>(args)...);
-    }
-};
-
-template<typename R, class C, typename... FArgs>
-struct fn_type_marshaller<R(C::*)(FArgs...)>
-{
-    template<class Stream, typename... Args, std::size_t... Is>
-    static void marshal(Stream& ps, Args&&... args)
-    {
-        //test<std::tuple<FArgs...>,std::tuple<Args...>>::marshal(ps, args...);
-        detail::fn_type_marshaller_impl<std::tuple<FArgs...>, std::index_sequence_for<Args...>, decltype(std::forward<Args>(args))...>::marshal(ps, std::forward<Args>(args)...);
-    }
-};
-
-template<typename R, typename... FArgs>
-struct fn_type_marshaller<std::function<R(FArgs...)>>
-{
-    template<class Stream, typename... Args, std::size_t... Is>
-    static void marshal(Stream& ps, Args&&... args)
-    {
-        //test<std::tuple<FArgs...>,std::tuple<Args...>>::marshal(ps, args...);
-        detail::fn_type_marshaller_impl<std::tuple<FArgs...>, std::index_sequence_for<Args...>, decltype(std::forward<Args>(args))...>::marshal(ps, std::forward<Args>(args)...);
-    }
-};*/
-
-/*template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
-{
-    std::size_t size;
-    in >> size;
-    std::cout << "getting returned pointer of size " << size << std::endl;
-    for (std::size_t i = 0; i < size; ++i)
-    {
-        in >> wrapper[i];
-    }
-    return in;
-}*/
 
 }
 

@@ -23,7 +23,7 @@
 #include "../../manager.hpp"
 
 template<typename MessageInterface, template<typename> typename Allocator>
-mpirpc::manager<MessageInterface, Allocator>::manager(MPI_Comm comm) : m_comm(comm), m_next_type_id(0), m_count(0), m_shutdown(false)
+mpirpc::manager<MessageInterface, Allocator>::manager(MPI_Comm comm, const Allocator<void> &alloc) : m_comm(comm), m_next_type_id(0), m_count(0), m_shutdown(false), m_alloc(alloc)
 {
     MPI_Comm_rank(m_comm, &m_rank);
     MPI_Comm_size(comm, &m_num_pes);

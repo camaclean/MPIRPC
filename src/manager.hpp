@@ -162,7 +162,7 @@ class manager
 public:
     using UserMessageHandler = void(*)(MPI_Status&&);
 
-    manager(MPI_Comm comm = MPI_COMM_WORLD);
+    manager(MPI_Comm comm = MPI_COMM_WORLD, const Allocator<void> &alloc = std::allocator<void>());
 
     /**
      * Register a type with the manager. This assigns a unique ID to the type.
@@ -604,7 +604,7 @@ protected:
             std::vector<char>* buffer = new std::vector<char>(len);
             parameter_stream stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
-            ret = unmarshal<R,Allocator<R>>(stream);
+            //ret = unmarshal<R,Allocator<R>>(stream);
             using swallow = int[];
             (void)swallow{((internal::is_pass_back<FArgs>::value) ? ( internal::pass_back_unmarshaller<FArgs,Args>::unmarshal(stream,args) /*args = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
             delete buffer;
@@ -688,6 +688,7 @@ protected:
     unsigned long long m_count;
     bool m_shutdown;
     MPI_Datatype m_mpi_object_info;
+    Allocator<void> m_alloc;
 };
 
 template<class MessageInterface, template<typename> typename Allocator>

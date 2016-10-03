@@ -28,6 +28,34 @@
 namespace mpirpc
 {
 
+/*
+ * Unmarshalling is a significantly greater challenge than marshalling. When marshalling,
+ * the input is already in a valid constructed state.
+ *
+ * However, when unmarshalling there may be one or more different limitations of the types
+ * which need to be handled. First of all, there is the issue of allocating memory. This
+ * will often be different for local and remote unmarshalling, since local unmarshalling
+ * will already have references or pointers to already-existing memory pass in as parameters.
+ * Remote unmarshalling, on the other hand, often requires allocating memory.
+ */
+
+template<typename T, typename Stream, typename Allocator>
+struct unmarshaller_remote
+{
+    void unmarshal(Allocator &a, Stream &s, T*& v)
+    {
+
+    }
+};
+
+/*template<typename Stream, typename Allocator, typename...Args>
+auto unmarshal_to_tuple(Allocator &a, Stream &s)
+    ->
+{
+
+}*/
+
+#if 1
 /**
  * Unmarshal types and specialize via specialization
  */
@@ -120,6 +148,7 @@ decltype(auto) unmarshal(mpirpc::parameter_stream &s)
     constexpr std::size_t extent = std::extent<std::remove_reference_t<T>>();
     //typename std::allocator_traits<Allocator>::template rebind_alloc<B> a;
     using CorrectedAllocatorType = typename allocator_identifier<Allocator>::template type<B>;
+    std::cout << "allocating memory for reference to array" << std::endl;
     CorrectedAllocatorType a;
     std::size_t e;
     s >> e;
@@ -157,37 +186,9 @@ struct unmarshaller<std::pair<Key,T>>
     }
 };
 
+#endif
+
 #if defined(__cpp_concepts) || 1
-/*template<typename T, typename Allocator>
-static inline T unmarshal(parameter_stream &s) requires Container<T> && !std::is_same<T,std::string>::value
-{
-    std::size_t size;
-    T c;
-    size = unmarshal<std::size_t, Allocator>(s);
-    auto it = std::inserter(c,c.begin());
-    std::cout << typeid(T).name() << " container has size: " << size << std::endl;
-    for (std::size_t i = 0; i < size; ++i)
-    {
-        //Because array types are not CopyConstructable, Container requires CopyConstructable elements,
-        //and the allocator is only used for unmarshalling array types, just pass std::allocator
-        it = unmarshal<typename T::value_type, Allocator>(s);
-    }
-    return c;
-}*/
-
-/*template<typename T, typename I>
-concept bool HasArraySubscriptOperator = requires(T t, I i) {
-        t[i];
-};
-
-template<typename T>
-concept bool HasIntegralArraySubscriptOperator = HasArraySubscriptOperator<T,size_t>;
-
-template<typename T>
-concept bool HasSizeFunction = requires(T t)
-{
-    t.size();
-};*/
 
 template<typename T>
 mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const T& c) requires Container<T>

@@ -54,10 +54,10 @@ void f7(const std::vector<int>& v)
     std::cout << v[0] << v[0] << "v0" << std::endl;
 }
 
-void f8(int (&c)[2])
+void f8(int (&c)[3][2])
 {
-    std::cout << "f8(int (&)[2]: " << c[0] << " " << c[1] << std::endl;
-    c[0] = 42;
+    std::cout << "f8(int (&)[2]: " << c[0][0] << " " << c[1][0] << std::endl;
+    c[0][0] = 42;
 }
 
 void f9(std::size_t x, int (*c)[3])
@@ -221,9 +221,9 @@ int main(int argc, char** argv)
         std::cout << "b: " << b << std::endl;
         manager->invoke_function<decltype(&f6),&f6>(0, "test cstring");
         manager->invoke_function<decltype(&f7),&f7>(0, vectest);
-        int c[2] = {1,2};
+        int c[3][2] = {1,2,3,4,5,6};
         manager->invoke_function_r<decltype(&f8),&f8>(0, c);
-        std::cout << "c[0] and c[1]" << c[0] << " " << c[1] << std::endl;
+        std::cout << "c[0] and c[1]" << c[0][0] << " " << c[1][0] << std::endl;
         int c2[2][3] = {1,2,3,4,5,6};
         manager->invoke_function_r<decltype(&f9),&f9>(0,2, c2);
         std::cout << "c2[0][0]: " << c2[0][0] << std::endl;

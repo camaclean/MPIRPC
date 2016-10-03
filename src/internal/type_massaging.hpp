@@ -23,6 +23,7 @@
 #include <type_traits>
 #include <tuple>
 #include <functional>
+#include "../pointerwrapper.hpp"
 
 namespace mpirpc
 {
@@ -248,16 +249,15 @@ template<typename FArg, typename Arg>
 struct choose_reference
 {
     using base_type = std::remove_reference_t<choose_wrapped_type<FArg,Arg>>;
-    using type = typename std::conditional<std::is_lvalue_reference<Arg>::value,
-                        base_type&,
-                        typename std::conditional<std::is_rvalue_reference<Arg>::value,
-                            base_type&&,
-                            typename std::conditional<std::is_rvalue_reference<Arg>::value,
-                                base_type&&,
-                                base_type
-                            >::type
-                        >::type
-                 >::type;
+    using type = std::conditional_t<std::is_rvalue_reference<FArg>::value && std::is_lvalue_reference<Arg>::value,
+                                    void,
+                                    std::conditional_t<std::is_same<std::remove_reference_t<FArg>,std::remove_reference_t<Arg>>::value && std::is_same<std::remove_reference_t<FArg>,base_type>::value,
+                                                       std::conditional_t<std::is_lvalue_reference<Arg>::value,
+                                                                          base_type&,
+                                                                          base_type&&
+                                                       >,
+                                                       base_type>
+                                    >;
 };
 
 template<typename FArg, typename T, std::size_t N>
@@ -272,8 +272,8 @@ struct choose_reference<FArg, T(*)[N]>
     using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<T>::value,std::allocator<T>>;
 };
 
-template<typename FArg, std::size_t N>
-struct choose_reference<FArg, const char (&)[N]>
+template<std::size_t N>
+struct choose_reference<const char*, const char (&)[N]>
 {
     using type = const char*;
 };

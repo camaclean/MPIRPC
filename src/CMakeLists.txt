@@ -70,14 +70,21 @@ configure_package_config_file(MPIRPCConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/MPIRPCConfig.cmake
         DESTINATION ${LIB_INSTALL_DIR}/cmake/mpirpc)
 
-set(CMAKE_AUTOMOC ON)
-find_package(Qt5 COMPONENTS Core Test)
-if(Qt5Test_FOUND)
+#set(CMAKE_AUTOMOC ON)
+#find_package(Qt5 COMPONENTS Core Test)
+#if(Qt5Test_FOUND)
+    #enable_testing()
+    #add_definitions(${Qt5Core_DEFINITIONS} ${Qt5Core_EXECUTABLE_COMPILE_FLAGS})
+    #include_directories(${Qt5Core_INCLUDE_DIRS} ${Qt5Concurrent_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
+    #add_subdirectory(tests)
+#endif(Qt5Test_FOUND)
+
+include(FindGTest)
+if(GTEST_FOUND)
     enable_testing()
-    add_definitions(${Qt5Core_DEFINITIONS} ${Qt5Core_EXECUTABLE_COMPILE_FLAGS})
-    include_directories(${Qt5Core_INCLUDE_DIRS} ${Qt5Concurrent_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
+    include_directories(${GTEST_INCLUDE_DIRS})
     add_subdirectory(tests)
-endif(Qt5Test_FOUND)
+endif(GTEST_FOUND)
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "MPIRPC is library for remote procedure calls over MPI.")
