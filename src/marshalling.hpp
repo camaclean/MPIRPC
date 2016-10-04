@@ -20,6 +20,8 @@
 #ifndef MPIRPC__MARSHALLING_HPP
 #define MPIRPC__MARSHALLING_HPP
 
+#include "../parameterstream.hpp"
+
 namespace mpirpc
 {
 

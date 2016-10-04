@@ -8,8 +8,8 @@ set(CMAKE_EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 #add_test(streamTest streamTest)
 
 
-add_executable(example example.cpp)
-target_link_libraries(example mpirpc)
+#add_executable(example example.cpp)
+#target_link_libraries(example mpirpc)
 #target_link_libraries(streamTest ${Qt5Core_LIBRARIES} ${Qt5Test_LIBRARIES} ${MPI_CXX_LIBRARIES})
 
 add_executable(type_massaging_test type_massaging_test.cpp)

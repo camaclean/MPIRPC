@@ -22,6 +22,8 @@
 
 #include "function_attributes.hpp"
 #include "marshalling.hpp"
+#include "utility.hpp"
+#include "../marshalling.hpp"
 
 namespace mpirpc
 {

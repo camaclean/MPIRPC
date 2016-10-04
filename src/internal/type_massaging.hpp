@@ -125,6 +125,8 @@ template<typename FT, typename T>
 inline constexpr auto forward_parameter(T&& t) noexcept
     -> choose_reference_type<FT, typename std::remove_cv<T>::type>
 {
+    using R = choose_reference_type<FT, typename std::remove_cv<T>::type>;
+    static_assert(!std::is_same<R,void>::value, "Invalid lvalue to rvalue reference conversion.");
     return static_cast<choose_reference_type<FT, std::remove_cv_t<T>>>(t);
 }
 
@@ -172,11 +174,11 @@ struct autowrapped
     using type = T;
 };
 
-template<typename T, std::size_t N>
+/*template<typename T, std::size_t N>
 struct autowrapped<T[N]>
 {
     using type = ::mpirpc::pointer_wrapper<T,N,false,std::is_const<T>::value,std::allocator<T>>;
-};
+};*/
 
 /*template<::size_t N>
 struct autowrapped<const char (&)[N]>
@@ -184,7 +186,7 @@ struct autowrapped<const char (&)[N]>
     using type = const char*;
 };*/
 
-template<typename T>
+/*template<typename T>
 struct autowrapped<T*>
 {
     using type = std::conditional_t<
@@ -192,7 +194,7 @@ struct autowrapped<T*>
                     T*,
                     ::mpirpc::pointer_wrapper<T,0,false,!std::is_const<T>::value,std::allocator<T>>
                  >;
-};
+};*/
 
 template<typename T>
 using autowrapped_type = typename autowrapped<T>::type;
@@ -201,14 +203,14 @@ using autowrapped_type = typename autowrapped<T>::type;
 /*                            mpirpc::internal::autowrap                             */
 /*************************************************************************************/
 
-template<typename T,
+/*template<typename T,
          std::enable_if_t<std::is_array<std::remove_reference_t<T>>::value>* = nullptr>
 auto autowrap(T& t) -> decltype(auto)
 {
     using U = std::remove_extent_t<T>;
     constexpr std::size_t extent = std::extent<T>::value;
     return ::mpirpc::pointer_wrapper<U,extent,false,!std::is_const<T>::value,std::allocator<U>>(static_cast<std::decay_t<T>>(t));
-}
+}*/
 
 template<typename T,
          std::enable_if_t<!std::is_array<T>::value>* = nullptr>
@@ -258,9 +260,10 @@ struct choose_reference
                                                        >,
                                                        base_type>
                                     >;
+    static_assert(!std::is_same<type,void>::value, "Illegal lvalue-to-rvalue reference conversion!");
 };
 
-template<typename FArg, typename T, std::size_t N>
+/*template<typename FArg, typename T, std::size_t N>
 struct choose_reference<FArg, T(&)[N]>
 {
     using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<T>::value,std::allocator<T>>;
@@ -270,7 +273,7 @@ template<typename FArg, typename T, std::size_t N>
 struct choose_reference<FArg, T(*)[N]>
 {
     using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<T>::value,std::allocator<T>>;
-};
+};*/
 
 template<std::size_t N>
 struct choose_reference<const char*, const char (&)[N]>

@@ -48,12 +48,21 @@ struct unmarshaller_remote
     }
 };
 
-/*template<typename Stream, typename Allocator, typename...Args>
+template<typename T, typename Stream>
+struct unmarshaller_local
+{
+    void unmarshal(Stream &s, T*& v)
+    {
+
+    }
+};
+
+template<typename Stream, typename Allocator, typename...Args>
 auto unmarshal_to_tuple(Allocator &a, Stream &s)
-    ->
+    -> std::tuple<Args...>
 {
 
-}*/
+}
 
 #if 1
 /**
@@ -187,59 +196,6 @@ struct unmarshaller<std::pair<Key,T>>
 };
 
 #endif
-
-#if defined(__cpp_concepts) || 1
-
-template<typename T>
-mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const T& c) requires Container<T>
-{
-    out << c.size();
-    for (const auto& i : c)
-    {
-        out << i;
-    }
-    return out;
-}
-
-template<typename T>
-mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T& c) requires Container<T>
-{
-    std::size_t size;
-    in >> size;
-    auto it = std::inserter(c,c.begin());
-    std::cout << typeid(T).name() << " container has size: " << size << std::endl;
-    for (std::size_t i = 0; i < size; ++i)
-    {
-        //Because array types are not CopyConstructable, Container requires CopyConstructable elements,
-        //and the allocator is only used for unmarshalling array types, just pass std::allocator
-        it = unmarshal<typename T::value_type, typename T::allocator_type>(in);
-    }
-    return in;
-}
-
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
-{
-    std::cout << "streaming PointerWrapper" << std::endl;
-    out << wrapper.size();
-    for (std::size_t i = 0; i < wrapper.size(); ++i)
-        out << wrapper[i];
-    return out;
-}
-
-
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
-{
-    std::size_t size;
-    in >> size;
-    std::cout << "getting returned pointer of size " << size << std::endl;
-    for (std::size_t i = 0; i < size; ++i)
-    {
-        in >> wrapper[i];
-    }
-    return in;
-}
 
 #endif
 

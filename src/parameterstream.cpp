@@ -19,6 +19,7 @@
 
 #include "parameterstream.hpp"
 #include <cstring>
+#include <iostream>
 
 namespace mpirpc {
 

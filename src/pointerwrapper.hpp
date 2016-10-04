@@ -60,7 +60,7 @@ public:
 
     T& operator[](std::size_t n) { return m_pointer[n]; }
     T const& operator[](std::size_t n) const { return m_pointer[n]; }
-    operator T*() { return m_pointer; }
+    explicit operator T*() { return m_pointer; }
 protected:
     T* m_pointer;
 };

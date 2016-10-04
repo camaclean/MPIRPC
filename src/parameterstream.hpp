@@ -41,7 +41,7 @@ namespace mpirpc {
 class parameter_stream
 {
 public:
-    parameter_stream() = delete;
+    //parameter_stream() = delete;
     parameter_stream(std::vector<char>* buffer = new std::vector<char>());
     //parameter_stream(const char* data, size_t length);
 
@@ -206,6 +206,71 @@ mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T (&a)[N])
         std::cout << a[i] << " ";
     }
     std::cout << std::endl;
+    return in;
+}
+
+#if defined(__cpp_concepts) || 1
+
+/*template<typename T>
+mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const T& c) requires Container<T>
+{
+    out << c.size();
+    for (const auto& i : c)
+    {
+        out << i;
+    }
+    return out;
+}
+
+template<typename T>
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T& c) requires Container<T>
+{
+    std::size_t size;
+    in >> size;
+    auto it = std::inserter(c,c.begin());
+    std::cout << typeid(T).name() << " container has size: " << size << std::endl;
+    for (std::size_t i = 0; i < size; ++i)
+    {
+        //Because array types are not CopyConstructable, Container requires CopyConstructable elements,
+        //and the allocator is only used for unmarshalling array types, just pass std::allocator
+        it = unmarshal<typename T::value_type, typename T::allocator_type>(in);
+    }
+    return in;
+}*/
+
+#endif
+
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
+{
+    //std::cout << "streaming PointerWrapper" << std::endl;
+    out << wrapper.size();
+    for (std::size_t i = 0; i < wrapper.size(); ++i)
+        out << wrapper[i];
+    return out;
+}
+
+
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
+{
+    std::size_t size;
+    in >> size;
+    //std::cout << "getting returned pointer of size " << size << std::endl;
+    for (std::size_t i = 0; i < size; ++i)
+    {
+        in >> wrapper[i];
+    }
+    return in;
+}
+
+template<typename T>
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T* t)
+{
+    std::size_t size;
+    in >> size;
+    for (std::size_t i = 0; i < size; ++i)
+        in >> t[i];
     return in;
 }
 
