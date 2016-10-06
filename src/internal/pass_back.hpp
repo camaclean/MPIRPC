@@ -20,6 +20,8 @@
 #ifndef MPIRPC__INTERNAL__PASS_BACK_HPP
 #define MPIRPC__INTERNAL__PASS_BACK_HPP
 
+#include <type_traits>
+
 namespace mpirpc
 {
 
@@ -104,6 +106,18 @@ struct pass_back_unmarshaller<::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBa
         s >> size;
         s >> arg;
     }
+};
+
+template<typename T, typename U>
+struct can_realloc
+{
+    constexpr static bool value = false;
+};
+
+template<typename T, typename U>
+struct can_realloc<T*&,U*&>
+{
+    constexpr static bool value = std::is_same<std::remove_const_t<T>,std::remove_const_t<U>>::value;
 };
 
 /*template <typename Stream, typename Tuple, size_t... I>

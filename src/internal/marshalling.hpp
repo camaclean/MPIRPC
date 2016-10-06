@@ -25,6 +25,8 @@
 #include "utility.hpp"
 #include "../marshalling.hpp"
 
+#include <functional>
+
 namespace mpirpc
 {
 
@@ -36,14 +38,35 @@ namespace internal
  * Marshalls the arguments Args... into the stream Stream using the types expected by the function F
  */
 template<typename F>
-struct fn_type_marshaller
+struct fn_type_marshaller;
+
+template<typename R, typename... FArgs>
+struct fn_type_marshaller<R(*)(FArgs...)>
 {
     template<class Stream, typename... Args>
     static void marshal(Stream& ps, Args&&... args)
     {
-        using Applier = typename ::mpirpc::internal::marshaller_function_signature<F,Args...>::applier;
-        Applier apply = [&](auto&&... a) { (void)::mpirpc::internal::passer{(::mpirpc::marshal(ps, std::forward<decltype(a)>(a)), 0)...}; };
-        apply(autowrap<Args>(args)...);
+        (void)::mpirpc::internal::passer{(::mpirpc::marshal(ps, forward_parameter<FArgs,Args>(args)), 0)...};
+    }
+};
+
+template<typename R, typename Class, typename... FArgs>
+struct fn_type_marshaller<R(Class::*)(FArgs...)>
+{
+    template<class Stream, typename... Args>
+    static void marshal(Stream& ps, Args&&... args)
+    {
+        (void)::mpirpc::internal::passer{(::mpirpc::marshal(ps, forward_parameter<FArgs,Args>(args)), 0)...};
+    }
+};
+
+template<typename R, typename... FArgs>
+struct fn_type_marshaller<std::function<R(FArgs...)>>
+{
+    template<class Stream, typename... Args>
+    static void marshal(Stream& ps, Args&&... args)
+    {
+        (void)::mpirpc::internal::passer{(::mpirpc::marshal(ps, forward_parameter<FArgs,Args>(args)), 0)...};
     }
 };
 
