@@ -22,7 +22,6 @@
 
 #include "parameterstream.hpp"
 #include "internal/parameterstream.hpp"
-#include "internal/unmarshalling.hpp"
 
 
 namespace mpirpc
@@ -39,12 +38,116 @@ namespace mpirpc
  * Remote unmarshalling, on the other hand, often requires allocating memory.
  */
 
-template<typename T, typename Stream, typename Allocator>
+
+template<typename T, typename = void>
+struct unmarshaller_remote;
+
+struct unmarshal_array_helper_remote
+{
+    template<typename T, typename Allocator,
+             std::enable_if_t<!std::is_array<std::remove_reference_t<T>>::value>* = nullptr>
+    static void unmarshal(Allocator& a, ::mpirpc::parameter_stream &s, T& v)
+    {
+        std::cout << "unmarshal_array_helper generic is unmarshalling " << typeid(T).name() << std::endl;
+
+        std::allocator_traits<Allocator>::construct(a,&v,::mpirpc::unmarshaller_remote<T>::unmarshal(a,s));
+    }
+
+    template<typename T, std::size_t N, typename Allocator>
+    static void unmarshal(Allocator& a, ::mpirpc::parameter_stream &s, T(&arr)[N])
+    {
+        for(std::size_t i = 0; i < N; ++i)
+        {
+            std::cout << "unmarshal_array_helper array: " << N << " " << i << " " << arr << " " << typeid(T).name() << " " << typeid(decltype(arr[i])).name() << std::endl;
+            unmarshal_array_helper_remote::unmarshal(a, s, arr[i]);
+        }
+    }
+};
+
+template<typename T, typename>
 struct unmarshaller_remote
 {
-    void unmarshal(Allocator &a, Stream &s, T*& v)
+    template<typename R = T, typename Stream, typename Allocator, std::enable_if_t<std::is_default_constructible<T>::value>* = nullptr>
+    static R unmarshal(Allocator &a, Stream &s)
     {
+        R ret;
+        s >> ret;
+        return ret;
+    }
+};
 
+/*template<typename T>
+struct unmarshaller_remote<T, std::enable_if_t<std::is_pointer<std::remove_reference_t<T>>::value>>
+{
+    template<typename Stream, typename Allocator>
+    static T unmarshal(Allocator &a, Stream &s)
+    {
+        std::cout << "unmarshalling pointer" << std::endl;
+        std::size_t size;
+        s >> size;
+        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<std::remove_pointer_t<std::remove_reference_t<T>>>;
+        AllocatorType al(a);
+        std::remove_reference_t<T> data = al.allocate(size);
+        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        NewAllocatorType na(a);
+        for (std::size_t i = 0; i < size; ++i)
+        {
+            unmarshal_array_helper_remote::unmarshal(na, s, data[i]);
+        }
+        return data;
+    }
+};*/
+
+
+/*template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+struct unmarshaller_remote<::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
+{
+    using R = ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>;
+    template<typename Stream, typename ManagerAllocator>
+    static R unmarshal(ManagerAllocator &a, Stream &s)
+    {
+        std::cout << "unmarshalling pointer wrapper" << std::endl;
+        std::size_t size = internal::pointer_wrapper_stream_size<N>::get(s);
+        Allocator al(a);
+        T* data = al.allocate(size);
+        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        NewAllocatorType na(a);
+        for (std::size_t i = 0; i < size; ++i)
+        {
+            unmarshal_array_helper_remote::unmarshal(na, s, data[i]);
+        }
+        return internal::pointer_wrapper_factory<T,N,PassOwnership,PassBack,Allocator>::create(data,size);
+    }
+};*/
+
+/*template<typename T, std::size_t N>
+struct unmarshaller_remote<T(&)[N]>
+{
+    using R = T(&)[N];
+    template<typename Stream, typename Allocator>
+    static R unmarshal(Allocator &a, Stream &s)
+    {
+        std::cout << "unmarshalling reference to array" << std::endl;
+        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        NewAllocatorType na(a);
+        T(&data)[N] = (T(&)[N]) *na.allocate(N);
+        for (std::size_t i = 0; i < N; ++i)
+        {
+            unmarshal_array_helper_remote::unmarshal(na, s, data[i]);
+        }
+        return data;
+    }
+};*/
+
+
+template<typename Key, typename T>
+struct unmarshaller_remote<std::pair<Key,T>>
+{
+    using R = std::pair<Key,T>;
+    template<typename Allocator, typename Stream>
+    static inline R unmarshal(Allocator &a, Stream &s)
+    {
+        return R(unmarshaller_remote<Key>::unmarshal(a,s),unmarshaller_remote<T>::unmarshal(a,s));
     }
 };
 
@@ -197,9 +300,10 @@ struct unmarshaller<std::pair<Key,T>>
 
 #endif
 
-#endif
 
 }
+
+#include "internal/unmarshalling.hpp"
 
 #endif /* MPIRPC__UNMARSHALLING_HPP */
 

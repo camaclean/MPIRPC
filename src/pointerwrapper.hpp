@@ -28,41 +28,23 @@ namespace mpirpc
 
 namespace detail
 {
-template<std::size_t N>
-class pointer_wrapper_size
-{
-public:
-    constexpr std::size_t size() const { return N; }
-};
 
-template<>
-class pointer_wrapper_size<0>
-{
-public:
-    pointer_wrapper_size() = delete;
-    pointer_wrapper_size(std::size_t size) : m_size(size) {};
-    std::size_t size() const { return m_size; }
-protected:
-    std::size_t m_size;
-};
 
 template<typename T, std::size_t N>
-class pointer_wrapper : public pointer_wrapper_size<N>
+class pointer_wrapper
 {
 public:
     pointer_wrapper() = delete;
 
-    template<std::size_t N2 = N, typename std::enable_if<N2 != 0>::type* = nullptr>
-    pointer_wrapper(T* pointer) : pointer_wrapper_size<N2>(), m_pointer(pointer) {}
-
-    template<std::size_t N2 = N, typename std::enable_if<N2 == 0>::type* = nullptr>
-    pointer_wrapper(T* pointer, std::size_t size) : pointer_wrapper_size<N2>(size), m_pointer(pointer) {};
+    pointer_wrapper(T* pointer, std::size_t size = N) : m_size(size), m_pointer(pointer) {}
 
     T& operator[](std::size_t n) { return m_pointer[n]; }
     T const& operator[](std::size_t n) const { return m_pointer[n]; }
     explicit operator T*() { return m_pointer; }
+    std::size_t size() const { return m_size; }
 protected:
     T* m_pointer;
+    std::size_t m_size;
 };
 
 }
@@ -95,6 +77,7 @@ template<typename T, std::size_t N = 0, bool PassOwnership = false, bool PassBac
 class pointer_wrapper : public detail::pointer_wrapper<T,N>
 {
     using detail::pointer_wrapper<T,N>::m_pointer;
+    using detail::pointer_wrapper<T,N>::m_size;
 public:
     using type = T;// typename std::decay_t<T>;
     static constexpr std::size_t count = N;
@@ -116,10 +99,9 @@ public:
              std::enable_if_t<!B>* = nullptr,
              std::enable_if_t<!std::is_array<U>::value>* = nullptr>
     void free() {
-        std::size_t size = detail::pointer_wrapper_size<N>::size();
-        for (std::size_t i = 0; i < size; ++i)
+        for (std::size_t i = 0; i < m_size; ++i)
             m_allocator.destroy(&m_pointer[i]);
-        m_allocator.deallocate(m_pointer,size);
+        m_allocator.deallocate(m_pointer,m_size);
     }
 
     template<bool B = PassOwnership,
@@ -127,10 +109,9 @@ public:
              std::enable_if_t<!B>* = nullptr,
              std::enable_if_t<std::is_array<U>::value>* = nullptr>
     void free() {
-        std::size_t size = detail::pointer_wrapper_size<N>::size();
-        for (std::size_t i = 0; i < size; ++i)
+        for (std::size_t i = 0; i < m_size; ++i)
             array_destroy_helper<U,Allocator>::destroy(m_allocator,&m_pointer[i]);
-        m_allocator.deallocate(m_pointer,size);
+        m_allocator.deallocate(m_pointer,m_size);
     }
 
 protected:

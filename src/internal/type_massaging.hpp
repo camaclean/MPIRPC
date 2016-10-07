@@ -513,73 +513,73 @@ struct choose_reference<FT*const &&,T*const &&>
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*,T(&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*const,T(&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*&,T(&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*const &,T(&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*&&,T(&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,true,false>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,true,false>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*const &&,T(&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,true,false>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,true,false>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*,T(&&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,false>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*const,T(&&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,false>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*&,T(&&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,false>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*const &,T(&&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,false>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*&&,T(&&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,true,false>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,true,false>;
 };
 
 template<typename FT, typename T, std::size_t N>
 struct choose_reference<FT*const &&,T(&&)[N]>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,true,false>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,true,false>;
 };
 
 template<std::size_t N>
