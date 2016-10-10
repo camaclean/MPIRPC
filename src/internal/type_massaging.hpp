@@ -259,10 +259,11 @@ struct choose_wrapped<FArg, ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack
 template<typename FArg, typename Arg>
 struct choose_reference
 {
-    using base_type = std::remove_reference_t<choose_wrapped_type<FArg,Arg>>;
+    using base_type_1 = std::remove_reference_t<choose_wrapped_type<FArg,Arg>>;
+    using base_type = std::conditional_t<std::is_const<std::remove_reference_t<FArg>>::value || std::is_const<std::remove_reference_t<Arg>>::value,const base_type_1,base_type_1>;
     using type = std::conditional_t<std::is_rvalue_reference<FArg>::value && std::is_lvalue_reference<Arg>::value,
                                     void,
-                                    std::conditional_t<std::is_same<std::remove_reference_t<FArg>,std::remove_reference_t<Arg>>::value && std::is_same<std::remove_reference_t<FArg>,base_type>::value,
+                                    std::conditional_t<std::is_same<std::remove_const_t<std::remove_reference_t<FArg>>,std::remove_const_t<std::remove_reference_t<Arg>>>::value && std::is_same<std::remove_const_t<std::remove_reference_t<FArg>>,std::remove_const_t<base_type>>::value,
                                                        std::conditional_t<std::is_lvalue_reference<Arg>::value,
                                                                           base_type&,
                                                                           base_type&&

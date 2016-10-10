@@ -48,7 +48,7 @@ struct unmarshal_array_helper_remote
              std::enable_if_t<!std::is_array<std::remove_reference_t<T>>::value>* = nullptr>
     static void unmarshal(Allocator& a, ::mpirpc::parameter_stream &s, T& v)
     {
-        std::cout << "unmarshal_array_helper generic is unmarshalling " << typeid(T).name() << std::endl;
+        //std::cout << "unmarshal_array_helper generic is unmarshalling " << typeid(T).name() << std::endl;
 
         std::allocator_traits<Allocator>::construct(a,&v,::mpirpc::unmarshaller_remote<T>::unmarshal(a,s));
     }
@@ -58,7 +58,7 @@ struct unmarshal_array_helper_remote
     {
         for(std::size_t i = 0; i < N; ++i)
         {
-            std::cout << "unmarshal_array_helper array: " << N << " " << i << " " << arr << " " << typeid(T).name() << " " << typeid(decltype(arr[i])).name() << std::endl;
+            //std::cout << "unmarshal_array_helper array: " << N << " " << i << " " << arr << " " << typeid(T).name() << " " << typeid(decltype(arr[i])).name() << std::endl;
             unmarshal_array_helper_remote::unmarshal(a, s, arr[i]);
         }
     }
@@ -76,13 +76,13 @@ struct unmarshaller_remote
     }
 };
 
-/*template<typename T>
+template<typename T>
 struct unmarshaller_remote<T, std::enable_if_t<std::is_pointer<std::remove_reference_t<T>>::value>>
 {
     template<typename Stream, typename Allocator>
     static T unmarshal(Allocator &a, Stream &s)
     {
-        std::cout << "unmarshalling pointer" << std::endl;
+        //std::cout << "unmarshalling pointer" << std::endl;
         std::size_t size;
         s >> size;
         using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<std::remove_pointer_t<std::remove_reference_t<T>>>;
@@ -96,21 +96,21 @@ struct unmarshaller_remote<T, std::enable_if_t<std::is_pointer<std::remove_refer
         }
         return data;
     }
-};*/
+};
 
 
-/*template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
+template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
 struct unmarshaller_remote<::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
 {
     using R = ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>;
     template<typename Stream, typename ManagerAllocator>
     static R unmarshal(ManagerAllocator &a, Stream &s)
     {
-        std::cout << "unmarshalling pointer wrapper" << std::endl;
+        //std::cout << "unmarshalling pointer wrapper" << std::endl;
         std::size_t size = internal::pointer_wrapper_stream_size<N>::get(s);
         Allocator al(a);
         T* data = al.allocate(size);
-        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<std::remove_const_t<T>>;
         NewAllocatorType na(a);
         for (std::size_t i = 0; i < size; ++i)
         {
@@ -118,26 +118,51 @@ struct unmarshaller_remote<::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,
         }
         return internal::pointer_wrapper_factory<T,N,PassOwnership,PassBack,Allocator>::create(data,size);
     }
-};*/
+};
 
-/*template<typename T, std::size_t N>
+/**
+ * The storage duration for lvalue references to arrays shall be the duration of the invoked function.
+ */
+template<typename T, std::size_t N>
 struct unmarshaller_remote<T(&)[N]>
 {
-    using R = T(&)[N];
+    using R = std::remove_const_t<T>(&)[N];
     template<typename Stream, typename Allocator>
     static R unmarshal(Allocator &a, Stream &s)
     {
-        std::cout << "unmarshalling reference to array" << std::endl;
-        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        //std::cout << "unmarshalling reference to array" << std::endl;
+        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<std::remove_const_t<T>>;
         NewAllocatorType na(a);
-        T(&data)[N] = (T(&)[N]) *na.allocate(N);
+        R data = (R) *na.allocate(N);
         for (std::size_t i = 0; i < N; ++i)
         {
             unmarshal_array_helper_remote::unmarshal(na, s, data[i]);
         }
         return data;
     }
-};*/
+};
+
+/**
+ * The storage duration for rvalue reference to arrays shall be indefinite. To clean
+ */
+template<typename T, std::size_t N>
+struct unmarshaller_remote<T(&&)[N]>
+{
+    using R = std::remove_const_t<T>(&&)[N];
+    template<typename Stream, typename Allocator>
+    static R unmarshal(Allocator &a, Stream &s)
+    {
+        //std::cout << "unmarshalling rvalue reference to array" << std::endl;
+        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<std::remove_const_t<T>>;
+        NewAllocatorType na(a);
+        R data = (R) *na.allocate(N);
+        for (std::size_t i = 0; i < N; ++i)
+        {
+            unmarshal_array_helper_remote::unmarshal(na, s, data[i]);
+        }
+        return std::move(data);
+    }
+};
 
 
 template<typename Key, typename T>

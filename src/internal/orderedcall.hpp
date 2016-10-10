@@ -35,48 +35,6 @@ namespace mpirpc
 namespace internal
 {
 
-/*template<typename T>
-struct arg_cleanup
-{
-    static void apply(typename std::remove_reference<T>::type& t) { std::cout << "blank clean up for " << typeid(t).name() << std::endl; }
-    static void apply(typename std::remove_reference<T>::type&& t) { std::cout << "generic rvalue " << typeid(t).name() << std::endl; }
-};
-
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct arg_cleanup<pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
-{
-    static void apply(pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>&& t) { std::cout << "cleaned up C Array of " << typeid(T).name() << std::endl; t.free(); }
-};
-
-template<typename T, std::size_t N>
-struct arg_cleanup<T(&)[N]>
-{
-    static void apply(T(&v)[N])
-    {
-        std::cout << "cleaning up reference to array" << std::endl;
-        std::allocator<std::remove_cv_t<T>> a;
-        a.deallocate((std::remove_cv_t<T>*)&v,N);
-    }
-};
-
-template<>
-struct arg_cleanup<char*>
-{
-    static void apply(char*&& s) { delete[] s; std::cout << "deleted char*" << std::endl; }
-};
-
-template<>
-struct arg_cleanup<const char*>
-{
-    static void apply(const char*&& s) { delete[] s; std::cout << "deleted const char*" << std::endl; }
-};
-
-template<typename... Args>
-void do_post_exec(Args&&... args)
-{
-    [](...){}( (arg_cleanup<Args>::apply(std::forward<Args>(args)), 0)...);
-}*/
-
 /**
  * @brief The mpirpc::ordered_call<F> class
  *
@@ -86,21 +44,21 @@ void do_post_exec(Args&&... args)
  * constructing using {} brackets instead of (). This bound call
  * can then be executed using mpirpc::ordered_call<F>::operator().
  */
-template <typename F>
+template <typename F, typename Allocator>
 struct ordered_call;
 
 /**
  * Specialization of mpirpc::ordered_call<F> for function pointer calls.
  */
-template<typename R, typename... FArgs>
-struct ordered_call<R(*)(FArgs...)>
+template<typename R, typename... FArgs, typename Allocator>
+struct ordered_call<R(*)(FArgs...), Allocator>
 {
     using function_type = R(*)(FArgs...);
     using storage_tuple = typename internal::wrapped_function_parts<function_type>::wrapped_args_tuple_type;
 
     template<typename... Args>
-    ordered_call(internal::unwrapped_function_type<function_type>& func, Args&&... args)
-        : function(func), args_tuple(args...)
+    ordered_call(internal::unwrapped_function_type<function_type> func, Allocator &a, Args&&... args)
+        : function(func), args_tuple(args...), alloc(a)
     {}
 
     R operator()()
@@ -110,25 +68,26 @@ struct ordered_call<R(*)(FArgs...)>
 
     ~ordered_call()
     {
-        internal::apply(&internal::detail::do_post_exec<FArgs...>, args_tuple);
+        internal::detail::clean_up_args_tuple(alloc, args_tuple);
     }
 
     internal::unwrapped_function_type<function_type> function;
     storage_tuple args_tuple;
+    Allocator &alloc;
 };
 
 /**
  * Specialization of OrderedCall<F> for member function pointer calls.
  */
-template<typename R, typename Class, typename... FArgs>
-struct ordered_call<R(Class::*)(FArgs...)>
+template<typename R, typename Class, typename... FArgs, typename Allocator>
+struct ordered_call<R(Class::*)(FArgs...), Allocator>
 {
     using function_type = R(Class::*)(FArgs...);
     using storage_tuple = typename internal::wrapped_function_parts<function_type>::wrapped_args_tuple_type;
 
     template<typename... Args>
-    ordered_call(internal::unwrapped_function_type<function_type>& func, Class *c, Args&&... args)
-        : function(func), obj(c), args_tuple(args...)
+    ordered_call(internal::unwrapped_function_type<function_type> func, Class *c, Allocator &a, Args&&... args)
+        : function(func), obj(c), args_tuple(args...), alloc(a)
     {}
 
     R operator()()
@@ -138,26 +97,27 @@ struct ordered_call<R(Class::*)(FArgs...)>
 
     ~ordered_call()
     {
-        internal::apply(&internal::detail::do_post_exec<FArgs...>, args_tuple);
+        internal::detail::clean_up_args_tuple(alloc, args_tuple);
     }
 
     internal::unwrapped_function_type<function_type> function;
     Class *obj;
     storage_tuple args_tuple;
+    Allocator &alloc;
 };
 
 /**
  * Specialization of OrderedCall<F> for std::function calls.
  */
-template<typename R, typename... FArgs>
-struct ordered_call<std::function<R(FArgs...)>>
+template<typename R, typename... FArgs, typename Allocator>
+struct ordered_call<std::function<R(FArgs...)>, Allocator>
 {
     using function_type = std::function<R(FArgs...)>;
     using storage_tuple = typename internal::wrapped_function_parts<function_type>::wrapped_args_tuple_type;
 
     template<typename... Args>
-    ordered_call(internal::unwrapped_function_type<function_type>& func, Args&&... args)
-        : function(func), args_tuple(args...)
+    ordered_call(internal::unwrapped_function_type<function_type>& func, Allocator &a, Args&&... args)
+        : function(func), args_tuple(args...), alloc(a)
     {}
 
     R operator()()
@@ -167,11 +127,12 @@ struct ordered_call<std::function<R(FArgs...)>>
 
     ~ordered_call()
     {
-        internal::apply(&internal::detail::do_post_exec<FArgs...>, args_tuple);
+        internal::detail::clean_up_args_tuple(alloc, args_tuple);
     }
 
     internal::unwrapped_function_type<function_type> function;
     storage_tuple args_tuple;
+    Allocator &alloc;
 };
 
 }

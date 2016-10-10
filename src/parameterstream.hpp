@@ -183,14 +183,14 @@ mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, std::map<T, U
 template<typename T, std::size_t N>
 mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const T (&a)[N])
 {
-    std::cout << "streaming c array: ";
+    //std::cout << "streaming c array: ";
     //out << N;
     for (auto& v : a)
     {
-        std::cout << v;
+        //std::cout << v;
         out << v;
     }
-    std::cout << std::endl;
+    //std::cout << std::endl;
     return out;
 }
 

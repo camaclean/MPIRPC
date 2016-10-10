@@ -20,6 +20,11 @@
 #ifndef MPIRPC__INTERNAL__DETAIL__ORDEREDCALL_HPP
 #define MPIRPC__INTERNAL__DETAIL__ORDEREDCALL_HPP
 
+#include <tuple>
+#include <utility>
+#include "../pointerwrapper.hpp"
+#include <memory>
+
 namespace mpirpc
 {
 
@@ -32,43 +37,79 @@ namespace detail
 template<typename T>
 struct arg_cleanup
 {
-    static void apply(typename std::remove_reference<T>::type& t) { std::cout << "blank clean up for " << typeid(t).name() << std::endl; }
-    static void apply(typename std::remove_reference<T>::type&& t) { std::cout << "generic rvalue " << typeid(t).name() << std::endl; }
+    template<typename Allocator>
+    static void apply(Allocator&& a, typename std::remove_reference<T>::type& t) { std::cout << "blank clean up for " << typeid(t).name() << std::endl; }
+    template<typename Allocator>
+    static void apply(Allocator&& a, typename std::remove_reference<T>::type&& t) { std::cout << "generic rvalue " << typeid(t).name() << std::endl; }
 };
 
 template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
 struct arg_cleanup<pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
 {
-    static void apply(pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>&& t) { std::cout << "cleaned up C Array of " << typeid(T).name() << std::endl; t.free(); }
+    template<typename ManagerAllocator>
+    static void apply(ManagerAllocator&& a, pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>&& t) { std::cout << "cleaned up C Array of " << typeid(T).name() << std::endl; t.free(); }
 };
 
 template<typename T, std::size_t N>
 struct arg_cleanup<T(&)[N]>
 {
-    static void apply(T(&v)[N])
+    template<typename Allocator>
+    static void apply(Allocator&& a, T(&v)[N])
     {
         std::cout << "cleaning up reference to array" << std::endl;
-        std::allocator<std::remove_cv_t<T>> a;
-        a.deallocate((std::remove_cv_t<T>*)&v,N);
+        using NA = typename std::allocator_traits<Allocator>::template rebind<std::remove_const_t<T>>;
+        NA na(a);
+        std::allocator_traits<NA>::destroy(na,&v);
+        for (std::size_t i = 0; i < N; ++i)
+            mpirpc::array_destroy_helper<T,NA>::destroy(a,v[i]);
+        std::allocator_traits<NA>::deallocate(na,(std::remove_const_t<T>*) &v,N);
+    }
+};
+
+template<typename T, std::size_t N>
+struct arg_cleanup<T(&&)[N]>
+{
+    template<typename Allocator>
+    static void apply(Allocator&& a, T(&&v)[N])
+    {
+        std::cout << "cleaning up rvalue reference to array" << std::endl;
+        using NA = typename std::allocator_traits<Allocator>::template rebind<std::remove_const_t<T>>;
+        NA na(a);
+        std::allocator_traits<NA>::destroy(na,&v);
+        for (std::size_t i = 0; i < N; ++i)
+            mpirpc::array_destroy_helper<T,NA>::destroy(a,v[i]);
+        std::allocator_traits<NA>::deallocate(na,(std::remove_const_t<T>*) &v,N);
     }
 };
 
 template<>
 struct arg_cleanup<char*>
 {
-    static void apply(char*&& s) { delete[] s; std::cout << "deleted char*" << std::endl; }
+    template<typename Allocator>
+    static void apply(Allocator&& a, char*&& s) { delete[] s; std::cout << "deleted char*" << std::endl; }
 };
 
 template<>
 struct arg_cleanup<const char*>
 {
-    static void apply(const char*&& s) { delete[] s; std::cout << "deleted const char*" << std::endl; }
+    template<typename Allocator>
+    static void apply(Allocator&& a, const char*&& s)
+    {
+        delete[] s;
+        std::cout << "deleted const char*" << std::endl;
+    }
 };
 
-template<typename... Args>
-void do_post_exec(Args&&... args)
+template<typename Allocator, typename... Ts, std::size_t... Is>
+void clean_up_args_tuple_impl(Allocator&& a, std::tuple<Ts...>& t, std::index_sequence<Is...>)
 {
-    [](...){}( (arg_cleanup<Args>::apply(std::forward<Args>(args)), 0)...);
+    (void)(int[]){ (arg_cleanup<Ts>::apply(a, std::get<Is>(t)),0)... };
+}
+
+template<typename Allocator, typename... Args>
+void clean_up_args_tuple(Allocator&& a, std::tuple<Args...> &t)
+{
+    clean_up_args_tuple_impl(a,t,std::make_index_sequence<sizeof...(Args)>{});
 }
 
 }

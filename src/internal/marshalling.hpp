@@ -46,8 +46,8 @@ struct fn_type_marshaller<R(*)(FArgs...)>
     template<class Stream, typename... Args>
     static void marshal(Stream& ps, Args&&... args)
     {
-        (void)::mpirpc::internal::passer{(std:: cout << abi::__cxa_demangle(typeid(void(*)(FArgs)).name(),0,0,0) << " " << abi::__cxa_demangle(typeid(void(*)(decltype(forward_parameter<FArgs,Args>(args)))).name(),0,0,0) << " | ", ::mpirpc::marshal(ps, forward_parameter<FArgs,Args>(args)), 0)...};
-        std::cout << std::endl;
+        using swallow = int[];
+        (void)swallow{(::mpirpc::marshal(ps, forward_parameter<FArgs,Args>(args)),0)...};
     }
 };
 
@@ -57,7 +57,8 @@ struct fn_type_marshaller<R(Class::*)(FArgs...)>
     template<class Stream, typename... Args>
     static void marshal(Stream& ps, Args&&... args)
     {
-        (void)::mpirpc::internal::passer{(::mpirpc::marshal(ps, forward_parameter<FArgs,Args>(args)), 0)...};
+        using swallow = int[];
+        (void)swallow{(::mpirpc::marshal(ps, forward_parameter<FArgs,Args>(args)),0)...};
     }
 };
 
@@ -67,7 +68,8 @@ struct fn_type_marshaller<std::function<R(FArgs...)>>
     template<class Stream, typename... Args>
     static void marshal(Stream& ps, Args&&... args)
     {
-        (void)::mpirpc::internal::passer{(::mpirpc::marshal(ps, forward_parameter<FArgs,Args>(args)), 0)...};
+        using swallow = int[];
+        (void)swallow{(::mpirpc::marshal(ps, forward_parameter<FArgs,Args>(args)),0)...};
     }
 };
 

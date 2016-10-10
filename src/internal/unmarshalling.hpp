@@ -37,11 +37,12 @@ namespace internal
 
 namespace detail {
 template<typename Allocator, typename Stream, typename... Ts, std::size_t... Is>
-std::tuple<std::conditional_t<std::is_array<std::remove_reference_t<Ts>>::value,Ts,std::decay_t<std::remove_reference_t<Ts>>>...> unmarshal_into_tuple_impl(Allocator &a, Stream &s, std::index_sequence<Is...>)
+std::tuple<storage_type<Ts>...> unmarshal_into_tuple_impl(Allocator &a, Stream &s, std::index_sequence<Is...>)
 {
-    using R = std::tuple<std::conditional_t<std::is_array<std::remove_reference_t<Ts>>::value,Ts,std::decay_t<std::remove_reference_t<Ts>>>...>;
-    std::cout << abi::__cxa_demangle(typeid(R).name(),0,0,0) << " " << abi::__cxa_demangle(typeid(std::tuple<Ts...>).name(),0,0,0) << std::endl;
-    return R(::mpirpc::unmarshaller_remote<std::conditional_t<std::is_array<std::remove_reference_t<Ts>>::value,Ts,std::decay_t<std::remove_reference_t<Ts>>>>::unmarshal(a,s)...);
+    using R = std::tuple<storage_type<Ts>...>;
+    //std::cout << abi::__cxa_demangle(typeid(R).name(),0,0,0) << " " << abi::__cxa_demangle(typeid(std::tuple<Ts...>).name(),0,0,0) << std::endl;
+    R ret{(::mpirpc::unmarshaller_remote<storage_type<Ts>>::unmarshal(a,s))...};
+    return ret;
 }
 
 }
@@ -50,7 +51,7 @@ template<typename... Ts>
 struct tuple_unmarshaller_remote
 {
     template<typename Allocator, typename Stream>
-    static std::tuple<std::conditional_t<std::is_array<std::remove_reference_t<Ts>>::value,Ts,std::decay_t<std::remove_reference_t<Ts>>>...> unmarshal(Allocator &a, Stream &s)
+    static std::tuple<storage_type<Ts>...> unmarshal(Allocator &a, Stream &s)
     {
         return detail::unmarshal_into_tuple_impl<Allocator, Stream, Ts...>(a, s, std::make_index_sequence<sizeof...(Ts)>{});
     }

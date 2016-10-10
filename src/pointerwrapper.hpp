@@ -52,10 +52,12 @@ protected:
 template<typename T,typename Allocator>
 struct array_destroy_helper
 {
-    static void destroy(Allocator &a, T* v)
+    static void destroy(Allocator &a, T& v)
     {
-        std::cout << "destroying " << *v << std::endl;
-        a.destroy(v);
+        std::cout << "destroying " << v << std::endl;
+        using NA = typename std::allocator_traits<Allocator>::template rebind<T>;
+        NA na(a);
+        std::allocator_traits<NA>::destroy(na,&v);
     }
 };
 
@@ -64,11 +66,11 @@ template<typename T,
          typename Allocator>
 struct array_destroy_helper<T[N],Allocator>
 {
-    static void destroy(Allocator &a, T(*arr)[N])
+    static void destroy(Allocator &a, T(&arr)[N])
     {
         for(std::size_t i = 0; i < N; ++i)
         {
-            array_destroy_helper<T,Allocator>::destroy(a, &arr[0][i]);
+            array_destroy_helper<T,Allocator>::destroy(a, arr[i]);
         }
     }
 };
@@ -110,7 +112,7 @@ public:
              std::enable_if_t<std::is_array<U>::value>* = nullptr>
     void free() {
         for (std::size_t i = 0; i < m_size; ++i)
-            array_destroy_helper<U,Allocator>::destroy(m_allocator,&m_pointer[i]);
+            array_destroy_helper<U,Allocator>::destroy(m_allocator,m_pointer[i]);
         m_allocator.deallocate(m_pointer,m_size);
     }
 

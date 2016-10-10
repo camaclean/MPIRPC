@@ -516,6 +516,14 @@ public:
      */
     size_t queue_size() const;
 
+    template<typename T, std::size_t N>
+    void free_array(T(&&arr)[N])
+    {
+        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<std::remove_const_t<T>>;
+        NewAllocatorType na(m_alloc);
+        std::allocator_traits<NewAllocatorType>::deallocate(na,&arr,N);
+    }
+
     /**
      * Destroy this manager
      */
