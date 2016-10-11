@@ -40,7 +40,7 @@ template<typename Allocator, typename Stream, typename... Ts, std::size_t... Is>
 std::tuple<storage_type<Ts>...> unmarshal_into_tuple_impl(Allocator &a, Stream &s, std::index_sequence<Is...>)
 {
     using R = std::tuple<storage_type<Ts>...>;
-    //std::cout << abi::__cxa_demangle(typeid(R).name(),0,0,0) << " " << abi::__cxa_demangle(typeid(std::tuple<Ts...>).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(R).name(),0,0,0) << " " << abi::__cxa_demangle(typeid(std::tuple<Ts...>).name(),0,0,0) << std::endl;
     R ret{(::mpirpc::unmarshaller_remote<storage_type<Ts>>::unmarshal(a,s))...};
     return ret;
 }

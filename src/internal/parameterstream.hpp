@@ -81,28 +81,6 @@ struct pointer_wrapper_stream_size<0>
     }
 };
 
-/*************************************************************************************/
-/*                     mpirpc::internal::pointer_wrapper_factory                     */
-/*************************************************************************************/
-
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct pointer_wrapper_factory
-{
-    static ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator> create(T* data, std::size_t size)
-    {
-        return ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>(data);
-    }
-};
-
-template<typename T, bool PassOwnership, bool PassBack, typename Allocator>
-struct pointer_wrapper_factory<T,0,PassOwnership,PassBack,Allocator>
-{
-    static ::mpirpc::pointer_wrapper<T,0,PassOwnership,PassBack,Allocator> create(T* data, std::size_t size)
-    {
-        return ::mpirpc::pointer_wrapper<T,0,PassOwnership,PassBack,Allocator>(data,size);
-    }
-};
-
 }
 
 }

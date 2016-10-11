@@ -26,105 +26,86 @@
 namespace mpirpc
 {
 
-namespace detail
-{
 
-
-template<typename T, std::size_t N>
-class pointer_wrapper
-{
-public:
-    pointer_wrapper() = delete;
-
-    pointer_wrapper(T* pointer, std::size_t size = N) : m_size(size), m_pointer(pointer) {}
-
-    T& operator[](std::size_t n) { return m_pointer[n]; }
-    T const& operator[](std::size_t n) const { return m_pointer[n]; }
-    explicit operator T*() { return m_pointer; }
-    std::size_t size() const { return m_size; }
-protected:
-    T* m_pointer;
-    std::size_t m_size;
-};
-
-}
-
-template<typename T,typename Allocator>
+template<typename T>
 struct array_destroy_helper
 {
-    static void destroy(Allocator &a, T& v)
+    template<typename Allocator>
+    static void destroy(Allocator&& a, T& v)
     {
         std::cout << "destroying " << v << std::endl;
-        using NA = typename std::allocator_traits<Allocator>::template rebind<T>;
+        using NA = typename std::allocator_traits<std::remove_reference_t<Allocator>>::template rebind_alloc<T>;
         NA na(a);
         std::allocator_traits<NA>::destroy(na,&v);
     }
 };
 
 template<typename T,
-         std::size_t N,
-         typename Allocator>
-struct array_destroy_helper<T[N],Allocator>
+         std::size_t N>
+struct array_destroy_helper<T[N]>
 {
-    static void destroy(Allocator &a, T(&arr)[N])
+    template<typename Allocator>
+    static void destroy(Allocator&& a, T(&arr)[N])
     {
         for(std::size_t i = 0; i < N; ++i)
         {
-            array_destroy_helper<T,Allocator>::destroy(a, arr[i]);
+            array_destroy_helper<T>::destroy(a, arr[i]);
         }
     }
 };
 
-template<typename T, std::size_t N = 0, bool PassOwnership = false, bool PassBack = false, typename Allocator = std::allocator<T>>
-class pointer_wrapper : public detail::pointer_wrapper<T,N>
+template<typename T>
+class pointer_wrapper
 {
-    using detail::pointer_wrapper<T,N>::m_pointer;
-    using detail::pointer_wrapper<T,N>::m_size;
 public:
-    using type = T;// typename std::decay_t<T>;
-    static constexpr std::size_t count = N;
-    static constexpr bool pass_ownership = PassOwnership;
-    static constexpr bool pass_back = PassBack;
-    using allocator_type = Allocator;
+    using type = T;
 
-    template<std::size_t N2 = N, typename std::enable_if<N2 != 0>::type* = nullptr>
-    pointer_wrapper(T* data) : detail::pointer_wrapper<T,N2>(data) {}
+    pointer_wrapper(T* data, std::size_t size = 1, bool pass_back = false, bool pass_ownership = false)
+        : m_pointer(data),
+          m_size(size),
+          m_pass_back(pass_back),
+          m_pass_ownership(pass_ownership)
+    {}
 
-    template<std::size_t N2 = N, typename std::enable_if<N2 == 0>::type* = nullptr>
-    pointer_wrapper(T* data, std::size_t size) : detail::pointer_wrapper<T,N2>(data,size) {}
+    T& operator[](std::size_t n) { return m_pointer[n]; }
+    T const& operator[](std::size_t n) const { return m_pointer[n]; }
+    explicit operator T*() { return m_pointer; }
+    std::size_t size() const { return m_size; }
 
-    template<bool B = PassOwnership, typename std::enable_if<B>::type* = nullptr>
-    void free() {}
-
-    template<bool B = PassOwnership,
+    template<typename Allocator,
              typename U = T,
-             std::enable_if_t<!B>* = nullptr,
              std::enable_if_t<!std::is_array<U>::value>* = nullptr>
-    void free() {
-        for (std::size_t i = 0; i < m_size; ++i)
-            m_allocator.destroy(&m_pointer[i]);
-        m_allocator.deallocate(m_pointer,m_size);
+    void free(Allocator &a) {
+        if (!m_pass_ownership)
+        {
+            using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+            AllocatorType al(a);
+            for (std::size_t i = 0; i < m_size; ++i)
+                std::allocator_traits<AllocatorType>::destroy(al,&m_pointer[i]);
+            std::allocator_traits<AllocatorType>::deallocate(al,m_pointer,m_size);
+        }
     }
 
-    template<bool B = PassOwnership,
+    template<typename Allocator,
              typename U = T,
-             std::enable_if_t<!B>* = nullptr,
              std::enable_if_t<std::is_array<U>::value>* = nullptr>
-    void free() {
-        for (std::size_t i = 0; i < m_size; ++i)
-            array_destroy_helper<U,Allocator>::destroy(m_allocator,m_pointer[i]);
-        m_allocator.deallocate(m_pointer,m_size);
+    void free(Allocator &a) {
+        if (!m_pass_ownership)
+        {
+            using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+            AllocatorType al(a);
+            for (std::size_t i = 0; i < m_size; ++i)
+                array_destroy_helper<U>::destroy(al,m_pointer[i]);
+            std::allocator_traits<AllocatorType>::deallocate(al,m_pointer,m_size);
+        }
     }
 
 protected:
-    Allocator m_allocator;
+    T *m_pointer;
+    std::size_t m_size;
+    bool m_pass_back;
+    bool m_pass_ownership;
 };
-
-template<typename T, bool PassOwnership, bool PassBack, typename Allocator, typename std::enable_if<!std::is_array<T>::value>::type* = nullptr>
-using basic_pointer_wrapper = pointer_wrapper<T,1,PassOwnership,PassBack,Allocator>;
-
-template<typename T, bool PassOwnership, bool PassBack, typename Allocator, typename std::enable_if<!std::is_array<T>::value>::type* = nullptr>
-using dynamic_pointer_wrapper = pointer_wrapper<T,0,PassOwnership,PassBack,Allocator>;
 
 }
 

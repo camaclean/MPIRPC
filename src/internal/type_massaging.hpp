@@ -49,22 +49,20 @@ using unwrapped_type = typename unwrapped<T>::type;
  * \internal
  * Used to find the wrapped types for autowrapped function arguments, such as pointers and arrays
  */
-template<typename T>
+template<typename T,typename>
 struct autowrapped;
 
 /**
  * \internal
  * A helper type to query the wrapped type
  */
-template<typename T>
-using autowrapped_type = typename autowrapped<T>::type;
+//template<typename T, typename Allocator>
+//using autowrapped_type = typename autowrapped<T,Allocator>::type;
 
 /**
  * \internal
  * Automatically construct wrappers around types which need them, otherwise behave like std::forward
  */
-template<typename T>
-auto autowrap(T&& t);
 
 /**
  * \intneral
@@ -90,7 +88,7 @@ using choose_wrapped_type = typename choose_wrapped<FArg,Arg>::type;
  *      double&         float       double&
  *      double          float&&     double
  */
-template<typename FArg, typename Arg>
+template<typename FArg, typename Arg,typename = void>
 struct choose_reference;
 
 /**
@@ -154,8 +152,8 @@ struct unwrapped
     using type = T;
 };
 
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct unwrapped<::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
+template<typename T>
+struct unwrapped<::mpirpc::pointer_wrapper<T>>
 {
     using type = T*;
 };
@@ -176,7 +174,7 @@ struct unwrapped<const char (&)[N]>
 /*                            mpirpc::internal::autowrapped                          */
 /*************************************************************************************/
 
-template<typename T>
+template<typename T, typename = void>
 struct autowrapped
 {
     using type = T;
@@ -194,15 +192,19 @@ struct autowrapped<const char (&)[N]>
     using type = const char*;
 };*/
 
-/*template<typename T>
-struct autowrapped<T*>
+template<typename T>
+struct autowrapped<T, std::enable_if_t<
+        std::is_pointer<
+            std::remove_reference_t<T>
+        >::value>>
 {
+    using PT = std::remove_pointer_t<std::remove_reference_t<T>>;
     using type = std::conditional_t<
-                    std::is_same<std::remove_cv_t<T>,char>::value,
-                    T*,
-                    ::mpirpc::pointer_wrapper<T,0,false,!std::is_const<T>::value,std::allocator<T>>
+                    std::is_same<std::remove_cv_t<PT>,char>::value,
+                    T,
+                    ::mpirpc::pointer_wrapper<std::remove_const_t<PT>>
                  >;
-};*/
+};
 
 template<typename T>
 using autowrapped_type = typename autowrapped<T>::type;
@@ -211,28 +213,58 @@ using autowrapped_type = typename autowrapped<T>::type;
 /*                            mpirpc::internal::autowrap                             */
 /*************************************************************************************/
 
-template<typename FT,typename T,
-         std::enable_if_t<std::is_reference<FT>::value && std::is_array<FT>::value>* = nullptr,
-         std::enable_if_t<std::is_array<std::remove_reference_t<T>>::value>* = nullptr>
-auto autowrap(T& t) -> decltype(auto)
+template<typename T>
+struct is_pointer_wrapper
 {
-    using U = std::remove_extent_t<T>;
-    constexpr std::size_t extent = std::extent<T>::value;
-    return ::mpirpc::pointer_wrapper<U,extent,false,!std::is_const<T>::value,std::allocator<U>>(static_cast<std::decay_t<T>>(t));
+    static constexpr bool value = false;
+};
+
+template<typename T>
+struct is_pointer_wrapper<::mpirpc::pointer_wrapper<T>>
+{
+    static constexpr bool value = true;
+};
+
+template<typename FT,typename T,
+         std::enable_if_t<std::is_pointer<std::remove_reference_t<FT>>::value>* = nullptr,
+         std::enable_if_t<std::is_array<std::remove_reference_t<T>>::value>* = nullptr>
+mpirpc::pointer_wrapper<std::remove_pointer_t<std::remove_reference_t<FT>>> autowrap(std::remove_reference_t<T>& t)
+{
+    using U = std::remove_extent_t<std::remove_reference_t<T>>;
+    constexpr std::size_t extent = std::extent<std::remove_reference_t<T>>::value;
+    constexpr bool is_mutable = !std::is_const<std::remove_pointer_t<std::remove_reference_t<FT>>>::value && !std::is_const<U>::value;
+    constexpr bool pass_back = !std::is_rvalue_reference<T>::value && is_mutable;
+    constexpr bool pass_ownership = false;
+    //std::cout << "autowrapping array: " << extent << std::endl;
+    return ::mpirpc::pointer_wrapper<U>(static_cast<std::decay_t<T>>(t),extent,pass_back,pass_ownership);
+}
+
+template<typename FT,typename T,
+         std::enable_if_t<std::is_pointer<std::remove_reference_t<FT>>::value>* = nullptr,
+         std::enable_if_t<std::is_array<std::remove_reference_t<T>>::value>* = nullptr>
+mpirpc::pointer_wrapper<std::remove_pointer_t<std::remove_reference_t<FT>>> autowrap(std::remove_reference_t<T>&& t)
+{
+    using U = std::remove_extent_t<std::remove_reference_t<T>>;
+    constexpr std::size_t extent = std::extent<std::remove_reference_t<T>>::value;
+    constexpr bool is_mutable = !std::is_const<std::remove_pointer_t<std::remove_reference_t<FT>>>::value && !std::is_const<U>::value;
+    constexpr bool pass_back = !std::is_rvalue_reference<T>::value && is_mutable;
+    constexpr bool pass_ownership = false;
+    //std::cout << "autowrapping array: " << extent << std::endl;
+    return ::mpirpc::pointer_wrapper<U>(static_cast<std::decay_t<T>>(t),extent,pass_back,pass_ownership);
 }
 
 template<typename FT, typename T,
-         std::enable_if_t<!std::is_array<T>::value>* = nullptr>
+         std::enable_if_t<!std::is_pointer<std::remove_reference_t<FT>>::value || is_pointer_wrapper<std::remove_reference_t<T>>::value>* = nullptr>
 auto autowrap(std::remove_reference_t<T>& t) -> decltype(auto)
 {
-    return static_cast<T&&>(t);
+    return forward_parameter<FT,T>(t);//static_cast<T&&>(t);
 }
 
 template<typename FT, typename T,
-         std::enable_if_t<!std::is_array<T>::value>* = nullptr>
+         std::enable_if_t<!std::is_pointer<std::remove_reference_t<FT>>::value || is_pointer_wrapper<std::remove_reference_t<T>>::value>* = nullptr>
 auto autowrap(std::remove_reference<T>&& t) -> decltype(auto)
 {
-    return static_cast<T&&>(t);
+    return forward_parameter<FT,T>(t);//static_cast<T&&>(t);
 }
 
 
@@ -246,17 +278,17 @@ struct choose_wrapped
     using type = FArg;
 };
 
-template<typename FArg, typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct choose_wrapped<FArg, ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
+template<typename FArg, typename T>
+struct choose_wrapped<FArg, ::mpirpc::pointer_wrapper<T>>
 {
-    using type = ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>;
+    using type = ::mpirpc::pointer_wrapper<T>;
 };
 
 /*************************************************************************************/
 /*                         mpirpc::internal::choose_reference                        */
 /*************************************************************************************/
 
-template<typename FArg, typename Arg>
+template<typename FArg, typename Arg, typename>
 struct choose_reference
 {
     using base_type_1 = std::remove_reference_t<choose_wrapped_type<FArg,Arg>>;
@@ -286,301 +318,13 @@ struct choose_reference<FArg, T(*)[N]>
 };*/
 
 template<typename FT, typename T>
-struct choose_reference<FT*,T*>
+struct choose_reference<FT,T,std::enable_if_t<
+        std::is_pointer<std::remove_reference_t<FT>>::value &&
+        std::is_same<std::remove_cv_t<std::remove_pointer_t<std::decay_t<FT>>>,std::remove_cv_t<std::remove_pointer_t<std::decay_t<T>>>>::value &&
+        !std::is_same<std::remove_cv_t<std::remove_pointer_t<std::decay_t<FT>>>,const char>::value
+       >>
 {
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*,T*&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*,T*&&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const,T*>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const,T*&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const,T*&&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*,T*const>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*,T*const&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*,T*const&&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const,T*const>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const,T*const &>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const,T*const &&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-
-
-template<typename FT, typename T>
-struct choose_reference<FT*&,T*>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*&,T*&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*&,T*&&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-
-template<typename FT, typename T>
-struct choose_reference<FT*&,T*const>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*&,T*const&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*&,T*const&&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const &,T*>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const &,T*&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const &,T*&&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-
-template<typename FT, typename T>
-struct choose_reference<FT*const &,T*const>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const &,T*const&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-template<typename FT, typename T>
-struct choose_reference<FT*const &,T*const&&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,!std::is_const<FT>::value && !std::is_const<T>::value>>;
-};
-
-
-
-template<typename FT, typename T>
-struct choose_reference<FT*&&,T*>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,true,false>>;
-};
-
-/*template<typename FT, typename T>
-struct choose_reference<FT*&&,T*&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,false>>;
-};*/
-
-template<typename FT, typename T>
-struct choose_reference<FT*&&,T*&&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,true,false>>;
-};
-
-
-template<typename FT, typename T>
-struct choose_reference<FT*&&,T*const>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,true,false>>;
-};
-
-/*template<typename FT, typename T>
-struct choose_reference<FT*&&,T*const &>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,false>>;
-};*/
-
-template<typename FT, typename T>
-struct choose_reference<FT*&&,T*const &&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,true,false>>;
-};
-
-
-template<typename FT, typename T>
-struct choose_reference<FT*const &&,T*>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,true,false>>;
-};
-
-/*template<typename FT, typename T>
-struct choose_reference<FT*const &&,T*&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,false>>;
-};*/
-
-template<typename FT, typename T>
-struct choose_reference<FT*const &&,T*&&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,true,false>>;
-};
-
-
-
-template<typename FT, typename T>
-struct choose_reference<FT*const &&,T*const>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,true,false>>;
-};
-
-/*template<typename FT, typename T>
-struct choose_reference<FT*const &&,T*const &>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,false,false>>;
-};*/
-
-template<typename FT, typename T>
-struct choose_reference<FT*const &&,T*const &&>
-{
-    using type = std::enable_if_t<std::is_same<std::decay_t<FT>,std::decay_t<T>>::value,::mpirpc::pointer_wrapper<std::remove_const_t<T>,1,true,false>>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*,T(&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*const,T(&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*&,T(&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*const &,T(&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,!std::is_const<FT>::value && !std::is_const<T>::value>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*&&,T(&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,true,false>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*const &&,T(&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,true,false>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*,T(&&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,false>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*const,T(&&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,false>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*&,T(&&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,false>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*const &,T(&&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,false,false>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*&&,T(&&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,true,false>;
-};
-
-template<typename FT, typename T, std::size_t N>
-struct choose_reference<FT*const &&,T(&&)[N]>
-{
-    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<T>,N,true,false>;
+    using type = ::mpirpc::pointer_wrapper<std::remove_const_t<std::remove_pointer_t<std::remove_reference_t<FT>>>>;
 };
 
 template<std::size_t N>

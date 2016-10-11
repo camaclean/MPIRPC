@@ -52,10 +52,10 @@ struct is_pass_back<T(*)[N]>
     constexpr static bool value = true;
 };
 
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct is_pass_back<::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
+template<typename T>
+struct is_pass_back<::mpirpc::pointer_wrapper<T>>
 {
-    constexpr static bool value = PassBack;
+    constexpr static bool value = true;
 };
 
 template<typename T>
@@ -96,8 +96,8 @@ struct pass_back_unmarshaller
     }
 };
 
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator, typename T2, std::size_t N2>
-struct pass_back_unmarshaller<::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>,T2(&)[N2]>
+template<typename T, typename T2, std::size_t N2>
+struct pass_back_unmarshaller<::mpirpc::pointer_wrapper<T>,T2(&)[N2]>
 {
     template<typename Stream>
     inline static void unmarshal(Stream &s, T2(&arg)[N2])

@@ -240,10 +240,10 @@ mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T& c) require
 
 #endif
 
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
+template<typename T>
+mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const mpirpc::pointer_wrapper<T>& wrapper)
 {
-    //std::cout << "streaming PointerWrapper" << std::endl;
+    std::cout << "streaming PointerWrapper of size " << wrapper.size() << std::endl;
     out << wrapper.size();
     for (std::size_t i = 0; i < wrapper.size(); ++i)
         out << wrapper[i];
@@ -251,8 +251,8 @@ mpirpc::parameter_stream& operator<<(mpirpc::parameter_stream& out, const mpirpc
 }
 
 
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>& wrapper)
+template<typename T>
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, mpirpc::pointer_wrapper<T>& wrapper)
 {
     std::size_t size;
     in >> size;

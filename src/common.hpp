@@ -41,9 +41,6 @@
 namespace mpirpc
 {
 
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-class pointer_wrapper;
-
 using FnHandle = unsigned long long;
 using TypeId = unsigned long long;
 using ObjectId = unsigned long long;

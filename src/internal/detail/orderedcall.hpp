@@ -38,16 +38,20 @@ template<typename T>
 struct arg_cleanup
 {
     template<typename Allocator>
-    static void apply(Allocator&& a, typename std::remove_reference<T>::type& t) { std::cout << "blank clean up for " << typeid(t).name() << std::endl; }
+    static void apply(Allocator&& a, typename std::remove_reference<T>::type& t) { std::cout << "blank clean up for " << typeid(void(*)(T)).name() << std::endl; }
     template<typename Allocator>
-    static void apply(Allocator&& a, typename std::remove_reference<T>::type&& t) { std::cout << "generic rvalue " << typeid(t).name() << std::endl; }
+    static void apply(Allocator&& a, typename std::remove_reference<T>::type&& t) { std::cout << "generic rvalue " << typeid(void(*)(T)).name() << std::endl; }
 };
 
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct arg_cleanup<pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
+template<typename T>
+struct arg_cleanup<pointer_wrapper<T>>
 {
-    template<typename ManagerAllocator>
-    static void apply(ManagerAllocator&& a, pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>&& t) { std::cout << "cleaned up C Array of " << typeid(T).name() << std::endl; t.free(); }
+    template<typename Allocator>
+    static void apply(Allocator&& a, pointer_wrapper<T>&& t)
+    {
+        std::cout << "cleaned up C Array of " << typeid(T).name() << std::endl;
+        t.free(a);
+    }
 };
 
 template<typename T, std::size_t N>
@@ -57,11 +61,10 @@ struct arg_cleanup<T(&)[N]>
     static void apply(Allocator&& a, T(&v)[N])
     {
         std::cout << "cleaning up reference to array" << std::endl;
-        using NA = typename std::allocator_traits<Allocator>::template rebind<std::remove_const_t<T>>;
+        using NA = typename std::allocator_traits<std::remove_reference_t<Allocator>>::template rebind_alloc<std::remove_const_t<T>>;
         NA na(a);
-        std::allocator_traits<NA>::destroy(na,&v);
         for (std::size_t i = 0; i < N; ++i)
-            mpirpc::array_destroy_helper<T,NA>::destroy(a,v[i]);
+            mpirpc::array_destroy_helper<T>::destroy(a,v[i]);
         std::allocator_traits<NA>::deallocate(na,(std::remove_const_t<T>*) &v,N);
     }
 };
@@ -73,11 +76,10 @@ struct arg_cleanup<T(&&)[N]>
     static void apply(Allocator&& a, T(&&v)[N])
     {
         std::cout << "cleaning up rvalue reference to array" << std::endl;
-        using NA = typename std::allocator_traits<Allocator>::template rebind<std::remove_const_t<T>>;
+        using NA = typename std::allocator_traits<std::remove_reference_t<Allocator>>::template rebind_alloc<std::remove_const_t<T>>;
         NA na(a);
-        std::allocator_traits<NA>::destroy(na,&v);
         for (std::size_t i = 0; i < N; ++i)
-            mpirpc::array_destroy_helper<T,NA>::destroy(a,v[i]);
+            mpirpc::array_destroy_helper<T>::destroy(a,v[i]);
         std::allocator_traits<NA>::deallocate(na,(std::remove_const_t<T>*) &v,N);
     }
 };
@@ -103,7 +105,7 @@ struct arg_cleanup<const char*>
 template<typename Allocator, typename... Ts, std::size_t... Is>
 void clean_up_args_tuple_impl(Allocator&& a, std::tuple<Ts...>& t, std::index_sequence<Is...>)
 {
-    (void)(int[]){ (arg_cleanup<Ts>::apply(a, std::get<Is>(t)),0)... };
+    (void)(int[]){ (std::cout << abi::__cxa_demangle(typeid(void(*)(Ts)).name(),0,0,0) << std::endl, arg_cleanup<Ts>::apply(a, std::forward<Ts>(std::get<Is>(t))),0)... };
 }
 
 template<typename Allocator, typename... Args>

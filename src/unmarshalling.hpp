@@ -99,24 +99,24 @@ struct unmarshaller_remote<T, std::enable_if_t<std::is_pointer<std::remove_refer
 };
 
 
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct unmarshaller_remote<::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>>
+template<typename T>
+struct unmarshaller_remote<::mpirpc::pointer_wrapper<T>>
 {
-    using R = ::mpirpc::pointer_wrapper<T,N,PassOwnership,PassBack,Allocator>;
-    template<typename Stream, typename ManagerAllocator>
-    static R unmarshal(ManagerAllocator &a, Stream &s)
+    using R = ::mpirpc::pointer_wrapper<T>;
+    template<typename Stream, typename Allocator>
+    static R unmarshal(Allocator &a, Stream &s)
     {
         //std::cout << "unmarshalling pointer wrapper" << std::endl;
-        std::size_t size = internal::pointer_wrapper_stream_size<N>::get(s);
-        Allocator al(a);
+        std::size_t size;
+        s >> size;
+        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        AllocatorType al(a);
         T* data = al.allocate(size);
-        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<std::remove_const_t<T>>;
-        NewAllocatorType na(a);
         for (std::size_t i = 0; i < size; ++i)
         {
-            unmarshal_array_helper_remote::unmarshal(na, s, data[i]);
+            unmarshal_array_helper_remote::unmarshal(al, s, data[i]);
         }
-        return internal::pointer_wrapper_factory<T,N,PassOwnership,PassBack,Allocator>::create(data,size);
+        return mpirpc::pointer_wrapper<T>(data,size);
     }
 };
 
@@ -246,7 +246,7 @@ struct unmarshal_array_helper<Allocator, T[N]>
     }
 };
 
-template<class PW, typename ManagerAllocator>
+/*template<class PW, typename ManagerAllocator>
 auto unmarshal(mpirpc::parameter_stream& s)
      -> pointer_wrapper<typename PW::type,
                         PW::count,
@@ -271,7 +271,7 @@ auto unmarshal(mpirpc::parameter_stream& s)
         unmarshal_array_helper<Allocator,T>::unmarshal(a, s, (T*) &data[i]);
     }
     return internal::pointer_wrapper_factory<T,N,PassOwnership,PassBack,Allocator>::create(data,size);
-};
+};*/
 
 template<typename T,
          typename Allocator,
