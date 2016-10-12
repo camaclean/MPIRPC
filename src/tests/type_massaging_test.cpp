@@ -130,10 +130,10 @@ TEST_STORAGE_TUPLE_TYPE(lscalar ,void(*)(int&)       , std::tuple<int>        )
 TEST_STORAGE_TUPLE_TYPE(rscalar ,void(*)(int&&)      , std::tuple<int>        )
 TEST_STORAGE_TUPLE_TYPE(Ascalar ,void(*)(int[4])     , std::tuple<int*>       )
 TEST_STORAGE_TUPLE_TYPE(Alscalar,void(*)(int(&)[4])  , std::tuple<int(&)[4]>  )
-TEST_STORAGE_TUPLE_TYPE(Arscalar,void(*)(int(&&)[4]) , std::tuple<int(&&)[4]> )
+TEST_STORAGE_TUPLE_TYPE(Arscalar,void(*)(int(&&)[4]) , std::tuple<int(&)[4]> )
 TEST_STORAGE_TUPLE_TYPE(Achar   ,void(*)(char[4])    , std::tuple<char*>      )
 TEST_STORAGE_TUPLE_TYPE(Alchar  ,void(*)(char(&)[4]) , std::tuple<char(&)[4]> )
-TEST_STORAGE_TUPLE_TYPE(Archar  ,void(*)(char(&&)[4]), std::tuple<char(&&)[4]>)
+TEST_STORAGE_TUPLE_TYPE(Archar  ,void(*)(char(&&)[4]), std::tuple<char(&)[4]>)
 
 
 /**
@@ -977,6 +977,46 @@ TEST(OrderedCallTest, ref_array)
     std::allocator<void> a;
     {
         mpirpc::internal::ordered_call<decltype(&ordered_call_ref_array),std::allocator<void>> oc{&ordered_call_ref_array, a, a1};
+        oc();
+        int(&v)[3][4] = std::get<0>(oc.args_tuple);
+        ASSERT_EQ(2 ,v[0][0]);
+        ASSERT_EQ(3 ,v[0][1]);
+        ASSERT_EQ(4 ,v[0][2]);
+        ASSERT_EQ(5 ,v[0][3]);
+        ASSERT_EQ(6 ,v[1][0]);
+        ASSERT_EQ(7 ,v[1][1]);
+        ASSERT_EQ(8 ,v[1][2]);
+        ASSERT_EQ(9 ,v[1][3]);
+        ASSERT_EQ(10,v[2][0]);
+        ASSERT_EQ(11,v[2][1]);
+        ASSERT_EQ(12,v[2][2]);
+        ASSERT_EQ(13,v[2][3]);
+    } //make ordered_call go out of scope
+}
+
+void ordered_call_rref_array(int(&&v)[3][4])
+{
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+        for (std::size_t j = 0; j < 4; ++j)
+        {
+            std:: cout << v[i][j] << " ";
+            ++v[i][j];
+        }
+        std::cout << std::endl;
+    }
+}
+
+TEST(OrderedCallTest, rref_array)
+{
+    //int t[3][4]{1,2,3,4,5,6,7,8,9,10,11,12};
+    using T = int(&&)[3][4];
+    int *p = new int[3*4]{1,2,3,4,5,6,7,8,9,10,11,12};
+    //T a1 = std::move(t);
+    T a1 = (T) *p;
+    std::allocator<void> a;
+    {
+        mpirpc::internal::ordered_call<decltype(&ordered_call_rref_array),std::allocator<void>> oc{&ordered_call_rref_array, a, a1};
         oc();
         int(&v)[3][4] = std::get<0>(oc.args_tuple);
         ASSERT_EQ(2 ,v[0][0]);
