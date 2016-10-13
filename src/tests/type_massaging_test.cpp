@@ -1046,7 +1046,10 @@ public:
 void ordered_call_rref_array_Bar(Bar(&&v)[1])
 {
     std::cout << v[0].moved << " " << v << std::endl;
-    ASSERT_TRUE(v[0].moved);
+    /*
+     * This should be moving the array location, not the elements of the array itself
+     */
+    ASSERT_FALSE(v[0].moved);
 }
 
 TEST(OrderedCallTest, rref_array_Bar)
@@ -1064,6 +1067,228 @@ TEST(OrderedCallTest, rref_array_Bar)
         mpirpc::internal::ordered_call<decltype(&ordered_call_rref_array_Bar),std::allocator<void>> oc{&ordered_call_rref_array_Bar, a, a1};
         oc();
     } //make ordered_call go out of scope
+}
+
+template<typename MAT, typename NMAT, typename...Ts>
+struct get_argument;
+
+/*template<typename... Ts, typename MAT0, typename... MATs, typename NMAT0, typename... NMATs>
+struct get_argument<std::tuple<MAT0,MATs...>,std::tuple<NMAT0,NMATs...>,Ts...>
+{
+    constexpr std::size_t index = sizeof...(Ts)-1;
+    using type
+};*/
+
+/*template<typename MAT, typename Ts>
+struct get_argument<std::tuple<MAT>,std::tuple<>,Ts>
+{
+    static constexpr bool mat = true;
+    static constexpr std::size_t mat_index = 0;
+    static constexpr std::size_t index = 0;
+};*/
+
+/*template<typename NMAT, typename Ts>
+struct get_argument<std::tuple<>,std::tuple<NMAT>,Ts>
+{
+    static constexpr bool mat = true;
+    static constexpr std::size_t mat_index = 0;
+    static constexpr std::size_t index = 0;
+};*/
+
+template<std::size_t index, std::size_t size, typename... Ts>
+struct mats_index
+{
+    using type = std::tuple<std::enable_if_t<std::is_move_constructible<Ts>::value,Ts>...>;
+};
+
+/*template<typename... Ts, typename... MCTs, typename... NMCTs>
+constexpr decltype(auto) get_argument(std::size_t position, std::tuple<MCTs...> dct, std::tuple<MCTs...> ndct)
+{
+
+}*/
+
+template<typename T,bool MCT, std::size_t I>
+struct argument_info
+{
+    using type = T;
+    static constexpr bool mct = MCT;
+    static constexpr std::size_t index = I;
+};
+
+template<typename...>
+struct argument_storage_tuples;
+
+template<typename T, typename...Rest>
+struct argument_storage_tuples<T,Rest...>
+{
+    static constexpr bool condition = std::is_move_constructible<T>::value;
+    using mct_tuple = decltype(std::tuple_cat(std::conditional_t<condition,std::tuple<T>,std::tuple<>>{},typename argument_storage_tuples<Rest...>::mct_tuple{}));
+    using nmct_tuple = decltype(std::tuple_cat(std::conditional_t<!condition,std::tuple<T>,std::tuple<>>{},typename argument_storage_tuples<Rest...>::nmct_tuple{}));
+};
+
+template<>
+struct argument_storage_tuples<>
+{
+    using mct_tuple = std::tuple<>;
+    using nmct_tuple = std::tuple<>;
+};
+
+template<std::size_t MCTSize, std::size_t NMCTSize, typename...>
+struct argument_storage_info_impl;
+
+template<std::size_t MCTSize, std::size_t NMCTSize, typename T, typename... Rest>
+struct argument_storage_info_impl<MCTSize, NMCTSize, T, Rest...>
+{
+    static constexpr bool condition = std::is_move_constructible<T>::value;
+    using current_info =  argument_info<T,condition,
+                                        std::conditional_t<condition,
+                                                           std::integral_constant<std::size_t,MCTSize>,
+                                                           std::integral_constant<std::size_t,NMCTSize>
+                                                          >::value -
+                                        std::tuple_size<std::conditional_t<condition,
+                                                                           typename argument_storage_tuples<T,Rest...>::mct_tuple,
+                                                                           typename argument_storage_tuples<T,Rest...>::nmct_tuple
+                                                                          >>::value
+                                       >;
+    using info = decltype(std::tuple_cat(std::tuple<current_info>{},typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::info{}));
+};
+
+/*template<typename, typename...>
+struct filter_tuple;
+
+template<template <typename> typename... Predicates, typename T, typename... Rest>
+struct filter_tuple<std::tuple<Predicates...>,T,Rest...>
+{
+
+};*/
+
+template<std::size_t MCTSize, std::size_t NMCTSize>
+struct argument_storage_info_impl<MCTSize, NMCTSize>
+{
+    using info = std::tuple<>;
+};
+
+template<typename>
+struct argument_storage_info;
+
+template<typename... Ts>
+struct argument_storage_info<std::tuple<Ts...>>
+{
+    using mct_tuple = typename argument_storage_tuples<Ts...>::mct_tuple;
+    using nmct_tuple = typename argument_storage_tuples<Ts...>::nmct_tuple;
+    using info = typename argument_storage_info_impl<std::tuple_size<mct_tuple>::value,std::tuple_size<nmct_tuple>::value,Ts...>::info;
+};
+
+template<typename T>
+struct unmarshal_remote_helper;
+
+template<typename T, bool MCT>
+struct build_tuple_helper;
+
+template<typename T>
+struct build_tuple_helper<T,true>
+{
+    template<typename Allocator, typename Stream, typename U>
+    static T build(Allocator&& a, Stream&& s, U*)
+    {
+        return mpirpc::unmarshaller_remote<T>::unmarshal(a,s);
+    }
+};
+
+template<typename T>
+struct build_tuple_helper<T,false>
+{
+    template<typename Allocator, typename Stream>
+    static void build(Allocator &, Stream &s, T *t)
+    {
+        s >> t;
+    }
+};
+
+template<bool, typename, typename...>
+struct build_tuple_helper3;
+
+template<bool Enable, typename T, std::size_t I, typename...Ts, bool... MCTs, std::size_t... Is>
+struct build_tuple_helper3<Enable,argument_info<T, true, I>,argument_info<Ts,MCTs,Is>...>
+{
+    template<typename Allocator, typename Stream, typename Tuple>
+    static decltype(auto) build(Allocator &a, Stream &s, Tuple&&)
+    {
+        mpirpc::unmarshaller_remote<T>::unmarshal(a,s);
+    }
+};
+
+template<typename T, std::size_t I, typename...Ts, bool... MCTs, std::size_t... Is>
+struct build_tuple_helper3<argument_info<T, false, I>,argument_info<Ts,MCTs,Is>...>
+{
+    template<typename Allocator, typename Stream, typename Tuple>
+    static decltype(auto) build(Allocator &a, Stream &s, Tuple&& t)
+    {
+        s >> std::get<I>(t);
+        return build_tuple_helper3<argument_info<Ts,MCTs,Is>...>::build(a,s,t);
+    }
+};
+
+
+
+template<typename>
+struct build_tuple_helper2;
+
+template<typename... Ts>
+struct build_tuple_helper2<std::tuple<Ts...>>
+{
+    using R = typename argument_storage_info<std::tuple<Ts...>>::mct_tuple;
+    using NMCT = typename argument_storage_info<std::tuple<Ts...>>::nmct_tuple;
+    using info = typename argument_storage_info<std::tuple<Ts...>>::info;
+    template<std::size_t I>
+    using index = std::conditional_t<!std::tuple_element_t<I,info>::mct,
+                                     std::integral_constant<std::size_t,std::tuple_element_t<I,info>::index>,
+                                     std::integral_constant<std::size_t,0>
+                                    >;
+    template<typename Allocator, typename Stream, std::size_t... Is>
+    static R unmarshal(Allocator &&a, Stream&&s, NMCT& t, std::index_sequence<Is...>)
+    {
+        return R(build_tuple_helper3<Ts,std::is_move_constructible<Ts>::value>::build(a,s,&std::get<index<Is>::value>(t))...);
+    }
+};
+
+/*struct unmarshal_remote_helper<std::tuple<argument_stTs>>
+{
+    template<typename Allocator, typename Stream>
+    static std::tuple<Ts...> unmarshal(Allocator &a, Stream &s)
+    {
+        return mpirpc::internal::tuple_unmarshaller_remote<Ts...>::unmarshal(a,s);
+    }
+};*/
+
+/*template<typename...Args, typename StorageInfo = argument_storage_info<std::tuple<std::remove_reference_t<Args...>>>>
+typename StorageInfo::mct_tuple test_unmarshal(typename StorageInfo::nmct_tuple& t, Args&&... args)
+{
+    //typename StorageInfo::mct_tuple ret = unmarshal_into_tuple_helper
+}*/
+
+TEST(TypeGetter, blah)
+{
+    using type = typename argument_storage_info<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::mct_tuple;
+    using type2 = typename argument_storage_info<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::nmct_tuple;
+    using type3 = typename argument_storage_info<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::info;
+    mpirpc::parameter_stream p;
+    int ai[4]{2,4,6,8};
+    double ad[3]{4.6,8.2,9.1};
+    float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
+    p << 2.3 << 4 << 1.2f << ai << ad << true << af;
+    std::allocator<void> a;
+
+    //using storage_info = argument_info<std::remove_reference_t<Args>...>;
+    type2 t;
+    auto blah{build_tuple_helper2<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::unmarshal(a,p,t,std::make_index_sequence<7>{})};
+    //auto t = mpirpc::internal::autowrap(p1);
+    //std::cout << t.size() << std::endl;
+    //std::cout << "StorageTupleType: " << abi::__cxa_demangle(typeid(StorageTupleType).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(type).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(type2).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(type3).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(blah).name(),0,0,0) << std::endl;
 }
 
 int main(int argc, char **argv) {

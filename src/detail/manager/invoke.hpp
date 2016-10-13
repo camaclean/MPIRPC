@@ -159,10 +159,10 @@ struct forward_parameter_type_helper
     template<std::size_t Index, typename...Args>
     auto get(Args&&...args)
     {
-        return std::get<Index>(std::make_tuple(args...));
+        return std::get<Index>(std::make_tuple(std::forward<Args(args)...));
     }
 };
-};
+}
 
 template<typename MessageInterface, template<typename> typename Allocator>
 template<typename Lambda, typename... Args>
