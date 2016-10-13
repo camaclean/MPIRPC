@@ -1005,6 +1005,18 @@ void ordered_call_rref_array(int(&&v)[3][4])
         }
         std::cout << std::endl;
     }
+    ASSERT_EQ(2 ,v[0][0]);
+    ASSERT_EQ(3 ,v[0][1]);
+    ASSERT_EQ(4 ,v[0][2]);
+    ASSERT_EQ(5 ,v[0][3]);
+    ASSERT_EQ(6 ,v[1][0]);
+    ASSERT_EQ(7 ,v[1][1]);
+    ASSERT_EQ(8 ,v[1][2]);
+    ASSERT_EQ(9 ,v[1][3]);
+    ASSERT_EQ(10,v[2][0]);
+    ASSERT_EQ(11,v[2][1]);
+    ASSERT_EQ(12,v[2][2]);
+    ASSERT_EQ(13,v[2][3]);
 }
 
 TEST(OrderedCallTest, rref_array)
@@ -1018,19 +1030,39 @@ TEST(OrderedCallTest, rref_array)
     {
         mpirpc::internal::ordered_call<decltype(&ordered_call_rref_array),std::allocator<void>> oc{&ordered_call_rref_array, a, a1};
         oc();
-        int(&v)[3][4] = std::get<0>(oc.args_tuple);
-        ASSERT_EQ(2 ,v[0][0]);
-        ASSERT_EQ(3 ,v[0][1]);
-        ASSERT_EQ(4 ,v[0][2]);
-        ASSERT_EQ(5 ,v[0][3]);
-        ASSERT_EQ(6 ,v[1][0]);
-        ASSERT_EQ(7 ,v[1][1]);
-        ASSERT_EQ(8 ,v[1][2]);
-        ASSERT_EQ(9 ,v[1][3]);
-        ASSERT_EQ(10,v[2][0]);
-        ASSERT_EQ(11,v[2][1]);
-        ASSERT_EQ(12,v[2][2]);
-        ASSERT_EQ(13,v[2][3]);
+    } //make ordered_call go out of scope
+}
+
+class Bar
+{
+public:
+    Bar() : moved(false) {}
+    Bar(const Bar&) = delete;
+    Bar(Bar&) = delete;
+    Bar(Bar&&) { moved = true; }
+    bool moved;
+};
+
+void ordered_call_rref_array_Bar(Bar(&&v)[1])
+{
+    std::cout << v[0].moved << " " << v << std::endl;
+    ASSERT_TRUE(v[0].moved);
+}
+
+TEST(OrderedCallTest, rref_array_Bar)
+{
+    using T = Bar(&&)[1];
+    Bar *p = new Bar[1]();
+    Bar t[1]{};
+    std::cout << &t << std::endl;
+    std::cout << p << std::endl;
+    ordered_call_rref_array_Bar(std::move(t));
+    //T a1 = std::move(t);
+    T a1 = (T) *p;
+    std::allocator<void> a;
+    {
+        mpirpc::internal::ordered_call<decltype(&ordered_call_rref_array_Bar),std::allocator<void>> oc{&ordered_call_rref_array_Bar, a, a1};
+        oc();
     } //make ordered_call go out of scope
 }
 

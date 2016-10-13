@@ -33,7 +33,7 @@ struct array_destroy_helper
     template<typename Allocator>
     static void destroy(Allocator&& a, T& v)
     {
-        std::cout << "destroying " << v << std::endl;
+        std::cout << "destroying " << typeid(v).name() <<  std::endl;
         using NA = typename std::allocator_traits<std::remove_reference_t<Allocator>>::template rebind_alloc<T>;
         NA na(a);
         std::allocator_traits<NA>::destroy(na,&v);
