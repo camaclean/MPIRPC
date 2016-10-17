@@ -1115,6 +1115,15 @@ struct argument_info
     static constexpr std::size_t index = I;
 };
 
+template<typename IS1, typename IS2>
+struct integer_sequence_cat;
+
+template<typename Int, Int... I1s, Int... I2s>
+struct integer_sequence_cat<std::integer_sequence<Int, I1s...>, std::integer_sequence<Int, I2s...>>
+{
+    using type = std::integer_sequence<Int,I1s...,I2s...>;
+};
+
 template<typename...>
 struct argument_storage_tuples;
 
@@ -1140,16 +1149,28 @@ template<std::size_t MCTSize, std::size_t NMCTSize, typename T, typename... Rest
 struct argument_storage_info_impl<MCTSize, NMCTSize, T, Rest...>
 {
     static constexpr bool condition = std::is_move_constructible<T>::value;
-    using current_info =  argument_info<T,condition,
-                                        std::conditional_t<condition,
+    static constexpr std::size_t param_index = MCTSize + NMCTSize - sizeof...(Rest) - 1;
+    static constexpr std::size_t index = std::conditional_t<condition,
                                                            std::integral_constant<std::size_t,MCTSize>,
                                                            std::integral_constant<std::size_t,NMCTSize>
                                                           >::value -
-                                        std::tuple_size<std::conditional_t<condition,
-                                                                           typename argument_storage_tuples<T,Rest...>::mct_tuple,
-                                                                           typename argument_storage_tuples<T,Rest...>::nmct_tuple
-                                                                          >>::value
-                                       >;
+                                         std::tuple_size<std::conditional_t<condition,
+                                                                            typename argument_storage_tuples<T,Rest...>::mct_tuple,
+                                                                            typename argument_storage_tuples<T,Rest...>::nmct_tuple
+                                                                           >>::value;
+    using current_info =  argument_info<T,condition,index>;
+    using mct_indexes = std::conditional_t<condition,
+                                           typename integer_sequence_cat<std::index_sequence<param_index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::mct_indexes>::type,
+                                           typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::mct_indexes
+                                          >;
+    using nmct_indexes = std::conditional_t<!condition,
+                                            typename integer_sequence_cat<std::index_sequence<param_index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_indexes>::type,
+                                            typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_indexes
+                                           >;
+    using nmct_tail = std::conditional_t<(mct_indexes::size == 0 && !condition),
+                                         typename integer_sequence_cat<std::index_sequence<param_index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_tail>::type,
+                                         typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_tail
+                                        >;
     using info = decltype(std::tuple_cat(std::tuple<current_info>{},typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::info{}));
 };
 
@@ -1166,6 +1187,9 @@ template<std::size_t MCTSize, std::size_t NMCTSize>
 struct argument_storage_info_impl<MCTSize, NMCTSize>
 {
     using info = std::tuple<>;
+    using mct_indexes = std::index_sequence<>;
+    using nmct_indexes = std::index_sequence<>;
+    using nmct_tail = std::index_sequence<>;
 };
 
 template<typename>
@@ -1176,7 +1200,12 @@ struct argument_storage_info<std::tuple<Ts...>>
 {
     using mct_tuple = typename argument_storage_tuples<Ts...>::mct_tuple;
     using nmct_tuple = typename argument_storage_tuples<Ts...>::nmct_tuple;
-    using info = typename argument_storage_info_impl<std::tuple_size<mct_tuple>::value,std::tuple_size<nmct_tuple>::value,Ts...>::info;
+    
+    using info_type =  argument_storage_info_impl<std::tuple_size<mct_tuple>::value,std::tuple_size<nmct_tuple>::value,Ts...>;
+    using info = typename info_type::info;
+    using mct_indexes = typename info_type::mct_indexes;
+    using nmct_indexes = typename info_type::nmct_indexes;
+    using nmct_tail = typename info_type::nmct_tail;
 };
 
 template<typename T>
@@ -1205,7 +1234,7 @@ struct build_tuple_helper<T,false>
     }
 };
 
-template<bool, typename, typename...>
+/*template<bool, typename, typename...>
 struct build_tuple_helper3;
 
 template<bool Enable, typename T, std::size_t I, typename...Ts, bool... MCTs, std::size_t... Is>
@@ -1227,7 +1256,7 @@ struct build_tuple_helper3<argument_info<T, false, I>,argument_info<Ts,MCTs,Is>.
         s >> std::get<I>(t);
         return build_tuple_helper3<argument_info<Ts,MCTs,Is>...>::build(a,s,t);
     }
-};
+};*/
 
 
 
@@ -1248,7 +1277,7 @@ struct build_tuple_helper2<std::tuple<Ts...>>
     template<typename Allocator, typename Stream, std::size_t... Is>
     static R unmarshal(Allocator &&a, Stream&&s, NMCT& t, std::index_sequence<Is...>)
     {
-        return R(build_tuple_helper3<Ts,std::is_move_constructible<Ts>::value>::build(a,s,&std::get<index<Is>::value>(t))...);
+        return R();//(build_tuple_helper3<Ts,std::is_move_constructible<Ts>::value>::build(a,s,&std::get<index<Is>::value>(t))...);
     }
 };
 
@@ -1269,9 +1298,13 @@ typename StorageInfo::mct_tuple test_unmarshal(typename StorageInfo::nmct_tuple&
 
 TEST(TypeGetter, blah)
 {
-    using type = typename argument_storage_info<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::mct_tuple;
-    using type2 = typename argument_storage_info<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::nmct_tuple;
-    using type3 = typename argument_storage_info<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::info;
+    using tup = std::tuple<double,int,float,int[4],double[3],bool,float[5]>;
+    using type = typename argument_storage_info<tup>::mct_tuple;
+    using type2 = typename argument_storage_info<tup>::nmct_tuple;
+    using type3 = typename argument_storage_info<tup>::info;
+    using type4 = typename argument_storage_info<tup>::mct_indexes;
+    using type5 = typename argument_storage_info<tup>::nmct_indexes;
+    using type6 = typename argument_storage_info<tup>::nmct_tail;
     mpirpc::parameter_stream p;
     int ai[4]{2,4,6,8};
     double ad[3]{4.6,8.2,9.1};
@@ -1281,14 +1314,18 @@ TEST(TypeGetter, blah)
 
     //using storage_info = argument_info<std::remove_reference_t<Args>...>;
     type2 t;
-    auto blah{build_tuple_helper2<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::unmarshal(a,p,t,std::make_index_sequence<7>{})};
+    //auto blah{build_tuple_helper2<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::unmarshal(a,p,t,std::make_index_sequence<7>{})};
     //auto t = mpirpc::internal::autowrap(p1);
     //std::cout << t.size() << std::endl;
     //std::cout << "StorageTupleType: " << abi::__cxa_demangle(typeid(StorageTupleType).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(tup).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type2).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type3).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(blah).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(type4).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(type5).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(type6).name(),0,0,0) << std::endl;
+    //std::cout << abi::__cxa_demangle(typeid(blah).name(),0,0,0) << std::endl;
 }
 
 int main(int argc, char **argv) {
