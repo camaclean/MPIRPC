@@ -1124,6 +1124,54 @@ struct integer_sequence_cat<std::integer_sequence<Int, I1s...>, std::integer_seq
     using type = std::integer_sequence<Int,I1s...,I2s...>;
 };
 
+template<typename Int, Int...Is>
+struct get_last_integer_sequence;
+
+template<typename Int, Int I1, Int I2, Int...Is>
+struct get_last_integer_sequence<Int,I1,I2,Is...>
+{
+    constexpr static Int last = get_last_integer_sequence<Int,I2,Is...>::last;
+};
+
+template<typename Int, Int I>
+struct get_last_integer_sequence<Int,I>
+{
+    constexpr static Int last = I;
+};
+
+template<std::size_t Pos, typename Int, Int...Is>
+struct get_integer_sequence_clamped_impl;
+
+template<std::size_t Pos, typename Int, Int I1, Int I2, Int... Is>
+struct get_integer_sequence_clamped_impl<Pos,Int,I1,I2,Is...>
+{
+    constexpr static Int value = get_integer_sequence_clamped_impl<Pos-1,Int,I2,Is...>::value;
+};
+
+template<typename Int, Int I1, Int I2, Int...Is>
+struct get_integer_sequence_clamped_impl<0,Int,I1,I2,Is...>
+{
+    constexpr static Int value = I1;
+};
+
+template<std::size_t Pos, typename Int, Int I>
+struct get_integer_sequence_clamped_impl<Pos,Int,I>
+{
+    constexpr static Int value = I;
+};
+
+template<std::size_t Pos, typename Int>
+struct get_integer_sequence_clamped_impl<Pos,Int>
+{
+    constexpr static Int value = 0;
+};
+
+template<std::size_t Pos, typename Int, Int... Is>
+constexpr std::size_t get_clamped(std::integer_sequence<Int,Is...>)
+{
+    return get_integer_sequence_clamped_impl<Pos,Int,Is...>::value;
+}
+
 template<typename...>
 struct argument_storage_tuples;
 
@@ -1325,6 +1373,15 @@ TEST(TypeGetter, blah)
     std::cout << abi::__cxa_demangle(typeid(type4).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type5).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type6).name(),0,0,0) << std::endl;
+    std::cout << get_clamped<0>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << get_clamped<2>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << get_clamped<4>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << get_clamped<6>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << get_clamped<4>(std::make_index_sequence<0>()) << std::endl;
+    std::cout << get_clamped<0>(type4()) << std::endl;
+    std::cout << get_clamped<2>(type4()) << std::endl;
+    std::cout << get_clamped<3>(type4()) << std::endl;
+    std::cout << get_clamped<5>(type4()) << std::endl;
     //std::cout << abi::__cxa_demangle(typeid(blah).name(),0,0,0) << std::endl;
 }
 
