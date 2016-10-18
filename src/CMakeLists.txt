@@ -5,7 +5,7 @@ set(mpirpc_VERSION_MINOR 1)
 set(mpirpc_VERSION_PATCH 0)
 option(USE_LTO "Build with Link Time Optimizations" OFF)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -O3 -march=native -g -ggdb")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++1y -O3 -march=native -g -ggdb")
 
 set(ENV{OMPI_CC} gcc-6.2.0)
 set(ENV{OMPI_CXX} g++-6.2.0)

@@ -1107,6 +1107,9 @@ constexpr decltype(auto) get_argument(std::size_t position, std::tuple<MCTs...> 
 
 }*/
 
+template<typename...Tuples>
+using tuple_cat_type = decltype(std::tuple_cat(Tuples{}...));
+
 template<typename T,bool MCT, std::size_t I>
 struct argument_info
 {
@@ -1139,37 +1142,58 @@ struct get_last_integer_sequence<Int,I>
     constexpr static Int last = I;
 };
 
-template<std::size_t Pos, typename Int, Int...Is>
+template<std::size_t Pos, typename Int, Int Max, Int...Is>
 struct get_integer_sequence_clamped_impl;
 
-template<std::size_t Pos, typename Int, Int I1, Int I2, Int... Is>
-struct get_integer_sequence_clamped_impl<Pos,Int,I1,I2,Is...>
+template<std::size_t Pos, typename Int, Int Max, Int I, Int... Is>
+struct get_integer_sequence_clamped_impl<Pos,Int,Max,I,Is...>
 {
-    constexpr static Int value = get_integer_sequence_clamped_impl<Pos-1,Int,I2,Is...>::value;
+    constexpr static Int value = get_integer_sequence_clamped_impl<Pos-1,Int,Max,Is...>::value;
 };
 
-template<typename Int, Int I1, Int I2, Int...Is>
-struct get_integer_sequence_clamped_impl<0,Int,I1,I2,Is...>
-{
-    constexpr static Int value = I1;
-};
-
-template<std::size_t Pos, typename Int, Int I>
-struct get_integer_sequence_clamped_impl<Pos,Int,I>
+template<typename Int, Int I, Int Max, Int...Is>
+struct get_integer_sequence_clamped_impl<0,Int,Max,I,Is...>
 {
     constexpr static Int value = I;
 };
 
-template<std::size_t Pos, typename Int>
-struct get_integer_sequence_clamped_impl<Pos,Int>
+template<std::size_t Pos, typename Int, Int Max>
+struct get_integer_sequence_clamped_impl<Pos,Int,Max>
 {
-    constexpr static Int value = 0;
+    constexpr static Int value = Max;
 };
 
-template<std::size_t Pos, typename Int, Int... Is>
-constexpr std::size_t get_clamped(std::integer_sequence<Int,Is...>)
+template<std::size_t Pos, typename Int, Int Max, Int... Is>
+constexpr Int get_clamped(std::integer_sequence<Int,Is...>)
 {
-    return get_integer_sequence_clamped_impl<Pos,Int,Is...>::value;
+    return get_integer_sequence_clamped_impl<Pos,Int,Max,Is...>::value;
+}
+
+template<std::size_t Pos, std::size_t Max, std::size_t... Is>
+constexpr std::size_t get_clamped(std::integer_sequence<std::size_t, Is...>)
+{
+    return get_clamped<Pos,std::size_t,Max>(std::integer_sequence<std::size_t,Is...>());
+}
+
+template<std::size_t Pos, typename Int, Int... Is>
+struct get_integer_sequence_impl;
+
+template<std::size_t Pos, typename Int, Int I, Int... Is>
+struct get_integer_sequence_impl<Pos,Int,I,Is...>
+{
+    constexpr static Int value = get_integer_sequence_impl<Pos-1,Int,Is...>::value;
+};
+
+template<typename Int, Int I, Int... Is>
+struct get_integer_sequence_impl<0,Int,I,Is...>
+{
+    constexpr static Int value = I;
+};
+
+template<std::size_t Pos, typename Int, Int...Is>
+constexpr Int get(std::integer_sequence<Int,Is...>)
+{
+    return get_integer_sequence_impl<Pos,Int,Is...>::value;
 }
 
 template<typename...>
@@ -1179,8 +1203,8 @@ template<typename T, typename...Rest>
 struct argument_storage_tuples<T,Rest...>
 {
     static constexpr bool condition = std::is_move_constructible<T>::value;
-    using mct_tuple = decltype(std::tuple_cat(std::conditional_t<condition,std::tuple<T>,std::tuple<>>{},typename argument_storage_tuples<Rest...>::mct_tuple{}));
-    using nmct_tuple = decltype(std::tuple_cat(std::conditional_t<!condition,std::tuple<T>,std::tuple<>>{},typename argument_storage_tuples<Rest...>::nmct_tuple{}));
+    using mct_tuple = tuple_cat_type<std::conditional_t<condition,std::tuple<T>,std::tuple<>>,typename argument_storage_tuples<Rest...>::mct_tuple>;
+    using nmct_tuple = tuple_cat_type<std::conditional_t<!condition,std::tuple<T>,std::tuple<>>,typename argument_storage_tuples<Rest...>::nmct_tuple>;
 };
 
 template<>
@@ -1215,6 +1239,7 @@ struct argument_storage_info_impl<MCTSize, NMCTSize, T, Rest...>
                                             typename integer_sequence_cat<std::index_sequence<param_index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_indexes>::type,
                                             typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_indexes
                                            >;
+    using split_indexes = typename integer_sequence_cat<std::index_sequence<index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::split_indexes>::type;
     using nmct_tail = std::conditional_t<(mct_indexes::size == 0 && !condition),
                                          typename integer_sequence_cat<std::index_sequence<param_index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_tail>::type,
                                          typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_tail
@@ -1237,6 +1262,7 @@ struct argument_storage_info_impl<MCTSize, NMCTSize>
     using info = std::tuple<>;
     using mct_indexes = std::index_sequence<>;
     using nmct_indexes = std::index_sequence<>;
+    using split_indexes = std::index_sequence<>;
     using nmct_tail = std::index_sequence<>;
 };
 
@@ -1253,6 +1279,7 @@ struct argument_storage_info<std::tuple<Ts...>>
     using info = typename info_type::info;
     using mct_indexes = typename info_type::mct_indexes;
     using nmct_indexes = typename info_type::nmct_indexes;
+    using split_indexes = typename info_type::split_indexes;
     using nmct_tail = typename info_type::nmct_tail;
 };
 
@@ -1282,67 +1309,92 @@ struct build_tuple_helper<T,false>
     }
 };
 
-/*template<bool, typename, typename...>
-struct build_tuple_helper3;
 
-template<bool Enable, typename T, std::size_t I, typename...Ts, bool... MCTs, std::size_t... Is>
-struct build_tuple_helper3<Enable,argument_info<T, true, I>,argument_info<Ts,MCTs,Is>...>
+template<std::size_t TupleIndex, typename Allocator, typename Stream, typename... Ts>
+void unmarshal_nmct_impl2(Allocator &a, Stream &s, std::tuple<Ts...>& t)
 {
-    template<typename Allocator, typename Stream, typename Tuple>
-    static decltype(auto) build(Allocator &a, Stream &s, Tuple&&)
-    {
-        mpirpc::unmarshaller_remote<T>::unmarshal(a,s);
-    }
-};
+    //std::cout << "unmarshalling index " << ArgIndex << " with tuple index " << TupleIndex << " and type " << abi::__cxa_demangle(typeid(std::get<TupleIndex>(t)).name(),0,0,0) << std::endl;
+    s >> std::get<TupleIndex>(t);
+}
 
-template<typename T, std::size_t I, typename...Ts, bool... MCTs, std::size_t... Is>
-struct build_tuple_helper3<argument_info<T, false, I>,argument_info<Ts,MCTs,Is>...>
+template<std::size_t NMCT_Begin, typename Allocator, typename Stream, typename... NMCTs, std::size_t... Is, std::size_t... SplitTupleIs>
+void unmarshal_nmct_impl(Allocator &a, Stream &s, std::tuple<NMCTs...> &t, std::index_sequence<Is...>, std::index_sequence<SplitTupleIs...>)
 {
-    template<typename Allocator, typename Stream, typename Tuple>
-    static decltype(auto) build(Allocator &a, Stream &s, Tuple&& t)
-    {
-        s >> std::get<I>(t);
-        return build_tuple_helper3<argument_info<Ts,MCTs,Is>...>::build(a,s,t);
-    }
-};*/
+    using swallow = int[];
+    (void)swallow{(unmarshal_nmct_impl2<get<NMCT_Begin+Is>(std::index_sequence<SplitTupleIs...>())>(a,s,t), 0)...};
+}
 
+template<std::size_t NMCT_Begin, std::size_t NMCT_End, typename Allocator, typename Stream, typename... NMCTs, std::size_t... SplitTupleIs, std::enable_if_t<(NMCT_Begin < NMCT_End)>* = nullptr>
+void unmarshal_nmct(Allocator &a, Stream &s, std::tuple<NMCTs...> &t, std::index_sequence<SplitTupleIs...>)
+{
+    unmarshal_nmct_impl<NMCT_Begin>(a,s,t,std::make_index_sequence<NMCT_End-NMCT_Begin>(),std::index_sequence<SplitTupleIs...>());
+}
 
+template<std::size_t NMCT_Begin, std::size_t NMCT_End, typename Allocator, typename Stream, typename... NMCTs, std::size_t... SplitTupleIs, std::enable_if_t<(NMCT_Begin >= NMCT_End)>* = nullptr>
+void unmarshal_nmct(Allocator &, Stream &, std::tuple<NMCTs...> &, std::index_sequence<SplitTupleIs...>)
+{}
 
-template<typename>
-struct build_tuple_helper2;
+template<std::size_t NMCT_Begin, std::size_t NMCT_End, typename T, typename Allocator, typename Stream, typename... NMCTs, std::size_t... SplitTupleIs>
+T unmarshal_into_split_tuples_impl2(Allocator &a, Stream&s, std::tuple<NMCTs...> &t,std::index_sequence<SplitTupleIs...>)
+{
+    //std::cout << "unmarshalling index " << ArgIndex << " of type " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+    //std::cout << "unmarshalling nmct range: " << NMCT_Begin << " " << NMCT_End << std::endl;
+    T ret = mpirpc::unmarshaller_remote<T>::unmarshal(a,s);
+    unmarshal_nmct<NMCT_Begin,NMCT_End>(a,s,t,std::index_sequence<SplitTupleIs...>());
+    return ret;
+}
+
+template<std::size_t ArgLen, typename Allocator, typename Stream, typename...NMCTs, typename...MCTs, std::size_t... ArgIs, std::size_t... MCT_Is, std::size_t...SplitTupleIs>
+std::tuple<MCTs...> unmarshal_into_split_tuples_impl(
+         Allocator &a,
+         Stream &s,
+         std::tuple<NMCTs...> &t,
+         std::index_sequence<ArgIs...>,
+         std::index_sequence<MCT_Is...>,
+         std::index_sequence<SplitTupleIs...>,
+         std::tuple<MCTs...>
+     )
+{
+    return std::tuple<MCTs...>{unmarshal_into_split_tuples_impl2<ArgIs+1,get_clamped<MCT_Is+1,std::size_t,ArgLen>(std::index_sequence<ArgIs...>()),MCTs>(a,s,t,std::index_sequence<SplitTupleIs...>())...};
+}
+
+/*
+template<typename Allocator, typename Stream, typename...Ts>
+auto unmarshal_into_split_tuples(Allocator &a, Stream &s, typename argument_storage_info<std::tuple<Ts...>>::nmct_tuple& nmct_tuple)
+    -> typename argument_storage_info<std::tuple<Ts...>>::mct_tuple
+{
+    using mct_tuple_type = typename argument_storage_info<std::tuple<Ts...>>::mct_tuple;
+    using nmct_tuple_type = typename argument_storage_info<std::tuple<Ts...>>::nmct_tuple;
+    using mct_indexes = typename argument_storage_info<std::tuple<Ts...>>::mct_indexes;
+    using split_indexes = typename argument_storage_info<std::tuple<Ts...>>::split_indexes;
+    constexpr std::size_t mct_index_size = mct_indexes::size();
+    return unmarshal_into_split_tuples_impl<sizeof...(Ts)>(a,s,nmct_tuple,mct_indexes(),std::make_index_sequence<mct_index_size>(),split_indexes(),mct_tuple_type());
+}*/
 
 template<typename... Ts>
-struct build_tuple_helper2<std::tuple<Ts...>>
+struct unmarshal_tuples
 {
-    using R = typename argument_storage_info<std::tuple<Ts...>>::mct_tuple;
-    using NMCT = typename argument_storage_info<std::tuple<Ts...>>::nmct_tuple;
-    using info = typename argument_storage_info<std::tuple<Ts...>>::info;
-    template<std::size_t I>
-    using index = std::conditional_t<!std::tuple_element_t<I,info>::mct,
-                                     std::integral_constant<std::size_t,std::tuple_element_t<I,info>::index>,
-                                     std::integral_constant<std::size_t,0>
-                                    >;
-    template<typename Allocator, typename Stream, std::size_t... Is>
-    static R unmarshal(Allocator &&a, Stream&&s, NMCT& t, std::index_sequence<Is...>)
+    using mct_tuple_type = typename argument_storage_info<std::tuple<Ts...>>::mct_tuple;
+    using nmct_tuple_type = typename argument_storage_info<std::tuple<Ts...>>::nmct_tuple;
+    using mct_indexes = typename argument_storage_info<std::tuple<Ts...>>::mct_indexes;
+    using split_indexes = typename argument_storage_info<std::tuple<Ts...>>::split_indexes;
+
+    template<typename Allocator, typename Stream>
+    static mct_tuple_type unmarshal(Allocator &a, Stream &s, nmct_tuple_type& nmct_tuple)
     {
-        return R();//(build_tuple_helper3<Ts,std::is_move_constructible<Ts>::value>::build(a,s,&std::get<index<Is>::value>(t))...);
+
+         constexpr std::size_t mct_index_size = mct_indexes::size();
+         return unmarshal_into_split_tuples_impl<sizeof...(Ts)>(a,s,nmct_tuple,mct_indexes(),std::make_index_sequence<mct_index_size>(),split_indexes(),mct_tuple_type());
     }
 };
 
-/*struct unmarshal_remote_helper<std::tuple<argument_stTs>>
+void foo(std::size_t len, void *l)
 {
-    template<typename Allocator, typename Stream>
-    static std::tuple<Ts...> unmarshal(Allocator &a, Stream &s)
-    {
-        return mpirpc::internal::tuple_unmarshaller_remote<Ts...>::unmarshal(a,s);
-    }
-};*/
-
-/*template<typename...Args, typename StorageInfo = argument_storage_info<std::tuple<std::remove_reference_t<Args...>>>>
-typename StorageInfo::mct_tuple test_unmarshal(typename StorageInfo::nmct_tuple& t, Args&&... args)
-{
-    //typename StorageInfo::mct_tuple ret = unmarshal_into_tuple_helper
-}*/
+    int(*v)[len] = static_cast<int(*)[len]>(l);
+    for (std::size_t i = 0; i < len; ++i)
+        std::cout << v[0][i] << " ";
+    std::cout << std::endl;
+}
 
 TEST(TypeGetter, blah)
 {
@@ -1353,6 +1405,7 @@ TEST(TypeGetter, blah)
     using type4 = typename argument_storage_info<tup>::mct_indexes;
     using type5 = typename argument_storage_info<tup>::nmct_indexes;
     using type6 = typename argument_storage_info<tup>::nmct_tail;
+    using type7 = typename argument_storage_info<tup>::split_indexes;
     mpirpc::parameter_stream p;
     int ai[4]{2,4,6,8};
     double ad[3]{4.6,8.2,9.1};
@@ -1360,12 +1413,7 @@ TEST(TypeGetter, blah)
     p << 2.3 << 4 << 1.2f << ai << ad << true << af;
     std::allocator<void> a;
 
-    //using storage_info = argument_info<std::remove_reference_t<Args>...>;
     type2 t;
-    //auto blah{build_tuple_helper2<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::unmarshal(a,p,t,std::make_index_sequence<7>{})};
-    //auto t = mpirpc::internal::autowrap(p1);
-    //std::cout << t.size() << std::endl;
-    //std::cout << "StorageTupleType: " << abi::__cxa_demangle(typeid(StorageTupleType).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(tup).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type2).name(),0,0,0) << std::endl;
@@ -1373,15 +1421,27 @@ TEST(TypeGetter, blah)
     std::cout << abi::__cxa_demangle(typeid(type4).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type5).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type6).name(),0,0,0) << std::endl;
-    std::cout << get_clamped<0>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << get_clamped<2>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << get_clamped<4>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << get_clamped<6>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << get_clamped<4>(std::make_index_sequence<0>()) << std::endl;
-    std::cout << get_clamped<0>(type4()) << std::endl;
-    std::cout << get_clamped<2>(type4()) << std::endl;
-    std::cout << get_clamped<3>(type4()) << std::endl;
-    std::cout << get_clamped<5>(type4()) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(type7).name(),0,0,0) << std::endl;
+    std::cout << get_clamped<0,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << get_clamped<2,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << get_clamped<4,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << get_clamped<6,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << get_clamped<4,std::size_t,8>(std::make_index_sequence<0>()) << std::endl;
+    std::cout << get_clamped<0,std::size_t,6>(type4()) << std::endl;
+    std::cout << get_clamped<2,std::size_t,6>(type4()) << std::endl;
+    std::cout << get_clamped<3,std::size_t,6>(type4()) << std::endl;
+    std::cout << get_clamped<5,std::size_t,6>(type4()) << std::endl;
+    type res = unmarshal_tuples<double,int,float,int[4],double[3],bool,float[5]>::unmarshal(a,p,t);
+    ASSERT_EQ(2.3,std::get<0>(res));
+    ASSERT_EQ(4,std::get<1>(res));
+    ASSERT_EQ(1.2f, std::get<2>(res));
+    ASSERT_EQ(true, std::get<3>(res));
+    for(std::size_t i = 0; i < 4; ++i)
+        ASSERT_EQ(ai[i],std::get<0>(t)[i]);
+    for(std::size_t i = 0; i < 3; ++i)
+        ASSERT_EQ(ad[i],std::get<1>(t)[i]);
+    for(std::size_t i = 0; i < 5; ++i)
+        ASSERT_EQ(af[i],std::get<2>(t)[i]);
     //std::cout << abi::__cxa_demangle(typeid(blah).name(),0,0,0) << std::endl;
 }
 

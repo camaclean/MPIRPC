@@ -264,8 +264,8 @@ mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, mpirpc::point
     return in;
 }
 
-template<typename T>
-mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, T* t)
+template<typename T, typename U = std::decay_t<T>, std::enable_if_t<!std::is_array<std::remove_reference_t<T>>::value>* = nullptr>
+mpirpc::parameter_stream& operator>>(mpirpc::parameter_stream& in, U t)
 {
     std::size_t size;
     in >> size;
