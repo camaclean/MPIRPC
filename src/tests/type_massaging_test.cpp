@@ -818,7 +818,7 @@ TEST(FnTypeMarshaller, la5T_lpT)
     std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
 }
 
-TEST(FnTypeMarshaller, la5T_la5T)
+/*TEST(FnTypeMarshaller, la5T_la5T)
 {
     using F = void(*)(double(&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
@@ -902,7 +902,7 @@ TEST(FnTypeMarshaller, la5cT_la5cT)
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
     NewAllocatorType na(a);
     std::allocator_traits<std::allocator<double>>::deallocate(na,(double*) a1,5);
-}
+}*/
 
 void ordered_call_basic_test() {}
 
@@ -1240,11 +1240,7 @@ struct argument_storage_info_impl<MCTSize, NMCTSize, T, Rest...>
                                             typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_indexes
                                            >;
     using split_indexes = typename integer_sequence_cat<std::index_sequence<index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::split_indexes>::type;
-    using nmct_tail = std::conditional_t<(mct_indexes::size == 0 && !condition),
-                                         typename integer_sequence_cat<std::index_sequence<param_index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_tail>::type,
-                                         typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_tail
-                                        >;
-    using info = decltype(std::tuple_cat(std::tuple<current_info>{},typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::info{}));
+    using info = tuple_cat_type<std::tuple<current_info>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::info>;
 };
 
 /*template<typename, typename...>
@@ -1263,7 +1259,6 @@ struct argument_storage_info_impl<MCTSize, NMCTSize>
     using mct_indexes = std::index_sequence<>;
     using nmct_indexes = std::index_sequence<>;
     using split_indexes = std::index_sequence<>;
-    using nmct_tail = std::index_sequence<>;
 };
 
 template<typename>
@@ -1280,7 +1275,7 @@ struct argument_storage_info<std::tuple<Ts...>>
     using mct_indexes = typename info_type::mct_indexes;
     using nmct_indexes = typename info_type::nmct_indexes;
     using split_indexes = typename info_type::split_indexes;
-    using nmct_tail = typename info_type::nmct_tail;
+    constexpr static std::size_t size = sizeof...(Ts);
 };
 
 template<typename T>
@@ -1324,7 +1319,7 @@ void unmarshal_nmct_impl(Allocator &a, Stream &s, std::tuple<NMCTs...> &t, std::
     (void)swallow{(unmarshal_nmct_impl2<get<NMCT_Begin+Is>(std::index_sequence<SplitTupleIs...>())>(a,s,t), 0)...};
 }
 
-template<std::size_t NMCT_Begin, std::size_t NMCT_End, typename Allocator, typename Stream, typename... NMCTs, std::size_t... SplitTupleIs, std::enable_if_t<(NMCT_Begin < NMCT_End)>* = nullptr>
+template<std::size_t NMCT_Begin, std::size_t NMCT_End, typename Allocator, typename Stream, typename... NMCTs, std::size_t... SplitTupleIs, std::enable_if_t<!(NMCT_Begin >= NMCT_End)>* = nullptr>
 void unmarshal_nmct(Allocator &a, Stream &s, std::tuple<NMCTs...> &t, std::index_sequence<SplitTupleIs...>)
 {
     unmarshal_nmct_impl<NMCT_Begin>(a,s,t,std::make_index_sequence<NMCT_End-NMCT_Begin>(),std::index_sequence<SplitTupleIs...>());
@@ -1388,15 +1383,96 @@ struct unmarshal_tuples
     }
 };
 
-void foo(std::size_t len, void *l)
+template<std::size_t I, bool MCT, typename MTuple, typename NMTuple, std::enable_if_t<MCT>* = nullptr>
+decltype(auto) get_tuples(MTuple&& m, NMTuple&&)
 {
-    int(*v)[len] = static_cast<int(*)[len]>(l);
-    for (std::size_t i = 0; i < len; ++i)
-        std::cout << v[0][i] << " ";
-    std::cout << std::endl;
+    return std::get<I>(std::forward<MTuple>(m));
 }
 
-TEST(TypeGetter, blah)
+template<std::size_t I, bool MCT, typename MTuple, typename NMTuple, std::enable_if_t<!MCT>* = nullptr>
+decltype(auto) get_tuples(MTuple&&, NMTuple&& nm)
+{
+    return std::get<I>(std::forward<NMTuple>(nm));
+}
+
+template<typename F, typename MTuple, typename NMTuple, typename... Ts, bool... MCTs, std::size_t... TIs, std::size_t... Is>
+auto apply_impl(F&& f, MTuple&& m, NMTuple&& nm, std::tuple<argument_info<Ts,MCTs,TIs>...>, std::index_sequence<Is...>)
+    -> ::mpirpc::internal::function_return_type<F>
+{
+    return std::forward<F>(f)(static_cast<std::tuple_element_t<Is,typename ::mpirpc::internal::function_parts<std::remove_reference_t<F>>::args_tuple_type>>(get_tuples<TIs,MCTs>(std::forward<MTuple>(m),std::forward<NMTuple>(nm)))...);
+}
+
+template<typename F, typename MTuple, typename NMTuple>
+auto apply(F&& f, MTuple&& mct, NMTuple&& nmct)
+    -> ::mpirpc::internal::function_return_type<F>
+{
+    using args_tuple_type = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
+    using info_type = argument_storage_info<args_tuple_type>;
+    static_assert(std::is_same<std::remove_reference_t<MTuple>, typename info_type::mct_tuple>::value, "Wrong types for MTuple");
+    static_assert(std::is_same<std::remove_reference_t<NMTuple>, typename info_type::nmct_tuple>::value, "Wrong types for NMTuple");
+    return apply_impl(std::forward<F>(f), mct, nmct, typename info_type::info{}, std::make_index_sequence<info_type::size>{});
+}
+
+template <typename F, class Class, typename MTuple, typename NMTuple, typename... Ts, bool... MCTs, std::size_t... TIs, std::size_t... Is>
+decltype(auto) apply_impl(F&& f, Class *c, MTuple&& m, NMTuple&& nm, std::tuple<argument_info<Ts,MCTs,TIs>...>, std::index_sequence<Is...>)
+{
+    return ((*c).*(std::forward<F>(f)))(static_cast<std::tuple_element_t<Is,typename ::mpirpc::internal::function_parts<std::remove_reference_t<F>>::args_tuple_type>>(get_tuples<TIs,MCTs>(std::forward<MTuple>(m),std::forward<NMTuple>(nm)))...);
+}
+
+template<typename F, class Class, typename MTuple, typename NMTuple>
+auto apply(F&& f, Class *c, MTuple&& mct, NMTuple&& nmct)
+    -> ::mpirpc::internal::function_return_type<F>
+{
+    using args_tuple_type = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
+    using info_type = argument_storage_info<args_tuple_type>;
+    static_assert(std::is_same<std::remove_reference_t<MTuple>, typename info_type::mct_tuple>::value, "Wrong types for MTuple");
+    static_assert(std::is_same<std::remove_reference_t<NMTuple>, typename info_type::nmct_tuple>::value, "Wrong types for NMTuple");
+    return apply_impl(std::forward<F>(f), c, mct, nmct, typename info_type::info{}, std::make_index_sequence<info_type::size>{});
+}
+
+void foo(double d, int i, float f, int(&ai)[4], double(&ad)[3], bool b, float(&af)[5])
+{
+    int ai2[4]{2,4,6,8};
+    double ad2[3]{4.6,8.2,9.1};
+    float af2[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
+
+    ASSERT_EQ(2.3,d);
+    ASSERT_EQ(4,i);
+    ASSERT_EQ(1.2f,f);
+    ASSERT_EQ(true, b);
+    for(std::size_t index = 0; index < 4; ++index)
+        ASSERT_EQ(ai2[index],ai[index]);
+    for(std::size_t index = 0; index < 3; ++index)
+        ASSERT_EQ(ad2[index],ad[index]);
+    for(std::size_t index = 0; index < 5; ++index)
+        ASSERT_EQ(af2[index],af[index]);
+    std::cout << "ran foo" << std::endl;
+}
+
+class Foo2
+{
+public:
+    void foo(double d, int i, float f, int(&ai)[4], double(&ad)[3], bool b, float(&af)[5])
+    {
+        int ai2[4]{2,4,6,8};
+        double ad2[3]{4.6,8.2,9.1};
+        float af2[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
+
+        ASSERT_EQ(2.3,d);
+        ASSERT_EQ(4,i);
+        ASSERT_EQ(1.2f,f);
+        ASSERT_EQ(true, b);
+        for(std::size_t index = 0; index < 4; ++index)
+            ASSERT_EQ(ai2[index],ai[index]);
+        for(std::size_t index = 0; index < 3; ++index)
+            ASSERT_EQ(ad2[index],ad[index]);
+        for(std::size_t index = 0; index < 5; ++index)
+            ASSERT_EQ(af2[index],af[index]);
+        std::cout << "ran Foo2::foo" << std::endl;
+    }
+};
+
+TEST(ArgumentUnpacking, test1)
 {
     using tup = std::tuple<double,int,float,int[4],double[3],bool,float[5]>;
     using type = typename argument_storage_info<tup>::mct_tuple;
@@ -1404,7 +1480,6 @@ TEST(TypeGetter, blah)
     using type3 = typename argument_storage_info<tup>::info;
     using type4 = typename argument_storage_info<tup>::mct_indexes;
     using type5 = typename argument_storage_info<tup>::nmct_indexes;
-    using type6 = typename argument_storage_info<tup>::nmct_tail;
     using type7 = typename argument_storage_info<tup>::split_indexes;
     mpirpc::parameter_stream p;
     int ai[4]{2,4,6,8};
@@ -1412,6 +1487,8 @@ TEST(TypeGetter, blah)
     float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
     p << 2.3 << 4 << 1.2f << ai << ad << true << af;
     std::allocator<void> a;
+    Foo2 fo;
+
 
     type2 t;
     std::cout << abi::__cxa_demangle(typeid(tup).name(),0,0,0) << std::endl;
@@ -1420,7 +1497,6 @@ TEST(TypeGetter, blah)
     std::cout << abi::__cxa_demangle(typeid(type3).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type4).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type5).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(type6).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type7).name(),0,0,0) << std::endl;
     std::cout << get_clamped<0,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
     std::cout << get_clamped<2,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
@@ -1442,6 +1518,8 @@ TEST(TypeGetter, blah)
         ASSERT_EQ(ad[i],std::get<1>(t)[i]);
     for(std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(af[i],std::get<2>(t)[i]);
+    apply(&foo,res,t);
+    apply(&Foo2::foo,&fo,res,t);
     //std::cout << abi::__cxa_demangle(typeid(blah).name(),0,0,0) << std::endl;
 }
 

@@ -218,7 +218,7 @@ struct function_parts<std::function<R(Args...)>>
 template<typename Arg>
 struct storage_type_helper
 {
-    using type = std::conditional_t<std::is_array<std::remove_reference_t<Arg>>::value,std::remove_reference_t<Arg>&,std::decay_t<std::remove_reference_t<Arg>>>;
+    using type = std::conditional_t<std::is_array<std::remove_reference_t<Arg>>::value,std::remove_reference_t<Arg>,std::decay_t<std::remove_reference_t<Arg>>>;
 };
 
 template<typename Arg>
