@@ -234,9 +234,10 @@ struct wrapped_function_parts<R(Class::*)(Args...)>
     using return_type = R;
     using class_type = Class;
     using wrapped_function_type = R(Class::*)(autowrapped_type<Args>...);
-    using wrapped_args_tuple_type = std::tuple<autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Args>>::value,std::remove_reference_t<Args>&,std::remove_reference_t<Args>>>...>;
+    using wrapped_args_tuple_type = std::tuple<autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Args>>::value,std::remove_reference_t<Args>,std::remove_reference_t<Args>>>...>;
     using storage_tuple_type = std::tuple<storage_type<Args>...>;
     using unwrapped_function_type = R(Class::*)(unwrapped_type<Args>...);
+    using pass_backs = bool_template_list<is_pass_back<Args>::value...>;
 };
 
 template<typename R, typename... Args>
@@ -244,9 +245,10 @@ struct wrapped_function_parts<R(*)(Args...)>
 {
     using return_type = R;
     using wrapped_function_type = R(*)(autowrapped_type<Args>...);
-    using wrapped_args_tuple_type = std::tuple<autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Args>>::value,std::remove_reference_t<Args>&,std::remove_reference_t<Args>>>...>;
+    using wrapped_args_tuple_type = std::tuple<autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Args>>::value,std::remove_reference_t<Args>,std::remove_reference_t<Args>>>...>;
     using storage_tuple_type = std::tuple<storage_type<Args>...>;
     using unwrapped_function_type = R(*)(unwrapped_type<Args>...);
+    using pass_backs = bool_template_list<is_pass_back<Args>::value...>;
 };
 
 template<typename R, typename... Args>
@@ -254,9 +256,10 @@ struct wrapped_function_parts<std::function<R(Args...)>>
 {
     using return_type = R;
     using wrapped_function_type = std::function<R(autowrapped_type<Args>...)>;
-    using wrapped_args_tuple_type = std::tuple<autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Args>>::value,std::remove_reference_t<Args>&,std::remove_reference_t<Args>>>...>;
+    using wrapped_args_tuple_type = std::tuple<autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Args>>::value,std::remove_reference_t<Args>,std::remove_reference_t<Args>>>...>;
     using storage_tuple_type = std::tuple<storage_type<Args>...>;
     using unwrapped_function_type = std::function<R(unwrapped_type<Args>...)>;
+    using pass_backs = bool_template_list<is_pass_back<Args>::value...>;
 };
 
 /*************************************************************************************/

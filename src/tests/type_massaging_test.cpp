@@ -6,6 +6,7 @@
 #include "../internal/orderedcall.hpp"
 #include "../internal/parameterstream.hpp"
 #include "../internal/unmarshalling.hpp"
+#include "../internal/utility.hpp"
 
 #define SINGLE_ARG(...) __VA_ARGS__
 #define TEST_REFERENCE_TYPE(Name1,Name2,Argument,FArgument,GoodArgument,Realloc) \
@@ -129,11 +130,11 @@ TEST_STORAGE_TUPLE_TYPE(pscalar ,void(*)(int*)       , std::tuple<int*>       )
 TEST_STORAGE_TUPLE_TYPE(lscalar ,void(*)(int&)       , std::tuple<int>        )
 TEST_STORAGE_TUPLE_TYPE(rscalar ,void(*)(int&&)      , std::tuple<int>        )
 TEST_STORAGE_TUPLE_TYPE(Ascalar ,void(*)(int[4])     , std::tuple<int*>       )
-TEST_STORAGE_TUPLE_TYPE(Alscalar,void(*)(int(&)[4])  , std::tuple<int(&)[4]>  )
-TEST_STORAGE_TUPLE_TYPE(Arscalar,void(*)(int(&&)[4]) , std::tuple<int(&)[4]> )
+TEST_STORAGE_TUPLE_TYPE(Alscalar,void(*)(int(&)[4])  , std::tuple<int[4]>  )
+TEST_STORAGE_TUPLE_TYPE(Arscalar,void(*)(int(&&)[4]) , std::tuple<int[4]> )
 TEST_STORAGE_TUPLE_TYPE(Achar   ,void(*)(char[4])    , std::tuple<char*>      )
-TEST_STORAGE_TUPLE_TYPE(Alchar  ,void(*)(char(&)[4]) , std::tuple<char(&)[4]> )
-TEST_STORAGE_TUPLE_TYPE(Archar  ,void(*)(char(&&)[4]), std::tuple<char(&)[4]>)
+TEST_STORAGE_TUPLE_TYPE(Alchar  ,void(*)(char(&)[4]) , std::tuple<char[4]> )
+TEST_STORAGE_TUPLE_TYPE(Archar  ,void(*)(char(&&)[4]), std::tuple<char[4]>)
 
 
 /**
@@ -969,7 +970,7 @@ void ordered_call_ref_array(int(&v)[3][4])
     }
 }
 
-TEST(OrderedCallTest, ref_array)
+/*TEST(OrderedCallTest, ref_array)
 {
     using T = int(&)[3][4];
     int *p = new int[3*4]{1,2,3,4,5,6,7,8,9,10,11,12};
@@ -992,7 +993,7 @@ TEST(OrderedCallTest, ref_array)
         ASSERT_EQ(12,v[2][2]);
         ASSERT_EQ(13,v[2][3]);
     } //make ordered_call go out of scope
-}
+}*/
 
 void ordered_call_rref_array(int(&&v)[3][4])
 {
@@ -1019,7 +1020,7 @@ void ordered_call_rref_array(int(&&v)[3][4])
     ASSERT_EQ(13,v[2][3]);
 }
 
-TEST(OrderedCallTest, rref_array)
+/*TEST(OrderedCallTest, rref_array)
 {
     //int t[3][4]{1,2,3,4,5,6,7,8,9,10,11,12};
     using T = int(&&)[3][4];
@@ -1031,7 +1032,7 @@ TEST(OrderedCallTest, rref_array)
         mpirpc::internal::ordered_call<decltype(&ordered_call_rref_array),std::allocator<void>> oc{&ordered_call_rref_array, a, a1};
         oc();
     } //make ordered_call go out of scope
-}
+}*/
 
 class Bar
 {
@@ -1052,7 +1053,7 @@ void ordered_call_rref_array_Bar(Bar(&&v)[1])
     ASSERT_FALSE(v[0].moved);
 }
 
-TEST(OrderedCallTest, rref_array_Bar)
+/*TEST(OrderedCallTest, rref_array_Bar)
 {
     using T = Bar(&&)[1];
     Bar *p = new Bar[1]();
@@ -1067,67 +1068,9 @@ TEST(OrderedCallTest, rref_array_Bar)
         mpirpc::internal::ordered_call<decltype(&ordered_call_rref_array_Bar),std::allocator<void>> oc{&ordered_call_rref_array_Bar, a, a1};
         oc();
     } //make ordered_call go out of scope
-}
-
-template<typename MAT, typename NMAT, typename...Ts>
-struct get_argument;
-
-/*template<typename... Ts, typename MAT0, typename... MATs, typename NMAT0, typename... NMATs>
-struct get_argument<std::tuple<MAT0,MATs...>,std::tuple<NMAT0,NMATs...>,Ts...>
-{
-    constexpr std::size_t index = sizeof...(Ts)-1;
-    using type
-};*/
-
-/*template<typename MAT, typename Ts>
-struct get_argument<std::tuple<MAT>,std::tuple<>,Ts>
-{
-    static constexpr bool mat = true;
-    static constexpr std::size_t mat_index = 0;
-    static constexpr std::size_t index = 0;
-};*/
-
-/*template<typename NMAT, typename Ts>
-struct get_argument<std::tuple<>,std::tuple<NMAT>,Ts>
-{
-    static constexpr bool mat = true;
-    static constexpr std::size_t mat_index = 0;
-    static constexpr std::size_t index = 0;
-};*/
-
-template<std::size_t index, std::size_t size, typename... Ts>
-struct mats_index
-{
-    using type = std::tuple<std::enable_if_t<std::is_move_constructible<Ts>::value,Ts>...>;
-};
-
-/*template<typename... Ts, typename... MCTs, typename... NMCTs>
-constexpr decltype(auto) get_argument(std::size_t position, std::tuple<MCTs...> dct, std::tuple<MCTs...> ndct)
-{
-
 }*/
 
-template<typename...Tuples>
-using tuple_cat_type = decltype(std::tuple_cat(Tuples{}...));
-
-template<typename T,bool MCT, std::size_t I>
-struct argument_info
-{
-    using type = T;
-    static constexpr bool mct = MCT;
-    static constexpr std::size_t index = I;
-};
-
-template<typename IS1, typename IS2>
-struct integer_sequence_cat;
-
-template<typename Int, Int... I1s, Int... I2s>
-struct integer_sequence_cat<std::integer_sequence<Int, I1s...>, std::integer_sequence<Int, I2s...>>
-{
-    using type = std::integer_sequence<Int,I1s...,I2s...>;
-};
-
-template<typename Int, Int...Is>
+/*template<typename Int, Int...Is>
 struct get_last_integer_sequence;
 
 template<typename Int, Int I1, Int I2, Int...Is>
@@ -1140,295 +1083,7 @@ template<typename Int, Int I>
 struct get_last_integer_sequence<Int,I>
 {
     constexpr static Int last = I;
-};
-
-template<std::size_t Pos, typename Int, Int Max, Int...Is>
-struct get_integer_sequence_clamped_impl;
-
-template<std::size_t Pos, typename Int, Int Max, Int I, Int... Is>
-struct get_integer_sequence_clamped_impl<Pos,Int,Max,I,Is...>
-{
-    constexpr static Int value = get_integer_sequence_clamped_impl<Pos-1,Int,Max,Is...>::value;
-};
-
-template<typename Int, Int I, Int Max, Int...Is>
-struct get_integer_sequence_clamped_impl<0,Int,Max,I,Is...>
-{
-    constexpr static Int value = I;
-};
-
-template<std::size_t Pos, typename Int, Int Max>
-struct get_integer_sequence_clamped_impl<Pos,Int,Max>
-{
-    constexpr static Int value = Max;
-};
-
-template<std::size_t Pos, typename Int, Int Max, Int... Is>
-constexpr Int get_clamped(std::integer_sequence<Int,Is...>)
-{
-    return get_integer_sequence_clamped_impl<Pos,Int,Max,Is...>::value;
-}
-
-template<std::size_t Pos, std::size_t Max, std::size_t... Is>
-constexpr std::size_t get_clamped(std::integer_sequence<std::size_t, Is...>)
-{
-    return get_clamped<Pos,std::size_t,Max>(std::integer_sequence<std::size_t,Is...>());
-}
-
-template<std::size_t Pos, typename Int, Int... Is>
-struct get_integer_sequence_impl;
-
-template<std::size_t Pos, typename Int, Int I, Int... Is>
-struct get_integer_sequence_impl<Pos,Int,I,Is...>
-{
-    constexpr static Int value = get_integer_sequence_impl<Pos-1,Int,Is...>::value;
-};
-
-template<typename Int, Int I, Int... Is>
-struct get_integer_sequence_impl<0,Int,I,Is...>
-{
-    constexpr static Int value = I;
-};
-
-template<std::size_t Pos, typename Int, Int...Is>
-constexpr Int get(std::integer_sequence<Int,Is...>)
-{
-    return get_integer_sequence_impl<Pos,Int,Is...>::value;
-}
-
-template<typename...>
-struct argument_storage_tuples;
-
-template<typename T, typename...Rest>
-struct argument_storage_tuples<T,Rest...>
-{
-    static constexpr bool condition = std::is_move_constructible<T>::value;
-    using mct_tuple = tuple_cat_type<std::conditional_t<condition,std::tuple<T>,std::tuple<>>,typename argument_storage_tuples<Rest...>::mct_tuple>;
-    using nmct_tuple = tuple_cat_type<std::conditional_t<!condition,std::tuple<T>,std::tuple<>>,typename argument_storage_tuples<Rest...>::nmct_tuple>;
-};
-
-template<>
-struct argument_storage_tuples<>
-{
-    using mct_tuple = std::tuple<>;
-    using nmct_tuple = std::tuple<>;
-};
-
-template<std::size_t MCTSize, std::size_t NMCTSize, typename...>
-struct argument_storage_info_impl;
-
-template<std::size_t MCTSize, std::size_t NMCTSize, typename T, typename... Rest>
-struct argument_storage_info_impl<MCTSize, NMCTSize, T, Rest...>
-{
-    static constexpr bool condition = std::is_move_constructible<T>::value;
-    static constexpr std::size_t param_index = MCTSize + NMCTSize - sizeof...(Rest) - 1;
-    static constexpr std::size_t index = std::conditional_t<condition,
-                                                           std::integral_constant<std::size_t,MCTSize>,
-                                                           std::integral_constant<std::size_t,NMCTSize>
-                                                          >::value -
-                                         std::tuple_size<std::conditional_t<condition,
-                                                                            typename argument_storage_tuples<T,Rest...>::mct_tuple,
-                                                                            typename argument_storage_tuples<T,Rest...>::nmct_tuple
-                                                                           >>::value;
-    using current_info =  argument_info<T,condition,index>;
-    using mct_indexes = std::conditional_t<condition,
-                                           typename integer_sequence_cat<std::index_sequence<param_index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::mct_indexes>::type,
-                                           typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::mct_indexes
-                                          >;
-    using nmct_indexes = std::conditional_t<!condition,
-                                            typename integer_sequence_cat<std::index_sequence<param_index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_indexes>::type,
-                                            typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::nmct_indexes
-                                           >;
-    using split_indexes = typename integer_sequence_cat<std::index_sequence<index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::split_indexes>::type;
-    using info = tuple_cat_type<std::tuple<current_info>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::info>;
-};
-
-/*template<typename, typename...>
-struct filter_tuple;
-
-template<template <typename> typename... Predicates, typename T, typename... Rest>
-struct filter_tuple<std::tuple<Predicates...>,T,Rest...>
-{
-
 };*/
-
-template<std::size_t MCTSize, std::size_t NMCTSize>
-struct argument_storage_info_impl<MCTSize, NMCTSize>
-{
-    using info = std::tuple<>;
-    using mct_indexes = std::index_sequence<>;
-    using nmct_indexes = std::index_sequence<>;
-    using split_indexes = std::index_sequence<>;
-};
-
-template<typename>
-struct argument_storage_info;
-
-template<typename... Ts>
-struct argument_storage_info<std::tuple<Ts...>>
-{
-    using mct_tuple = typename argument_storage_tuples<Ts...>::mct_tuple;
-    using nmct_tuple = typename argument_storage_tuples<Ts...>::nmct_tuple;
-    
-    using info_type =  argument_storage_info_impl<std::tuple_size<mct_tuple>::value,std::tuple_size<nmct_tuple>::value,Ts...>;
-    using info = typename info_type::info;
-    using mct_indexes = typename info_type::mct_indexes;
-    using nmct_indexes = typename info_type::nmct_indexes;
-    using split_indexes = typename info_type::split_indexes;
-    constexpr static std::size_t size = sizeof...(Ts);
-};
-
-template<typename T>
-struct unmarshal_remote_helper;
-
-template<typename T, bool MCT>
-struct build_tuple_helper;
-
-template<typename T>
-struct build_tuple_helper<T,true>
-{
-    template<typename Allocator, typename Stream, typename U>
-    static T build(Allocator&& a, Stream&& s, U*)
-    {
-        return mpirpc::unmarshaller_remote<T>::unmarshal(a,s);
-    }
-};
-
-template<typename T>
-struct build_tuple_helper<T,false>
-{
-    template<typename Allocator, typename Stream>
-    static void build(Allocator &, Stream &s, T *t)
-    {
-        s >> t;
-    }
-};
-
-
-template<std::size_t TupleIndex, typename Allocator, typename Stream, typename... Ts>
-void unmarshal_nmct_impl2(Allocator &a, Stream &s, std::tuple<Ts...>& t)
-{
-    //std::cout << "unmarshalling index " << ArgIndex << " with tuple index " << TupleIndex << " and type " << abi::__cxa_demangle(typeid(std::get<TupleIndex>(t)).name(),0,0,0) << std::endl;
-    s >> std::get<TupleIndex>(t);
-}
-
-template<std::size_t NMCT_Begin, typename Allocator, typename Stream, typename... NMCTs, std::size_t... Is, std::size_t... SplitTupleIs>
-void unmarshal_nmct_impl(Allocator &a, Stream &s, std::tuple<NMCTs...> &t, std::index_sequence<Is...>, std::index_sequence<SplitTupleIs...>)
-{
-    using swallow = int[];
-    (void)swallow{(unmarshal_nmct_impl2<get<NMCT_Begin+Is>(std::index_sequence<SplitTupleIs...>())>(a,s,t), 0)...};
-}
-
-template<std::size_t NMCT_Begin, std::size_t NMCT_End, typename Allocator, typename Stream, typename... NMCTs, std::size_t... SplitTupleIs, std::enable_if_t<!(NMCT_Begin >= NMCT_End)>* = nullptr>
-void unmarshal_nmct(Allocator &a, Stream &s, std::tuple<NMCTs...> &t, std::index_sequence<SplitTupleIs...>)
-{
-    unmarshal_nmct_impl<NMCT_Begin>(a,s,t,std::make_index_sequence<NMCT_End-NMCT_Begin>(),std::index_sequence<SplitTupleIs...>());
-}
-
-template<std::size_t NMCT_Begin, std::size_t NMCT_End, typename Allocator, typename Stream, typename... NMCTs, std::size_t... SplitTupleIs, std::enable_if_t<(NMCT_Begin >= NMCT_End)>* = nullptr>
-void unmarshal_nmct(Allocator &, Stream &, std::tuple<NMCTs...> &, std::index_sequence<SplitTupleIs...>)
-{}
-
-template<std::size_t NMCT_Begin, std::size_t NMCT_End, typename T, typename Allocator, typename Stream, typename... NMCTs, std::size_t... SplitTupleIs>
-T unmarshal_into_split_tuples_impl2(Allocator &a, Stream&s, std::tuple<NMCTs...> &t,std::index_sequence<SplitTupleIs...>)
-{
-    //std::cout << "unmarshalling index " << ArgIndex << " of type " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
-    //std::cout << "unmarshalling nmct range: " << NMCT_Begin << " " << NMCT_End << std::endl;
-    T ret = mpirpc::unmarshaller_remote<T>::unmarshal(a,s);
-    unmarshal_nmct<NMCT_Begin,NMCT_End>(a,s,t,std::index_sequence<SplitTupleIs...>());
-    return ret;
-}
-
-template<std::size_t ArgLen, typename Allocator, typename Stream, typename...NMCTs, typename...MCTs, std::size_t... ArgIs, std::size_t... MCT_Is, std::size_t...SplitTupleIs>
-std::tuple<MCTs...> unmarshal_into_split_tuples_impl(
-         Allocator &a,
-         Stream &s,
-         std::tuple<NMCTs...> &t,
-         std::index_sequence<ArgIs...>,
-         std::index_sequence<MCT_Is...>,
-         std::index_sequence<SplitTupleIs...>,
-         std::tuple<MCTs...>
-     )
-{
-    return std::tuple<MCTs...>{unmarshal_into_split_tuples_impl2<ArgIs+1,get_clamped<MCT_Is+1,std::size_t,ArgLen>(std::index_sequence<ArgIs...>()),MCTs>(a,s,t,std::index_sequence<SplitTupleIs...>())...};
-}
-
-/*
-template<typename Allocator, typename Stream, typename...Ts>
-auto unmarshal_into_split_tuples(Allocator &a, Stream &s, typename argument_storage_info<std::tuple<Ts...>>::nmct_tuple& nmct_tuple)
-    -> typename argument_storage_info<std::tuple<Ts...>>::mct_tuple
-{
-    using mct_tuple_type = typename argument_storage_info<std::tuple<Ts...>>::mct_tuple;
-    using nmct_tuple_type = typename argument_storage_info<std::tuple<Ts...>>::nmct_tuple;
-    using mct_indexes = typename argument_storage_info<std::tuple<Ts...>>::mct_indexes;
-    using split_indexes = typename argument_storage_info<std::tuple<Ts...>>::split_indexes;
-    constexpr std::size_t mct_index_size = mct_indexes::size();
-    return unmarshal_into_split_tuples_impl<sizeof...(Ts)>(a,s,nmct_tuple,mct_indexes(),std::make_index_sequence<mct_index_size>(),split_indexes(),mct_tuple_type());
-}*/
-
-template<typename... Ts>
-struct unmarshal_tuples
-{
-    using mct_tuple_type = typename argument_storage_info<std::tuple<Ts...>>::mct_tuple;
-    using nmct_tuple_type = typename argument_storage_info<std::tuple<Ts...>>::nmct_tuple;
-    using mct_indexes = typename argument_storage_info<std::tuple<Ts...>>::mct_indexes;
-    using split_indexes = typename argument_storage_info<std::tuple<Ts...>>::split_indexes;
-
-    template<typename Allocator, typename Stream>
-    static mct_tuple_type unmarshal(Allocator &a, Stream &s, nmct_tuple_type& nmct_tuple)
-    {
-
-         constexpr std::size_t mct_index_size = mct_indexes::size();
-         return unmarshal_into_split_tuples_impl<sizeof...(Ts)>(a,s,nmct_tuple,mct_indexes(),std::make_index_sequence<mct_index_size>(),split_indexes(),mct_tuple_type());
-    }
-};
-
-template<std::size_t I, bool MCT, typename MTuple, typename NMTuple, std::enable_if_t<MCT>* = nullptr>
-decltype(auto) get_tuples(MTuple&& m, NMTuple&&)
-{
-    return std::get<I>(std::forward<MTuple>(m));
-}
-
-template<std::size_t I, bool MCT, typename MTuple, typename NMTuple, std::enable_if_t<!MCT>* = nullptr>
-decltype(auto) get_tuples(MTuple&&, NMTuple&& nm)
-{
-    return std::get<I>(std::forward<NMTuple>(nm));
-}
-
-template<typename F, typename MTuple, typename NMTuple, typename... Ts, bool... MCTs, std::size_t... TIs, std::size_t... Is>
-auto apply_impl(F&& f, MTuple&& m, NMTuple&& nm, std::tuple<argument_info<Ts,MCTs,TIs>...>, std::index_sequence<Is...>)
-    -> ::mpirpc::internal::function_return_type<F>
-{
-    return std::forward<F>(f)(static_cast<std::tuple_element_t<Is,typename ::mpirpc::internal::function_parts<std::remove_reference_t<F>>::args_tuple_type>>(get_tuples<TIs,MCTs>(std::forward<MTuple>(m),std::forward<NMTuple>(nm)))...);
-}
-
-template<typename F, typename MTuple, typename NMTuple>
-auto apply(F&& f, MTuple&& mct, NMTuple&& nmct)
-    -> ::mpirpc::internal::function_return_type<F>
-{
-    using args_tuple_type = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    using info_type = argument_storage_info<args_tuple_type>;
-    static_assert(std::is_same<std::remove_reference_t<MTuple>, typename info_type::mct_tuple>::value, "Wrong types for MTuple");
-    static_assert(std::is_same<std::remove_reference_t<NMTuple>, typename info_type::nmct_tuple>::value, "Wrong types for NMTuple");
-    return apply_impl(std::forward<F>(f), mct, nmct, typename info_type::info{}, std::make_index_sequence<info_type::size>{});
-}
-
-template <typename F, class Class, typename MTuple, typename NMTuple, typename... Ts, bool... MCTs, std::size_t... TIs, std::size_t... Is>
-decltype(auto) apply_impl(F&& f, Class *c, MTuple&& m, NMTuple&& nm, std::tuple<argument_info<Ts,MCTs,TIs>...>, std::index_sequence<Is...>)
-{
-    return ((*c).*(std::forward<F>(f)))(static_cast<std::tuple_element_t<Is,typename ::mpirpc::internal::function_parts<std::remove_reference_t<F>>::args_tuple_type>>(get_tuples<TIs,MCTs>(std::forward<MTuple>(m),std::forward<NMTuple>(nm)))...);
-}
-
-template<typename F, class Class, typename MTuple, typename NMTuple>
-auto apply(F&& f, Class *c, MTuple&& mct, NMTuple&& nmct)
-    -> ::mpirpc::internal::function_return_type<F>
-{
-    using args_tuple_type = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    using info_type = argument_storage_info<args_tuple_type>;
-    static_assert(std::is_same<std::remove_reference_t<MTuple>, typename info_type::mct_tuple>::value, "Wrong types for MTuple");
-    static_assert(std::is_same<std::remove_reference_t<NMTuple>, typename info_type::nmct_tuple>::value, "Wrong types for NMTuple");
-    return apply_impl(std::forward<F>(f), c, mct, nmct, typename info_type::info{}, std::make_index_sequence<info_type::size>{});
-}
 
 void foo(double d, int i, float f, int(&ai)[4], double(&ad)[3], bool b, float(&af)[5])
 {
@@ -1475,12 +1130,12 @@ public:
 TEST(ArgumentUnpacking, test1)
 {
     using tup = std::tuple<double,int,float,int[4],double[3],bool,float[5]>;
-    using type = typename argument_storage_info<tup>::mct_tuple;
-    using type2 = typename argument_storage_info<tup>::nmct_tuple;
-    using type3 = typename argument_storage_info<tup>::info;
-    using type4 = typename argument_storage_info<tup>::mct_indexes;
-    using type5 = typename argument_storage_info<tup>::nmct_indexes;
-    using type7 = typename argument_storage_info<tup>::split_indexes;
+    using type = typename ::mpirpc::internal::detail::argument_storage_info<tup>::mct_tuple;
+    using type2 = typename ::mpirpc::internal::detail::argument_storage_info<tup>::nmct_tuple;
+    using type3 = typename ::mpirpc::internal::detail::argument_storage_info<tup>::info;
+    using type4 = typename ::mpirpc::internal::detail::argument_storage_info<tup>::mct_indexes;
+    using type5 = typename ::mpirpc::internal::detail::argument_storage_info<tup>::nmct_indexes;
+    using type7 = typename ::mpirpc::internal::detail::argument_storage_info<tup>::split_indexes;
     mpirpc::parameter_stream p;
     int ai[4]{2,4,6,8};
     double ad[3]{4.6,8.2,9.1};
@@ -1488,7 +1143,6 @@ TEST(ArgumentUnpacking, test1)
     p << 2.3 << 4 << 1.2f << ai << ad << true << af;
     std::allocator<void> a;
     Foo2 fo;
-
 
     type2 t;
     std::cout << abi::__cxa_demangle(typeid(tup).name(),0,0,0) << std::endl;
@@ -1498,16 +1152,16 @@ TEST(ArgumentUnpacking, test1)
     std::cout << abi::__cxa_demangle(typeid(type4).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type5).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(type7).name(),0,0,0) << std::endl;
-    std::cout << get_clamped<0,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << get_clamped<2,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << get_clamped<4,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << get_clamped<6,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << get_clamped<4,std::size_t,8>(std::make_index_sequence<0>()) << std::endl;
-    std::cout << get_clamped<0,std::size_t,6>(type4()) << std::endl;
-    std::cout << get_clamped<2,std::size_t,6>(type4()) << std::endl;
-    std::cout << get_clamped<3,std::size_t,6>(type4()) << std::endl;
-    std::cout << get_clamped<5,std::size_t,6>(type4()) << std::endl;
-    type res = unmarshal_tuples<double,int,float,int[4],double[3],bool,float[5]>::unmarshal(a,p,t);
+    std::cout << ::mpirpc::internal::get_clamped<0,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << ::mpirpc::internal::get_clamped<2,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << ::mpirpc::internal::get_clamped<4,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << ::mpirpc::internal::get_clamped<6,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+    std::cout << ::mpirpc::internal::get_clamped<4,std::size_t,8>(std::make_index_sequence<0>()) << std::endl;
+    std::cout << ::mpirpc::internal::get_clamped<0,std::size_t,6>(type4()) << std::endl;
+    std::cout << ::mpirpc::internal::get_clamped<2,std::size_t,6>(type4()) << std::endl;
+    std::cout << ::mpirpc::internal::get_clamped<3,std::size_t,6>(type4()) << std::endl;
+    std::cout << ::mpirpc::internal::get_clamped<5,std::size_t,6>(type4()) << std::endl;
+    type res = ::mpirpc::internal::detail::unmarshal_tuples<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::unmarshal(a,p,t);
     ASSERT_EQ(2.3,std::get<0>(res));
     ASSERT_EQ(4,std::get<1>(res));
     ASSERT_EQ(1.2f, std::get<2>(res));
@@ -1518,8 +1172,8 @@ TEST(ArgumentUnpacking, test1)
         ASSERT_EQ(ad[i],std::get<1>(t)[i]);
     for(std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(af[i],std::get<2>(t)[i]);
-    apply(&foo,res,t);
-    apply(&Foo2::foo,&fo,res,t);
+    ::mpirpc::internal::detail::apply(&foo,res,t);
+    ::mpirpc::internal::detail::apply(&Foo2::foo,&fo,res,t);
     //std::cout << abi::__cxa_demangle(typeid(blah).name(),0,0,0) << std::endl;
 }
 

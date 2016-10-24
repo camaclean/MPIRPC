@@ -53,9 +53,42 @@ decltype(auto) apply(F&& f, Class *c, Tuple&& t)
     return detail::apply_impl(std::forward<F>(f), c, std::forward<Tuple>(t), Indices{});
 }
 
+template<typename...Tuples>
+using tuple_cat_type = decltype(std::tuple_cat(Tuples{}...));
+
+template<std::size_t Pos, typename Int, Int Max, Int... Is>
+constexpr Int get_clamped(std::integer_sequence<Int,Is...>)
+{
+    return ::mpirpc::internal::detail::get_integer_sequence_clamped_impl<Pos,Int,Max,Is...>::value;
 }
 
+template<std::size_t Pos, std::size_t Max, std::size_t... Is>
+constexpr std::size_t get_clamped(std::integer_sequence<std::size_t, Is...>)
+{
+    return get_clamped<Pos,std::size_t,Max>(std::integer_sequence<std::size_t,Is...>());
 }
+
+template<std::size_t Pos, typename Int, Int...Is>
+constexpr Int get(std::integer_sequence<Int,Is...>)
+{
+    return ::mpirpc::internal::detail::get_integer_sequence_impl<Pos,Int,Is...>::value;
+}
+
+template<typename Is1, typename Is2>
+struct integer_sequence_cat;
+
+template<typename Int, Int... I1s, Int... I2s>
+struct integer_sequence_cat<std::integer_sequence<Int, I1s...>, std::integer_sequence<Int, I2s...>>
+{
+    using type = std::integer_sequence<Int,I1s...,I2s...>;
+};
+
+template <typename Is1, typename Is2>
+using integer_sequence_cat_type = typename integer_sequence_cat<Is1,Is2>::type;
+
+} //internal
+
+} //mpirpc
 
 #endif /* MPIRPC__INTERNAL__UTILITY_HPP */
 
