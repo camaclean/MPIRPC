@@ -126,10 +126,10 @@
 TEST_STORAGE_TUPLE_TYPE(none    ,void(*)()           , std::tuple<>           )
 TEST_STORAGE_TUPLE_TYPE(scalar  ,void(*)(int)        , std::tuple<int>        )
 TEST_STORAGE_TUPLE_TYPE(cscalar ,void(*)(const int)  , std::tuple<int>        )
-TEST_STORAGE_TUPLE_TYPE(pscalar ,void(*)(int*)       , std::tuple<int*>       )
+TEST_STORAGE_TUPLE_TYPE(pscalar ,void(*)(int*)       , std::tuple<mpirpc::pointer_wrapper<int>>       )
 TEST_STORAGE_TUPLE_TYPE(lscalar ,void(*)(int&)       , std::tuple<int>        )
 TEST_STORAGE_TUPLE_TYPE(rscalar ,void(*)(int&&)      , std::tuple<int>        )
-TEST_STORAGE_TUPLE_TYPE(Ascalar ,void(*)(int[4])     , std::tuple<int*>       )
+TEST_STORAGE_TUPLE_TYPE(Ascalar ,void(*)(int[4])     , std::tuple<mpirpc::pointer_wrapper<int>>       )
 TEST_STORAGE_TUPLE_TYPE(Alscalar,void(*)(int(&)[4])  , std::tuple<int[4]>  )
 TEST_STORAGE_TUPLE_TYPE(Arscalar,void(*)(int(&&)[4]) , std::tuple<int[4]> )
 TEST_STORAGE_TUPLE_TYPE(Achar   ,void(*)(char[4])    , std::tuple<char*>      )
@@ -732,7 +732,7 @@ TEST(FnTypeMarshaller, p5T_pT)
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
     std::allocator<void> a;
     StorageTupleType st(mpirpc::internal::tuple_unmarshaller_remote<double*>::unmarshal(a,s));
-    double *a1 = std::get<0>(st);
+    double *a1 = (double*) std::get<0>(st);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
@@ -750,7 +750,7 @@ TEST(FnTypeMarshaller, p5T_lpT)
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
     std::allocator<void> a;
     StorageTupleType st(mpirpc::internal::tuple_unmarshaller_remote<double*&>::unmarshal(a,s));
-    double *a1 = std::get<0>(st);
+    double *a1 = (double*) std::get<0>(st);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
@@ -768,7 +768,7 @@ TEST(FnTypeMarshaller, p5T_rpT)
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
     std::allocator<void> a;
     StorageTupleType st(mpirpc::internal::tuple_unmarshaller_remote<double*&&>::unmarshal(a,s));
-    double *a1 = std::get<0>(st);
+    double *a1 = (double*) std::get<0>(st);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
@@ -790,7 +790,7 @@ TEST(FnTypeMarshaller, la5T_pT)
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
     std::allocator<void> a;
     StorageTupleType st(mpirpc::internal::tuple_unmarshaller_remote<mpirpc::pointer_wrapper<double>>::unmarshal(a,s));
-    double *a1 = std::get<0>(st);
+    double *a1 = (double*) std::get<0>(st);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
@@ -811,7 +811,7 @@ TEST(FnTypeMarshaller, la5T_lpT)
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
     std::allocator<void> a;
     StorageTupleType st(mpirpc::internal::tuple_unmarshaller_remote<double*&>::unmarshal(a,s));
-    double *a1 = std::get<0>(st);
+    double *a1 = (double*) std::get<0>(st);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
@@ -997,7 +997,7 @@ void ordered_call_ref_array(int(&v)[3][4])
 
 void ordered_call_rref_array(int(&&v)[3][4])
 {
-    for (std::size_t i = 0; i < 3; ++i)
+    /*for (std::size_t i = 0; i < 3; ++i)
     {
         for (std::size_t j = 0; j < 4; ++j)
         {
@@ -1005,7 +1005,7 @@ void ordered_call_rref_array(int(&&v)[3][4])
             ++v[i][j];
         }
         std::cout << std::endl;
-    }
+    }*/
     ASSERT_EQ(2 ,v[0][0]);
     ASSERT_EQ(3 ,v[0][1]);
     ASSERT_EQ(4 ,v[0][2]);
@@ -1046,7 +1046,7 @@ public:
 
 void ordered_call_rref_array_Bar(Bar(&&v)[1])
 {
-    std::cout << v[0].moved << " " << v << std::endl;
+    //std::cout << v[0].moved << " " << v << std::endl;
     /*
      * This should be moving the array location, not the elements of the array itself
      */
@@ -1085,7 +1085,7 @@ struct get_last_integer_sequence<Int,I>
     constexpr static Int last = I;
 };*/
 
-void foo(double d, int i, float f, int(&ai)[4], double(&ad)[3], bool b, float(&af)[5])
+void foo(double d, int i, float f, int(&ai)[4], double(&ad)[3], bool b, float(&af)[5], double *pd)
 {
     int ai2[4]{2,4,6,8};
     double ad2[3]{4.6,8.2,9.1};
@@ -1101,13 +1101,14 @@ void foo(double d, int i, float f, int(&ai)[4], double(&ad)[3], bool b, float(&a
         ASSERT_EQ(ad2[index],ad[index]);
     for(std::size_t index = 0; index < 5; ++index)
         ASSERT_EQ(af2[index],af[index]);
-    std::cout << "ran foo" << std::endl;
+    ASSERT_EQ(3.14159,*pd);
+    //std::cout << "ran foo" << std::endl;
 }
 
 class Foo2
 {
 public:
-    void foo(double d, int i, float f, int(&ai)[4], double(&ad)[3], bool b, float(&af)[5])
+    void foo(double d, int i, float f, int(&ai)[4], double(&ad)[3], bool b, float(&af)[5], double *pd)
     {
         int ai2[4]{2,4,6,8};
         double ad2[3]{4.6,8.2,9.1};
@@ -1123,7 +1124,8 @@ public:
             ASSERT_EQ(ad2[index],ad[index]);
         for(std::size_t index = 0; index < 5; ++index)
             ASSERT_EQ(af2[index],af[index]);
-        std::cout << "ran Foo2::foo" << std::endl;
+        ASSERT_EQ(3.14159,*pd);
+        //std::cout << "ran Foo2::foo" << std::endl;
     }
 };
 
@@ -1145,22 +1147,22 @@ TEST(ArgumentUnpacking, test1)
     Foo2 fo;
 
     type2 t;
-    std::cout << abi::__cxa_demangle(typeid(tup).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(type).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(type2).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(type3).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(type4).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(type5).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(type7).name(),0,0,0) << std::endl;
-    std::cout << ::mpirpc::internal::get_clamped<0,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << ::mpirpc::internal::get_clamped<2,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << ::mpirpc::internal::get_clamped<4,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << ::mpirpc::internal::get_clamped<6,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
-    std::cout << ::mpirpc::internal::get_clamped<4,std::size_t,8>(std::make_index_sequence<0>()) << std::endl;
-    std::cout << ::mpirpc::internal::get_clamped<0,std::size_t,6>(type4()) << std::endl;
-    std::cout << ::mpirpc::internal::get_clamped<2,std::size_t,6>(type4()) << std::endl;
-    std::cout << ::mpirpc::internal::get_clamped<3,std::size_t,6>(type4()) << std::endl;
-    std::cout << ::mpirpc::internal::get_clamped<5,std::size_t,6>(type4()) << std::endl;
+//    std::cout << abi::__cxa_demangle(typeid(tup).name(),0,0,0) << std::endl;
+//    std::cout << abi::__cxa_demangle(typeid(type).name(),0,0,0) << std::endl;
+//    std::cout << abi::__cxa_demangle(typeid(type2).name(),0,0,0) << std::endl;
+//    std::cout << abi::__cxa_demangle(typeid(type3).name(),0,0,0) << std::endl;
+//    std::cout << abi::__cxa_demangle(typeid(type4).name(),0,0,0) << std::endl;
+//    std::cout << abi::__cxa_demangle(typeid(type5).name(),0,0,0) << std::endl;
+//    std::cout << abi::__cxa_demangle(typeid(type7).name(),0,0,0) << std::endl;
+//    std::cout << ::mpirpc::internal::get_clamped<0,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+//    std::cout << ::mpirpc::internal::get_clamped<2,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+//    std::cout << ::mpirpc::internal::get_clamped<4,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+//    std::cout << ::mpirpc::internal::get_clamped<6,std::size_t,8>(std::make_index_sequence<5>()) << std::endl;
+//    std::cout << ::mpirpc::internal::get_clamped<4,std::size_t,8>(std::make_index_sequence<0>()) << std::endl;
+//    std::cout << ::mpirpc::internal::get_clamped<0,std::size_t,6>(type4()) << std::endl;
+//    std::cout << ::mpirpc::internal::get_clamped<2,std::size_t,6>(type4()) << std::endl;
+//    std::cout << ::mpirpc::internal::get_clamped<3,std::size_t,6>(type4()) << std::endl;
+//    std::cout << ::mpirpc::internal::get_clamped<5,std::size_t,6>(type4()) << std::endl;
     type res = ::mpirpc::internal::detail::unmarshal_tuples<std::tuple<double,int,float,int[4],double[3],bool,float[5]>>::unmarshal(a,p,t);
     ASSERT_EQ(2.3,std::get<0>(res));
     ASSERT_EQ(4,std::get<1>(res));
@@ -1172,9 +1174,23 @@ TEST(ArgumentUnpacking, test1)
         ASSERT_EQ(ad[i],std::get<1>(t)[i]);
     for(std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(af[i],std::get<2>(t)[i]);
-    ::mpirpc::internal::detail::apply(&foo,res,t);
-    ::mpirpc::internal::detail::apply(&Foo2::foo,&fo,res,t);
+    //::mpirpc::internal::detail::apply(&foo,res,t);
+    //::mpirpc::internal::detail::apply(&Foo2::foo,&fo,res,t);
+
     //std::cout << abi::__cxa_demangle(typeid(blah).name(),0,0,0) << std::endl;
+}
+
+TEST(ArgumentUnpacking, test2)
+{
+    mpirpc::parameter_stream p;
+    int ai[4]{2,4,6,8};
+    double ad[3]{4.6,8.2,9.1};
+    float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
+    double pd = 3.14159;
+    p << 2.3 << 4 << 1.2f << ai << ad << true << af << mpirpc::pointer_wrapper<double>(&pd);
+    std::allocator<void> a;
+    mpirpc::parameter_stream pout;
+    ::mpirpc::internal::apply_stream(&foo,a,p,pout);
 }
 
 int main(int argc, char **argv) {

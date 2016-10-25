@@ -38,7 +38,7 @@
 
 namespace mpirpc {
 
-class parameter_stream
+class MPIRPC_EXPORT parameter_stream
 {
 public:
     //parameter_stream() = delete;

@@ -218,7 +218,7 @@ struct function_parts<std::function<R(Args...)>>
 template<typename Arg>
 struct storage_type_helper
 {
-    using type = std::conditional_t<std::is_array<std::remove_reference_t<Arg>>::value,std::remove_reference_t<Arg>,std::decay_t<std::remove_reference_t<Arg>>>;
+    using type = autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Arg>>::value,std::remove_reference_t<Arg>,std::decay_t<std::remove_reference_t<Arg>>>>;
 };
 
 template<typename Arg>
@@ -268,6 +268,18 @@ struct wrapped_function_parts<std::function<R(Args...)>>
 
 template<typename...Args>
 struct argument_types {};
+
+template<typename T>
+struct tuple_to_argt;
+
+template<typename...Ts>
+struct tuple_to_argt<std::tuple<Ts...>>
+{
+    using type = argument_types<Ts...>;
+};
+
+template<typename T>
+using tuple_to_argument_types_type = typename tuple_to_argt<T>::type;
 
 template<typename R, typename... FArgs, typename... Args>
 struct marshaller_function_signature<R(*)(FArgs...), Args...>

@@ -39,9 +39,16 @@ template<typename T>
 struct arg_cleanup
 {
     template<typename Allocator>
-    static void apply(Allocator&& a, typename std::remove_reference<T>::type& t) { std::cout << "blank clean up for " << typeid(void(*)(T)).name() << std::endl; }
+    static void apply(Allocator&& a, typename std::remove_reference<T>::type&)
+    {
+        //std::cout << "blank clean up for " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+    }
+
     template<typename Allocator>
-    static void apply(Allocator&& a, typename std::remove_reference<T>::type&& t) { std::cout << "generic rvalue " << typeid(void(*)(T)).name() << std::endl; }
+    static void apply(Allocator&& a, typename std::remove_reference<T>::type&&)
+    {
+        //std::cout << "generic rvalue " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+    }
 };
 
 template<typename T>
@@ -50,7 +57,7 @@ struct arg_cleanup<pointer_wrapper<T>>
     template<typename Allocator>
     static void apply(Allocator&& a, pointer_wrapper<T>&& t)
     {
-        std::cout << "cleaned up C Array of " << typeid(T).name() << std::endl;
+        //std::cout << "cleaned up C Array of " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
         t.free(a);
     }
 };
@@ -61,7 +68,7 @@ struct arg_cleanup<T(&)[N]>
     template<typename Allocator>
     static void apply(Allocator&& a, T(&v)[N])
     {
-        std::cout << "cleaning up reference to array" << std::endl;
+        //std::cout << "cleaning up reference to array" << std::endl;
         using NA = typename std::allocator_traits<std::remove_reference_t<Allocator>>::template rebind_alloc<std::remove_const_t<T>>;
         NA na(a);
         for (std::size_t i = 0; i < N; ++i)
@@ -119,7 +126,7 @@ template<typename T, std::size_t I>
 struct argument_info
 {
     using type = T;
-    static constexpr bool mct = std::is_move_constructible<Ts>::value;
+    static constexpr bool mct = std::is_move_constructible<T>::value;
     static constexpr bool passback = ::mpirpc::internal::is_pass_back<T>::value;
     static constexpr std::size_t index = I;
 };
@@ -158,7 +165,7 @@ struct argument_storage_info_impl<MCTSize, NMCTSize, T, Rest...>
                                                                             typename argument_storage_tuples<T,Rest...>::mct_tuple,
                                                                             typename argument_storage_tuples<T,Rest...>::nmct_tuple
                                                                            >>::value;
-    using current_info =  argument_info<T,condition,index>;
+    using current_info =  argument_info<T,index>;
     using mct_indexes = std::conditional_t<condition,
                                            ::mpirpc::internal::integer_sequence_cat_type<std::index_sequence<param_index>,typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::mct_indexes>,
                                            typename argument_storage_info_impl<MCTSize,NMCTSize,Rest...>::mct_indexes
@@ -239,11 +246,13 @@ std::tuple<MCTs...> unmarshal_tuples_impl(
          std::index_sequence<ArgIs...>,
          std::index_sequence<MCT_Is...>,
          std::index_sequence<SplitTupleIs...>,
-         std::tuple<MCTs...>
+         argument_types<MCTs...>
      )
 {
     return std::tuple<MCTs...>{std::allocator_arg_t{}, a, unmarshal_tuples_impl2<ArgIs+1,::mpirpc::internal::get_clamped<MCT_Is+1,std::size_t,ArgLen>(std::index_sequence<ArgIs...>()),MCTs>(a,s,t,std::index_sequence<SplitTupleIs...>())...};
 }
+
+
 
 template<typename T>
 struct unmarshal_tuples
@@ -258,7 +267,7 @@ struct unmarshal_tuples
     {
 
          constexpr std::size_t mct_index_size = mct_indexes::size();
-         return unmarshal_tuples_impl<std::tuple_size<T>::value>(a,s,nmct_tuple,mct_indexes(),std::make_index_sequence<mct_index_size>(),split_indexes(),mct_tuple_type());
+         return unmarshal_tuples_impl<std::tuple_size<T>::value>(a,s,nmct_tuple,mct_indexes(),std::make_index_sequence<mct_index_size>(),split_indexes(),tuple_to_argument_types_type<mct_tuple_type>());
     }
 };
 
@@ -309,25 +318,17 @@ auto apply(F&& f, Class *c, MTuple&& mct, NMTuple&& nmct)
     return apply_impl(std::forward<F>(f), c, mct, nmct, typename info_type::info{}, std::make_index_sequence<info_type::size>{});
 }
 
-template<typename Tuple, typename Stream, bool... PBs, typename... Ts, std::size_t... TIs>
-void marshal_pass_back_impl(Stream&& out, typename argument_storage_info<Tuple>::mct_tuple& mct, typename argument_storage_info<Tuple>::nmct_tuple& nmct, ::mpirpc::internal::bool_template_list<PBs...> std::tuple<argument_info<Ts,TIs>...>)
+template<typename MTuple, typename NMTuple, typename Stream, bool... PBs, typename... Ts, std::size_t... TIs>
+void marshal_pass_back_impl(Stream&& out, MTuple&& mct, NMTuple&& nmct, ::mpirpc::internal::bool_template_list<PBs...>, std::tuple<argument_info<Ts,TIs>...>)
 {
     using swallow = int[];
     (void)swallow{((PBs) ? out << get_tuples<TIs,std::is_move_constructible<Ts>::value>(mct,nmct), 1 : 0)...};
 }
 
-template<typename F, typename Stream>
-void marshal_pass_back(Stream&& out, typename argument_storage_info<Tuple>::mct_tuple& mct, typename argument_storage_info<Tuple>::nmct_tuple& nmct)
+template<typename F, typename Stream, typename StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type>
+void marshal_pass_back(Stream&& out, typename argument_storage_info<StorageTupleType>::mct_tuple& mct, typename argument_storage_info<StorageTupleType>::nmct_tuple& nmct)
 {
-    marshal_pass_back_impl(out, mct, nmct, , typename argument_storage_info<typename ::mpirpc::internal::function_parts<F>::storage_tuple_type>::info{});
-}
-
-template<typename F, typename Allocator, typename Stream>
-void apply_stream(F&& f, Allocator &a, Stream&& in, Stream&& out)
-{
-    typename argument_storage_info<typename ::mpirpc::internal::function_parts<F>::storage_tuple_type>::nmct_tuple nmct(std::allocator_arg_t{}, a);
-    auto mct = ::mpirpc::internal::detail::unmarshal_tuples<typename ::mpirpc::internal::function_parts<F>::storage_tuple_type>::unmarshal(a,in,nmct);
-    out << apply(std::forward<F>(f),mct,nmct);
+    marshal_pass_back_impl(out, mct, nmct, typename ::mpirpc::internal::wrapped_function_parts<F>::pass_backs{}, typename argument_storage_info<StorageTupleType>::info{});
 }
 
 } //detail

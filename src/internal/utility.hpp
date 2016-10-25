@@ -53,8 +53,17 @@ decltype(auto) apply(F&& f, Class *c, Tuple&& t)
     return detail::apply_impl(std::forward<F>(f), c, std::forward<Tuple>(t), Indices{});
 }
 
-template<typename...Tuples>
-using tuple_cat_type = decltype(std::tuple_cat(Tuples{}...));
+template<typename T1, typename T2>
+struct tuple_cat_type_helper;
+
+template<typename...T1s, typename...T2s>
+struct tuple_cat_type_helper<std::tuple<T1s...>,std::tuple<T2s...>>
+{
+    using type = std::tuple<T1s...,T2s...>;
+};
+
+template<typename T1, typename T2>
+using tuple_cat_type = typename tuple_cat_type_helper<T1,T2>::type;
 
 template<std::size_t Pos, typename Int, Int Max, Int... Is>
 constexpr Int get_clamped(std::integer_sequence<Int,Is...>)
