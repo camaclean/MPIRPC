@@ -33,6 +33,11 @@ void parameter_stream::seek(std::size_t pos)
     m_pos = pos;
 }
 
+void parameter_stream::advance(std::size_t step)
+{
+    m_pos += step;
+}
+
 char* parameter_stream::data()
 {
     return m_data->data();

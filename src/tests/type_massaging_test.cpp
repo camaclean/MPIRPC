@@ -1140,16 +1140,143 @@ protected:
     element_type m_element;
 };
 
-template<typename...Ts>
-void test()
+template<typename T>
+struct buildtype_helper
 {
-    std::tuple<std::add_pointer_t<Ts>...> t{static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts)))...};
+    constexpr static bool value = !std::is_scalar<std::remove_reference_t<T>>::value;
+};
+
+/*template<typename T, std::size_t N>
+struct buildtype_helper<T[N]>
+{
+    constexpr static bool value = !std::is_scalar<std::remove_reference_t<T>>::value;
+};*/
+
+template<typename T>
+constexpr bool is_buildtype = buildtype_helper<T>::value;
+
+template<typename...Ts>
+struct buildtype_tuple_helper;
+
+template<typename T, typename...Ts>
+struct buildtype_tuple_helper<T,Ts...>
+{
+    using prepend_type = std::conditional_t<is_buildtype<T>,std::tuple<std::add_pointer_t<T>>,std::tuple<>>;
+    using next_elems_type = typename buildtype_tuple_helper<Ts...>::type;
+    using type = mpirpc::internal::tuple_cat_type<prepend_type, next_elems_type>;
+};
+
+template<>
+struct buildtype_tuple_helper<>
+{
+    using type = std::tuple<>;
+};
+
+template<typename...Ts>
+using buildtype_tuple_type = typename buildtype_tuple_helper<Ts...>::type;
+
+template<typename T, typename Stream>
+void get_pointer_from_stream(Stream&& s, T*& t)
+{
+    t = reinterpret_cast<T*>(&(s.data()[s.pos()]));
+    s.advance(sizeof(T));
 }
+
+template<typename T>
+struct stream_constructor
+{
+    template<typename Allocator, typename Stream>
+    static void construct(const Allocator& a, T* t, Stream&& s)
+    {
+        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        AllocatorType na(a);
+        std::allocator_traits<AllocatorType>::construct(na,t,mpirpc::unmarshaller_remote<T>::unmarshal(na,s));
+    }
+};
+
+template<typename T, std::size_t N>
+struct stream_constructor<T[N]>
+{
+    template<typename Allocator, typename Stream>
+    static void construct(const Allocator &a, T(*t)[N], Stream&& s)
+    {
+        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        AllocatorType na(a);
+        std::cout << "array constructor: " << abi::__cxa_demangle(typeid(na).name(),0,0,0) << std::endl;
+        std::cout << "array constructor: " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+        std::cout << "array constructor: " << abi::__cxa_demangle(typeid(t).name(),0,0,0) << std::endl;
+        std::cout << "array constructor: " << abi::__cxa_demangle(typeid(&(*t)[2]).name(),0,0,0) << std::endl;
+        for (std::size_t i = 0; i < N; ++i)
+        {
+            std::allocator_traits<AllocatorType>::construct(na,&(*t)[i],mpirpc::unmarshaller_remote<T>::unmarshal(na,s));
+        }
+    }
+};
+
+template<typename Allocator, typename T, typename Stream, std::enable_if_t<is_buildtype<T>>* = nullptr>
+void get_from_stream(const Allocator &a, T*& t, Stream&& s)
+{
+    std::cout << "get from stream: " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+    std::cout << "get from stream: " << abi::__cxa_demangle(typeid(t).name(),0,0,0) << std::endl;
+    stream_constructor<T>::construct(a,t,s);
+}
+
+template<typename Allocator, typename T, typename Stream, std::enable_if_t<!is_buildtype<T>>* = nullptr>
+void get_from_stream(const Allocator &a, T*& t, Stream&& s)
+{
+    get_pointer_from_stream(s,t);
+}
+
+template<typename T, std::size_t N, std::enable_if_t<!std::is_same<T,char>::value>* = nullptr>
+std::ostream& operator<<(std::ostream& o, const T(&d)[N])
+{
+    o << "[";
+    for (std::size_t i = 0; i < N-1; ++i)
+        o << d[i] << ",";
+    o << d[N-1] << "]";
+    return o;
+}
+
+template<typename T>
+void print(T&& t)
+{
+    //std::cout << abi::__cxa_demangle(typeid(void(*)(T)).name(),0,0,0) << ": " << t << std::endl;
+    std::cout << t << std::endl;
+}
+
+template<typename Allocator, typename Stream, typename...Ts, std::size_t...Is>
+void apply_impl(const Allocator& a, Stream& s, std::index_sequence<Is...>)
+{
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts>) ? static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts))) : nullptr)...};
+    std::cout << abi::__cxa_demangle(typeid(t).name(),0,0,0) << std::endl;
+    using swallow = int[];
+    (void)(swallow){(get_from_stream(a,std::get<Is>(t),s), 0)...};
+    (void)(swallow){(std::cout << "type: " << abi::__cxa_demangle(typeid(decltype(*std::get<Is>(t))&).name(),0,0,0) << std::endl, 0)...};
+    (void)(swallow){(print(*std::get<Is>(t)), 0)...};
+}
+
+template<typename Allocator, typename Stream, typename...Ts>
+void apply(const Allocator &a, Stream &s)
+{
+    apply_impl<Allocator, Stream, Ts...>(a,s,std::make_index_sequence<sizeof...(Ts)>{});
+}
+
+TEST(ArgumentUnpacking, test0)
+{
+    mpirpc::parameter_stream p;
+    int ai[4]{2,4,6,8};
+    double ad[3]{4.6,8.2,9.1};
+    float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
+    p << 2.3 << 4 << 1.2f << ai << ad << true << af;
+    std::allocator<void> a;
+    apply<std::allocator<void>,mpirpc::parameter_stream,double,int,float,int[4],double[3],bool,float[5]>(a,p);
+}
+
 
 
 TEST(ArgumentUnpacking, test1)
 {
-    test<double,int,float,int[4],double[3],bool,float[5]>();
+    //apply<double,int,float,int[4],double[3],bool,float[5]>();
     using tup = std::tuple<double,int,float,int[4],double[3],bool,float[5]>;
     using type = typename ::mpirpc::internal::detail::argument_storage_info<tup>::mct_tuple;
     using type2 = typename ::mpirpc::internal::detail::argument_storage_info<tup>::nmct_tuple;
@@ -1166,6 +1293,7 @@ TEST(ArgumentUnpacking, test1)
     Foo2 fo;
 
     type2 t;
+    std::cout << abi::__cxa_demangle(typeid(buildtype_tuple_type<double,int,float,int[4],double[3],bool, float[5],mpirpc::pointer_wrapper<double>>).name(),0,0,0) << std::endl;
 //    std::cout << abi::__cxa_demangle(typeid(tup).name(),0,0,0) << std::endl;
 //    std::cout << abi::__cxa_demangle(typeid(type).name(),0,0,0) << std::endl;
 //    std::cout << abi::__cxa_demangle(typeid(type2).name(),0,0,0) << std::endl;

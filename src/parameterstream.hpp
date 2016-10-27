@@ -46,6 +46,7 @@ public:
     //parameter_stream(const char* data, size_t length);
 
     void seek(std::size_t pos);
+    void advance(std::size_t step);
     std::size_t pos() const { return m_pos; }
 
     void writeBytes(const char* b, size_t length);

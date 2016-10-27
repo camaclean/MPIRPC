@@ -141,7 +141,7 @@ struct ordered_call<std::function<R(FArgs...)>, Allocator>
 template<typename F, typename Allocator, typename Stream, std::enable_if_t<!std::is_same<function_return_type<F>,void>::value>* = nullptr>
 void apply_stream(F&& f, Allocator &a, Stream&& in, Stream&& out)
 {
-    typename detail::argument_storage_info<typename wrapped_function_parts<F>::storage_tuple_type>::nmct_tuple nmct(std::allocator_arg_t{}, a);
+    typename detail::argument_storage_info<typename wrapped_function_parts<F>::storage_tuple_type>::nmct_tuple nmct(std::allocator_arg, a);
     auto mct = detail::unmarshal_tuples<typename wrapped_function_parts<F>::storage_tuple_type>::unmarshal(a,in,nmct);
     out << detail::apply(std::forward<F>(f),mct,nmct);
     detail::marshal_pass_back<F>(out,mct,nmct);
@@ -152,7 +152,7 @@ void apply_stream(F&& f, Allocator &a, Stream&& in, Stream&& out)
 template<typename F, typename Allocator, typename Stream, std::enable_if_t<std::is_same<function_return_type<F>,void>::value>* = nullptr>
 void apply_stream(F&& f, Allocator &a, Stream&& in, Stream&& out)
 {
-    typename detail::argument_storage_info<typename wrapped_function_parts<F>::storage_tuple_type>::nmct_tuple nmct(std::allocator_arg_t{}, a);
+    typename detail::argument_storage_info<typename wrapped_function_parts<F>::storage_tuple_type>::nmct_tuple nmct(std::allocator_arg, a);
     auto mct = detail::unmarshal_tuples<typename wrapped_function_parts<F>::storage_tuple_type>::unmarshal(a,in,nmct);
     detail::apply(std::forward<F>(f),mct,nmct);
     detail::marshal_pass_back<F>(out,mct,nmct);
