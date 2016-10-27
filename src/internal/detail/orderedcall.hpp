@@ -328,6 +328,7 @@ void marshal_pass_back_impl(Stream&& out, MTuple&& mct, NMTuple&& nmct, ::mpirpc
 template<typename F, typename Stream, typename StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type>
 void marshal_pass_back(Stream&& out, typename argument_storage_info<StorageTupleType>::mct_tuple& mct, typename argument_storage_info<StorageTupleType>::nmct_tuple& nmct)
 {
+    std::cout << abi::__cxa_demangle(typeid(typename ::mpirpc::internal::wrapped_function_parts<F>::pass_backs).name(),0,0,0) << std::endl;
     marshal_pass_back_impl(out, mct, nmct, typename ::mpirpc::internal::wrapped_function_parts<F>::pass_backs{}, typename argument_storage_info<StorageTupleType>::info{});
 }
 

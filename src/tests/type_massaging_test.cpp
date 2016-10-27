@@ -1129,8 +1129,27 @@ public:
     }
 };
 
+template<typename Element, typename... NextElements>
+class piecewise_tuple_holder
+{
+    using element_type = Element;
+    using next_type = piecewise_tuple_holder<NextElements...>;
+
+public:
+protected:
+    element_type m_element;
+};
+
+template<typename...Ts>
+void test()
+{
+    std::tuple<std::add_pointer_t<Ts>...> t{static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts)))...};
+}
+
+
 TEST(ArgumentUnpacking, test1)
 {
+    test<double,int,float,int[4],double[3],bool,float[5]>();
     using tup = std::tuple<double,int,float,int[4],double[3],bool,float[5]>;
     using type = typename ::mpirpc::internal::detail::argument_storage_info<tup>::mct_tuple;
     using type2 = typename ::mpirpc::internal::detail::argument_storage_info<tup>::nmct_tuple;
@@ -1174,6 +1193,8 @@ TEST(ArgumentUnpacking, test1)
         ASSERT_EQ(ad[i],std::get<1>(t)[i]);
     for(std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(af[i],std::get<2>(t)[i]);
+    std::cout << typeid(type3).hash_code() << std::endl;
+    std::cout << &typeid(type3) << std::endl;
     //::mpirpc::internal::detail::apply(&foo,res,t);
     //::mpirpc::internal::detail::apply(&Foo2::foo,&fo,res,t);
 

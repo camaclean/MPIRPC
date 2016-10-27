@@ -237,7 +237,7 @@ struct wrapped_function_parts<R(Class::*)(Args...)>
     using wrapped_args_tuple_type = std::tuple<autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Args>>::value,std::remove_reference_t<Args>,std::remove_reference_t<Args>>>...>;
     using storage_tuple_type = std::tuple<storage_type<Args>...>;
     using unwrapped_function_type = R(Class::*)(unwrapped_type<Args>...);
-    using pass_backs = bool_template_list<is_pass_back<Args>::value...>;
+    using pass_backs = bool_template_list<is_pass_back<autowrapped_type<Args>>::value...>;
 };
 
 template<typename R, typename... Args>
@@ -248,7 +248,7 @@ struct wrapped_function_parts<R(*)(Args...)>
     using wrapped_args_tuple_type = std::tuple<autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Args>>::value,std::remove_reference_t<Args>,std::remove_reference_t<Args>>>...>;
     using storage_tuple_type = std::tuple<storage_type<Args>...>;
     using unwrapped_function_type = R(*)(unwrapped_type<Args>...);
-    using pass_backs = bool_template_list<is_pass_back<Args>::value...>;
+    using pass_backs = bool_template_list<is_pass_back<autowrapped_type<Args>>::value...>;
 };
 
 template<typename R, typename... Args>
@@ -259,7 +259,7 @@ struct wrapped_function_parts<std::function<R(Args...)>>
     using wrapped_args_tuple_type = std::tuple<autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Args>>::value,std::remove_reference_t<Args>,std::remove_reference_t<Args>>>...>;
     using storage_tuple_type = std::tuple<storage_type<Args>...>;
     using unwrapped_function_type = std::function<R(unwrapped_type<Args>...)>;
-    using pass_backs = bool_template_list<is_pass_back<Args>::value...>;
+    using pass_backs = bool_template_list<is_pass_back<autowrapped_type<Args>>::value...>;
 };
 
 /*************************************************************************************/
@@ -289,7 +289,7 @@ struct marshaller_function_signature<R(*)(FArgs...), Args...>
     using void_return_type = std::enable_if_t<std::is_same<R,void>::value,R>;
     using parameter_types = argument_types<autowrapped_type<FArgs>...>;
     using applier = std::function<void(choose_reference_type<FArgs,Args>...)>;
-    using pass_backs = bool_template_list<is_pass_back<FArgs>::value...>;
+    using pass_backs = bool_template_list<is_pass_back<autowrapped_type<FArgs>>::value...>;
 };
 
 /*template<typename... FArgs, typename... Args>
@@ -310,7 +310,7 @@ struct marshaller_function_signature<R(C::*)(FArgs...), Args...>
     using void_return_type = std::enable_if_t<std::is_same<R,void>::value,R>;
     using parameter_types = argument_types<autowrapped_type<FArgs>...>;
     using applier = std::function<void(choose_reference_type<FArgs,Args>...)>;
-    using pass_backs = bool_template_list<is_pass_back<FArgs>::value...>;
+    using pass_backs = bool_template_list<is_pass_back<autowrapped_type<FArgs>>::value...>;
 };
 
 /*template<class C, typename... FArgs, typename... Args>
@@ -331,7 +331,7 @@ struct marshaller_function_signature<std::function<R(FArgs...)>, Args...>
     using void_return_type = std::enable_if_t<std::is_same<R,void>::value,R>;
     using parameter_types = argument_types<autowrapped_type<FArgs>...>;
     using applier = std::function<void(typename choose_reference_type<FArgs,Args>::type...)>;
-    using pass_backs = bool_template_list<is_pass_back<FArgs>::value...>;
+    using pass_backs = bool_template_list<is_pass_back<autowrapped_type<FArgs>>::value...>;
 };
 
 /*template<typename... FArgs, typename... Args>
@@ -358,7 +358,7 @@ struct lambda_traits<R(C::*)(Args...) const>
     using lambda_fn_ptr       = R(*)(Args...);
     using lambda_stdfunction = std::function<R(Args...)>;
     using return_type = R;
-    using pass_backs = bool_template_list<is_pass_back<Args>::value...>;
+    using pass_backs = bool_template_list<is_pass_back<autowrapped_type<Args>>::value...>;
     using parameter_types = argument_types<autowrapped_type<Args>...>;
 };
 
