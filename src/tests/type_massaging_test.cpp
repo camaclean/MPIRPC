@@ -1358,12 +1358,8 @@ template<typename F, typename Allocator, typename InStream, typename OutStream, 
 void apply_impl(F&& f, const Allocator& a, InStream& s, OutStream& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>)
 {
     std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts>) ? static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts))) : nullptr)...};
-    std::cout << abi::__cxa_demangle(typeid(t).name(),0,0,0) << std::endl;
     using swallow = int[];
     (void)swallow{(get_from_stream(a,std::get<Is>(t),s), 0)...};
-    (void)swallow{(std::cout << "type: " << is_buildtype<Ts> << " " << abi::__cxa_demangle(typeid(decltype(*std::get<Is>(t))&).name(),0,0,0) << std::endl, 0)...};
-    (void)swallow{(print(*std::get<Is>(t)), 0)...};
-    (void)swallow{(std::cout << PBs << std::endl, 0)...};
     std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
     (void)swallow{((PBs) ? mpirpc::marshal(os, *std::get<Is>(t)), 0 : 0)...};
     (void)swallow{(cleanup(a,std::get<Is>(t)), 0)...};
