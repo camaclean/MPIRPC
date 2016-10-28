@@ -593,10 +593,10 @@ protected:
      * Unserialize the result and return it.
      */
     template<typename R, typename...FArgs, typename... Args>
-    auto process_return(int rank, internal::argument_types<FArgs...>, Args&&... args)
+    auto process_return(int rank, internal::type_pack<FArgs...>, Args&&... args)
         -> typename std::enable_if<!std::is_same<R,void>::value,R>::type
     {
-        std::cout << "processing return: " << typeid(internal::argument_types<FArgs...>).name() << " " << typeid(internal::bool_template_list<internal::is_pass_back<FArgs>::value...>).name() << std::endl;
+        std::cout << "processing return: " << typeid(internal::type_pack<FArgs...>).name() << " " << typeid(internal::bool_template_list<internal::is_pass_back<FArgs>::value...>).name() << std::endl;
         MPI_Status status;
         int len;
         int flag;
@@ -621,10 +621,10 @@ protected:
     }
 
     template<typename R, typename...FArgs, typename...Args>
-    auto process_return(int rank, internal::argument_types<FArgs...>, Args&&... args)
+    auto process_return(int rank, internal::type_pack<FArgs...>, Args&&... args)
         -> typename std::enable_if<std::is_same<R,void>::value,R>::type
     {
-        std::cout << "processing return: " << typeid(internal::argument_types<FArgs...>).name() << " " << typeid(internal::bool_template_list<internal::is_pass_back<FArgs>::value...>).name() << std::endl;
+        std::cout << "processing return: " << typeid(internal::type_pack<FArgs...>).name() << " " << typeid(internal::bool_template_list<internal::is_pass_back<FArgs>::value...>).name() << std::endl;
         if (!internal::any_true<internal::is_pass_back<FArgs>::value...>::value && std::is_void<R>::value)
             return;
         MPI_Status status;

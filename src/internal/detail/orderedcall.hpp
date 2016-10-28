@@ -41,23 +41,23 @@ struct arg_cleanup
     template<typename Allocator>
     static void apply(Allocator&& a, typename std::remove_reference<T>::type&)
     {
-        //std::cout << "blank clean up for " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+        std::cout << "blank clean up for " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
     }
 
     template<typename Allocator>
     static void apply(Allocator&& a, typename std::remove_reference<T>::type&&)
     {
-        //std::cout << "generic rvalue " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+        std::cout << "generic rvalue " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
     }
 };
 
 template<typename T>
 struct arg_cleanup<pointer_wrapper<T>>
 {
-    template<typename Allocator>
-    static void apply(Allocator&& a, pointer_wrapper<T>&& t)
+    template<typename Allocator, typename U, std::enable_if_t<std::is_same<std::decay_t<pointer_wrapper<T>>,std::decay_t<U>>::value>* = nullptr>
+    static void apply(Allocator&& a, U&& t)
     {
-        //std::cout << "cleaned up C Array of " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+        std::cout << "cleaned up C Array of " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
         t.free(a);
     }
 };
@@ -246,7 +246,7 @@ std::tuple<MCTs...> unmarshal_tuples_impl(
          std::index_sequence<ArgIs...>,
          std::index_sequence<MCT_Is...>,
          std::index_sequence<SplitTupleIs...>,
-         argument_types<MCTs...>
+         type_pack<MCTs...>
      )
 {
     return std::tuple<MCTs...>{std::allocator_arg_t{}, a, unmarshal_tuples_impl2<ArgIs+1,::mpirpc::internal::get_clamped<MCT_Is+1,std::size_t,ArgLen>(std::index_sequence<ArgIs...>()),MCTs>(a,s,t,std::index_sequence<SplitTupleIs...>())...};

@@ -69,7 +69,11 @@ public:
 
     T& operator[](std::size_t n) { return m_pointer[n]; }
     T const& operator[](std::size_t n) const { return m_pointer[n]; }
-    explicit operator T*() { return m_pointer; }
+    explicit operator T*() const { return m_pointer; }
+    T operator*() const { return *m_pointer; }
+
+    bool is_pass_back() const { return m_pass_back; }
+    bool is_pass_ownership() const { return m_pass_ownership; }
     std::size_t size() const { return m_size; }
 
     template<typename Allocator,

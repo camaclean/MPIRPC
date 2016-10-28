@@ -55,7 +55,7 @@ template<typename R, typename... FArgs, typename... Args>
 auto mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(int rank, R(*f)(FArgs...), FnHandle functionHandle, Args&&... args)
     -> typename std::enable_if<!std::is_same<R, void>::value, R>::type
 {
-    using pass_backs = internal::argument_types<internal::autowrapped_type<FArgs>...>;//internal::bool_template_list<internal::is_pass_back<FArgs>::value...>;
+    using pass_backs = internal::type_pack<internal::autowrapped_type<FArgs>...>;//internal::bool_template_list<internal::is_pass_back<FArgs>::value...>;
     if (rank == m_rank) {
         return f(std::forward<Args>(args)...);
     } else {
@@ -125,7 +125,7 @@ template<typename R, typename... Args>
 R mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(int rank, FnHandle functionHandle, Args&&... args)
 {
     send_function_invocation(rank, functionHandle, true, internal::autowrap<Args>(args)...);
-    return process_return<R>(rank, internal::argument_types<typename internal::pass_back_false<Args>::type...>{}, std::forward<Args>(args)...);
+    return process_return<R>(rank, internal::type_pack<typename internal::pass_back_false<Args>::type...>{}, std::forward<Args>(args)...);
 }
 
 template<typename MessageInterface, template<typename> typename Allocator>
@@ -133,7 +133,7 @@ template<typename R, typename... Args>
 R mpirpc::manager<MessageInterface, Allocator>::invoke_function_pr(int rank, FnHandle functionHandle, Args&&... args)
 {
     send_function_invocation(rank, functionHandle, true, internal::autowrap<Args>(args)...);
-    return process_return<R>(rank, internal::argument_types<internal::autowrapped_type<Args>...>{}, std::forward<Args>(args)...);
+    return process_return<R>(rank, internal::type_pack<internal::autowrapped_type<Args>...>{}, std::forward<Args>(args)...);
 }
 
 /*************************************************************************************/
