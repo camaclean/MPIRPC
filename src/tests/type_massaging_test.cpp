@@ -1188,17 +1188,14 @@ struct stream_constructor
     template<typename Allocator, typename Stream>
     static void construct(const Allocator& a, T* t, Stream&& s)
     {
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-        AllocatorType na(a);
-        std::allocator_traits<AllocatorType>::construct(na,t,mpirpc::unmarshaller_remote<T>::unmarshal(na,s));
+        new (t) T();
+        s >> *t;
     }
 
     template<typename Allocator>
     static void destruct(const Allocator& a, T* t)
     {
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-        AllocatorType na(a);
-        std::allocator_traits<AllocatorType>::destroy(na,t);
+        t->~T();
     }
 };
 
@@ -1212,21 +1209,23 @@ template <typename T>
 struct is_std_allocator<std::allocator<T>> : std::true_type{};
 
 template<typename T>
-struct stream_constructor<mpirpc::pointer_wrapper<T>>
+struct unmarshal_allocator
 {
     template<typename Allocator, typename Stream>
-    static void construct_allocate(const Allocator&a, T*& t, Stream&&s, std::size_t size)
+    static void construct(const Allocator& a, T* t, Stream&& s)
     {
         using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
         AllocatorType na(a);
-        t = std::allocator_traits<AllocatorType>::allocate(na,size);
-        for (std::size_t i = 0; i < size; ++i)
-            stream_constructor<T>::construct(na,&t[i],s);
+        std::allocator_traits<AllocatorType>::construct(na,t);
+        s >> *t;
     }
+};
 
+template<typename T>
+struct stream_constructor<mpirpc::pointer_wrapper<T>>
+{
     template<typename Allocator, typename Stream,
-             typename U = std::enable_if_t<std::is_scalar<T>::value,T>,
-             std::enable_if_t<is_std_allocator<Allocator>::value>* = nullptr>
+             typename U = T, std::enable_if_t<std::is_scalar<U>::value>* = nullptr>
     static void construct(const Allocator&a, mpirpc::pointer_wrapper<U>* t, Stream&&s)
     {
         std::size_t size;
@@ -1235,27 +1234,34 @@ struct stream_constructor<mpirpc::pointer_wrapper<T>>
         bool pass_back = false;
         U* ptr;
         if (pass_ownership)
-            construct_allocate(a,ptr,s,size);
+        {
+            using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+            AllocatorType na(a);
+            ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
+            for (std::size_t i = 0; i < size; ++i)
+                unmarshal_allocator<T>::construct(na,&ptr[i],s);
+        }
         else
+        {
             get_pointer_from_stream(s,ptr);
+        }
         new (t) mpirpc::pointer_wrapper<U>(ptr,size,pass_back,true);
     }
 
     template<typename Allocator, typename Stream,
-             typename U = std::enable_if_t<std::is_scalar<T>::value,T>,
-             std::enable_if_t<!is_std_allocator<Allocator>::value>* = nullptr>
+             typename U = T, std::enable_if_t<!std::is_scalar<U>::value>* = nullptr>
     static void construct(const Allocator&a, mpirpc::pointer_wrapper<U>* t, Stream&&s)
     {
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<mpirpc::pointer_wrapper<U>>;
-        using AllocatorTypeU = typename std::allocator_traits<Allocator>::template rebind_alloc<U>;
-        AllocatorType na(a);
-        AllocatorTypeU ua(a);
         std::size_t size;
         s >> size;
+        bool pass_back = false;
+        bool pass_ownership = false;
+        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        AllocatorType na(a);
         U* ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
         for (std::size_t i = 0; i < size; ++i)
-            stream_constructor<U>::construct(ua,&ptr[i],s);
-        std::allocator_traits<AllocatorType>::construct(na,t,ptr,size);
+            unmarshal_allocator<T>::construct(na,&ptr[i],s);
+        new (t) mpirpc::pointer_wrapper<U>(ptr,size,pass_back,pass_ownership);
     }
 
     template<typename Allocator>
@@ -1278,19 +1284,28 @@ struct stream_constructor<mpirpc::pointer_wrapper<T>>
 template<typename T, std::size_t N>
 struct stream_constructor<T[N]>
 {
-    template<typename Allocator, typename Stream>
-    static void construct(const Allocator &a, T(*t)[N], Stream&& s)
+    template<typename Allocator, typename Stream, typename U = T, std::size_t M,
+             std::enable_if_t<!std::is_array<U>::value>* = nullptr>
+    static void construct(const Allocator &a, U(*t)[M], Stream&& s)
     {
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<U>;
         AllocatorType na(a);
         std::cout << "array constructor: " << abi::__cxa_demangle(typeid(na).name(),0,0,0) << std::endl;
         std::cout << "array constructor: " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
         std::cout << "array constructor: " << abi::__cxa_demangle(typeid(t).name(),0,0,0) << std::endl;
         std::cout << "array constructor: " << abi::__cxa_demangle(typeid(&(*t)[2]).name(),0,0,0) << std::endl;
-        for (std::size_t i = 0; i < N; ++i)
+        for (std::size_t i = 0; i < M; ++i)
         {
-            std::allocator_traits<AllocatorType>::construct(na,&(*t)[i],mpirpc::unmarshaller_remote<T>::unmarshal(na,s));
+            stream_constructor<T>::construct(a,&(*t)[i],s);
         }
+    }
+
+    template<typename Allocator, typename Stream, typename U = T, std::size_t M,
+             std::enable_if_t<std::is_array<U>::value>* = nullptr>
+    static void construct(const Allocator &a, U(*t)[M], Stream&& s)
+    {
+        for(std::size_t i = 0; i < M; ++i)
+            stream_constructor<U[M]>::construct(a,&(*t)[i],s);
     }
 
     template<typename Allocator>
@@ -1361,11 +1376,25 @@ void apply_impl(F&& f, const Allocator& a, InStream& s, OutStream& os, mpirpc::i
     using swallow = int[];
     (void)swallow{(get_from_stream(a,std::get<Is>(t),s), 0)...};
     std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
+    (void)swallow{((PBs) ? (mpirpc::marshal(os, *std::get<Is>(t)), 0) : 0)...};
+    (void)swallow{(cleanup(a,std::get<Is>(t)), 0)...};
+}
+
+template<typename F, typename Allocator, typename InStream, typename OutStream, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is,
+         std::enable_if_t<!std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
+void apply_impl(F&& f, const Allocator& a, InStream& s, OutStream& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>)
+{
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts>) ? static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts))) : nullptr)...};
+    using swallow = int[];
+    (void)swallow{(get_from_stream(a,std::get<Is>(t),s), 0)...};
+    auto&& ret = std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
+    os << mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret));
     (void)swallow{((PBs) ? mpirpc::marshal(os, *std::get<Is>(t)), 0 : 0)...};
     (void)swallow{(cleanup(a,std::get<Is>(t)), 0)...};
 }
 
-template<typename F,typename Allocator, typename InStream, typename OutStream>
+template<typename F,typename Allocator, typename InStream, typename OutStream,
+         std::enable_if_t<std::is_function<std::remove_pointer_t<F>>::value && !std::is_member_function_pointer<F>::value>* = nullptr>
 void apply(F&& f, const Allocator& a, InStream&& s, OutStream&& os)
 {
     using fargs = typename mpirpc::internal::function_parts<F>::arg_types;
@@ -1373,6 +1402,47 @@ void apply(F&& f, const Allocator& a, InStream&& s, OutStream&& os)
     using pass_backs = typename mpirpc::internal::wrapped_function_parts<F>::pass_backs;
     constexpr std::size_t num_args = mpirpc::internal::function_parts<F>::num_args;
     apply_impl(std::forward<F>(f),a,std::forward<InStream>(s), std::forward<OutStream>(os), fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{});
+}
+
+template<typename F, class Class, typename Allocator, typename InStream, typename OutStream, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is,
+         std::enable_if_t<std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
+void apply_impl(F&& f, Class *c, const Allocator& a, InStream& s, OutStream& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>)
+{
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts>) ? static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts))) : nullptr)...};
+    using swallow = int[];
+    (void)swallow{(get_from_stream(a,std::get<Is>(t),s), 0)...};
+    ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
+    (void)swallow{((PBs) ? (mpirpc::marshal(os, *std::get<Is>(t)), 0) : 0)...};
+    (void)swallow{(cleanup(a,std::get<Is>(t)), 0)...};
+}
+
+template<typename F, class Class, typename Allocator, typename InStream, typename OutStream, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is,
+         std::enable_if_t<!std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
+void apply_impl(F&& f, Class *c, const Allocator& a, InStream& s, OutStream& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>)
+{
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts>) ? static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts))) : nullptr)...};
+    using swallow = int[];
+    (void)swallow{(get_from_stream(a,std::get<Is>(t),s), 0)...};
+    auto&& ret = ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
+    os << mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret));
+    (void)swallow{((PBs) ? mpirpc::marshal(os, *std::get<Is>(t)), 0 : 0)...};
+    (void)swallow{(cleanup(a,std::get<Is>(t)), 0)...};
+}
+
+template<typename F, class Class, typename Allocator, typename InStream, typename OutStream,
+         std::enable_if_t<std::is_member_function_pointer<F>::value>* = nullptr>
+void apply(F&& f, Class *c, const Allocator& a, InStream&& s, OutStream&& os)
+{
+    using fargs = typename mpirpc::internal::function_parts<F>::arg_types;
+    using ts = typename mpirpc::internal::wrapped_function_parts<F>::storage_types;
+    using pass_backs = typename mpirpc::internal::wrapped_function_parts<F>::pass_backs;
+    constexpr std::size_t num_args = mpirpc::internal::function_parts<F>::num_args;
+    apply_impl(std::forward<F>(f),c,a,std::forward<InStream>(s), std::forward<OutStream>(os), fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{});
+}
+
+int foo3()
+{
+    return 3;
 }
 
 TEST(ArgumentUnpacking, test0)
@@ -1386,6 +1456,8 @@ TEST(ArgumentUnpacking, test0)
     std::allocator<void> a;
     mpirpc::parameter_stream pout;
     apply(&foo,a,p,pout);
+    mpirpc::parameter_stream pout2;
+    apply(&foo3,a,p,pout2);
 }
 
 
@@ -1459,6 +1531,7 @@ TEST(ArgumentUnpacking, test2)
 }
 
 int main(int argc, char **argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+    std::cout << std::boolalpha;
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

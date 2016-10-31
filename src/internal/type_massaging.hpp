@@ -262,7 +262,7 @@ auto autowrap(std::remove_reference_t<T>& t) -> decltype(auto)
 
 template<typename FT, typename T,
          std::enable_if_t<!std::is_pointer<std::remove_reference_t<FT>>::value || is_pointer_wrapper<std::remove_reference_t<T>>::value>* = nullptr>
-auto autowrap(std::remove_reference<T>&& t) -> decltype(auto)
+auto autowrap(std::remove_reference_t<T>&& t) -> decltype(auto)
 {
     return forward_parameter<FT,T>(t);//static_cast<T&&>(t);
 }
