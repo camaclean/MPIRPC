@@ -1195,6 +1195,13 @@ public:
     void seek(std::size_t pos) noexcept { m_position = pos; }
 
     template<typename T>
+    parameter_buffer& operator<<(T&& t)
+    {
+        put(std::forward<T>(t));
+        return *this;
+    }
+
+    template<typename T>
     T* reinterpret_and_advance(std::size_t size) noexcept { T* ret = reinterpret_cast<T*>(&m_buffer->data()[m_position]); m_position+=size; return ret; }
 
     template<typename T>
@@ -1251,6 +1258,19 @@ struct unmarshaller<T,std::enable_if_t<!buildtype_helper<std::decay_t<T>>::value
     static T unmarshal(Allocator&&, parameter_buffer& b)
     {
         return *b.reinterpret_and_advance<std::remove_reference_t<T>>(sizeof(std::remove_reference_t<T>));
+    }
+};
+
+template<typename T>
+struct marshaller<mpirpc::pointer_wrapper<T>,void>
+{
+    static void marshal(parameter_buffer& b, const mpirpc::pointer_wrapper<T>& val)
+    {
+        b.put(val.size());
+        for (std::size_t i = 0; i < val.size(); ++i)
+        {
+            marshaller<T>::marshal(b,val[i]);
+        }
     }
 };
 
@@ -1384,7 +1404,18 @@ void get_pointer_from_stream(Stream&& s, T*& t)
     s.advance(sizeof(T));
 }
 
-template<typename T, typename Alloc>
+template<typename T>
+struct is_std_allocator;
+
+template <template <typename> class Alloc, typename T>
+struct is_std_allocator<Alloc<T>> : std::false_type{};
+
+template <typename T>
+struct is_std_allocator<std::allocator<T>> : std::true_type{};
+
+
+
+template<typename T>
 struct direct_initializer
 {
     template<typename Allocator, typename Stream>
@@ -1403,39 +1434,84 @@ struct direct_initializer
         AllocatorType na(a);
         std::allocator_traits<AllocatorType>::destroy(na, t);
     }
-};
 
-template<typename T>
-struct is_std_allocator;
-
-template <template <typename> class Alloc, typename T>
-struct is_std_allocator<Alloc<T>> : std::false_type{};
-
-template <typename T>
-struct is_std_allocator<std::allocator<T>> : std::true_type{};
-
-template<typename T, typename U>
-struct direct_initializer<T, std::allocator<U>>
-{
-    template<typename Allocator, typename Stream>
-    static void construct(const Allocator& a, T* t, Stream&& s)
+    template<typename Allocator, typename Buffer>
+    static void placementnew_construct(const Allocator& a, T* t, Buffer&& b)
     {
-        new (t) T();
-        s >> *t;
+        std::cout << "default std::allocator constructing " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std:: endl;
+        new (t) T(b.template get<T>(a));
     }
 
     template<typename Allocator>
-    static void destruct(const Allocator& a, T* t)
+    static void placementnew_destruct(const Allocator& a, T* t)
     {
         t->~T();
     }
 };
 
-template<typename T, typename X>
-struct direct_initializer<mpirpc::pointer_wrapper<T>, std::allocator<X>>
+template<typename T>
+struct direct_initializer<mpirpc::pointer_wrapper<T>>
 {
     template<typename Allocator, typename Stream,
              typename U = T, std::enable_if_t<std::is_scalar<U>::value>* = nullptr>
+    static void placementnew_construct(const Allocator&a, mpirpc::pointer_wrapper<U>* t, Stream&&s)
+    {
+        std::size_t size;
+        s >> size;
+        bool pass_ownership = false;
+        bool pass_back = false;
+        U* ptr;
+        if (pass_ownership)
+        {
+            using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+            AllocatorType na(a);
+            ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
+            for (std::size_t i = 0; i < size; ++i)
+                direct_initializer<T>::construct(na,&ptr[i],s);
+        }
+        else
+        {
+            get_pointer_from_stream(s,ptr);
+        }
+        new (t) mpirpc::pointer_wrapper<U>(ptr,size,pass_back,true);
+    }
+
+    template<typename Allocator, typename Stream,
+             typename U = T, std::enable_if_t<!std::is_scalar<U>::value>* = nullptr>
+    static void placementnew_construct(const Allocator&a, mpirpc::pointer_wrapper<U>* t, Stream&& s)
+    {
+        std::size_t size = s.template get<std::size_t>(a);
+        std::cout << "size: " << size << std::endl;
+        bool pass_back = false;
+        bool pass_ownership = false;
+        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        AllocatorType na(a);
+        U* ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
+        for (std::size_t i = 0; i < size; ++i)
+            direct_initializer<U>::construct(na,&ptr[i],s);
+        new (t) mpirpc::pointer_wrapper<U>(ptr,size,pass_back,pass_ownership);
+    }
+
+    template<typename Allocator>
+    static void placementnew_destruct(const Allocator& a, mpirpc::pointer_wrapper<T>* t)
+    {
+        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<mpirpc::pointer_wrapper<T>>;
+        using AllocatorTypeT = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+        AllocatorType na(a);
+        AllocatorTypeT ta(a);
+        if (!t->is_pass_ownership())
+        {
+            T* ptr = (T*) t;
+            for (std::size_t i = 0; i < t->size(); ++i)
+                direct_initializer<T>::destruct(ta, &ptr[i]);
+            //std::allocator_traits<AllocatorType>::destroy(na,t);
+            t->~pointer_wrapper();
+        }
+    }
+
+
+    template<typename Allocator, typename Stream,
+             typename U = T, std::enable_if_t<std::is_scalar<std::remove_all_extents_t<U>>::value>* = nullptr>
     static void construct(const Allocator&a, mpirpc::pointer_wrapper<U>* t, Stream&&s)
     {
         std::size_t size;
@@ -1449,29 +1525,33 @@ struct direct_initializer<mpirpc::pointer_wrapper<T>, std::allocator<X>>
             AllocatorType na(a);
             ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
             for (std::size_t i = 0; i < size; ++i)
-                direct_initializer<T,AllocatorType>::construct(na,&ptr[i],s);
+                direct_initializer<T>::construct(na,&ptr[i],s);
         }
         else
         {
             get_pointer_from_stream(s,ptr);
         }
-        new (t) mpirpc::pointer_wrapper<U>(ptr,size,pass_back,true);
+        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<mpirpc::pointer_wrapper<U>>;
+        AllocatorType na(a);
+        std::allocator_traits<AllocatorType>::construct(na,t,ptr,size,pass_back,true);
     }
 
     template<typename Allocator, typename Stream,
              typename U = T, std::enable_if_t<!std::is_scalar<U>::value>* = nullptr>
     static void construct(const Allocator&a, mpirpc::pointer_wrapper<U>* t, Stream&& s)
     {
-        std::size_t size;
-        s >> size;
+        std::size_t size = s.template get<std::size_t>(a);
+        std::cout << "size: " << size << std::endl;
         bool pass_back = false;
         bool pass_ownership = false;
         using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
         AllocatorType na(a);
         U* ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
         for (std::size_t i = 0; i < size; ++i)
-            direct_initializer<U,AllocatorType>::construct(na,&ptr[i],s);
-        new (t) mpirpc::pointer_wrapper<U>(ptr,size,pass_back,pass_ownership);
+            direct_initializer<U>::construct(na,&ptr[i],s);
+        using AllocatorType2 = typename std::allocator_traits<Allocator>::template rebind_alloc<mpirpc::pointer_wrapper<U>>;
+        AllocatorType2 na2(a);
+        std::allocator_traits<AllocatorType2>::construct(na2,t,ptr,size,pass_back,pass_ownership);
     }
 
     template<typename Allocator>
@@ -1485,47 +1565,48 @@ struct direct_initializer<mpirpc::pointer_wrapper<T>, std::allocator<X>>
         {
             T* ptr = (T*) t;
             for (std::size_t i = 0; i < t->size(); ++i)
-                direct_initializer<T,AllocatorType>::destruct(ta, &ptr[i]);
+                direct_initializer<T>::destruct(ta, &ptr[i]);
             std::allocator_traits<AllocatorType>::destroy(na,t);
         }
     }
 };
 
-template<typename T, std::size_t N, typename X>
-struct direct_initializer<T[N], std::allocator<X>>
+template<typename T, std::size_t N>
+struct direct_initializer<T[N]>
 {
-    template<typename Allocator, typename Stream, typename U = T, std::size_t M,
-             std::enable_if_t<!std::is_array<U>::value>* = nullptr>
-    static void construct(const Allocator &a, U(*t)[M], Stream&& s)
+    template<typename Allocator, typename Stream>
+    static void placementnew_construct(const Allocator &a, T(*t)[N], Stream&& s)
     {
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<U>;
-        AllocatorType na(a);
-        std::cout << "array constructor: " << abi::__cxa_demangle(typeid(na).name(),0,0,0) << std::endl;
-        std::cout << "array constructor: " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
-        std::cout << "array constructor: " << abi::__cxa_demangle(typeid(t).name(),0,0,0) << std::endl;
-        std::cout << "array constructor: " << abi::__cxa_demangle(typeid(&(*t)[2]).name(),0,0,0) << std::endl;
-        for (std::size_t i = 0; i < M; ++i)
+        for (std::size_t i = 0; i < N; ++i)
         {
-            direct_initializer<U,std::allocator<X>>::construct(a,&(*t)[i],s);
+            direct_initializer<T>::placementnew_construct(a,&(*t)[i],s);
         }
     }
 
-    template<typename Allocator, typename Stream, typename U = T, std::size_t M,
-             std::enable_if_t<std::is_array<U>::value>* = nullptr>
-    static void construct(const Allocator &a, U(*t)[M], Stream&& s)
+    template<typename Allocator>
+    static void placementnew_destruct(const Allocator& a, T(*t)[N])
     {
-        for(std::size_t i = 0; i < M; ++i)
-            direct_initializer<U,std::allocator<X>>::construct(a,&(*t)[i],s);
+        for (std::size_t i = 0; i < N; ++i)
+        {
+            direct_initializer<T>::placementnew_destroy(a,&(*t)[i]);
+        }
+    }
+
+    template<typename Allocator, typename Stream>
+    static void construct(const Allocator &a, T(*t)[N], Stream&& s)
+    {
+        for (std::size_t i = 0; i < N; ++i)
+        {
+            direct_initializer<T>::construct(a,&(*t)[i],s);
+        }
     }
 
     template<typename Allocator>
     static void destruct(const Allocator& a, T(*t)[N])
     {
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-        AllocatorType na(a);
         for (std::size_t i = 0; i < N; ++i)
         {
-            direct_initializer<T,AllocatorType>::destroy(na,&(*t)[i]);
+            direct_initializer<T>::destroy(a,&(*t)[i]);
         }
     }
 };
@@ -1545,7 +1626,7 @@ void get_from_stream(const Allocator &a, T*& t, Stream&& s)
 {
     std::cout << "get from stream: " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
     std::cout << "get from stream: " << abi::__cxa_demangle(typeid(t).name(),0,0,0) << std::endl;
-    direct_initializer<T,std::allocator<T>>::construct(a,t,s);
+    direct_initializer<T>::placementnew_construct(a,t,s);
 }
 
 template<typename Allocator, typename T, typename Stream, std::enable_if_t<!is_buildtype<T>>* = nullptr>
@@ -1557,7 +1638,7 @@ void get_from_stream(const Allocator &a, T*& t, Stream&& s)
 template<typename Allocator, typename T, std::enable_if_t<is_buildtype<T>>* = nullptr>
 void cleanup(const Allocator &a, T* t)
 {
-    direct_initializer<T,std::allocator<T>>::destruct(a,t);
+    direct_initializer<T>::placementnew_destruct(a,t);
 }
 
 template<typename Allocator, typename T, std::enable_if_t<!is_buildtype<T>>* = nullptr>
@@ -1718,7 +1799,7 @@ constexpr std::size_t align_buffer_size = alignment_padding_helper_impl<SkipBuil
  * custom types that can be correctly accessed by a reinterpret_cast<T*> on the buffer location (objects with standard layout
  * and no pointer/reference type member variables).
  *
- * Next, types for which is_buildtype<T> is true call direct_initializer<T,std::allocator<T>>::construct(Allocator,T*,Stream).
+ * Next, types for which is_buildtype<T> is true call direct_initializer<T,alloca_allocator<T>>::construct(Allocator,T*,Stream).
  * This is a specialization of direct_initializer<T,Alloc>::construct(Allocator,T*,Stream) and ensures that these variables in
  * the stack are allocated using placment new rather than Allocator, which is allowed to do more and could potentially expect
  * the memory to be allocated with its type of allocator. Allocator is used when these stack allocated variables need to heap
@@ -1760,9 +1841,9 @@ TEST(ArgumentUnpacking, test0)
     p << 2.3 << 4 << 1.2f << ai << ad << true << af << mpirpc::pointer_wrapper<double>(&pd);
     std::allocator<void> a;
     mpirpc::parameter_stream pout;
-    apply(&foo,a,p,pout);
+    //apply(&foo,a,p,pout);
     mpirpc::parameter_stream pout2;
-    apply(&foo3,a,p,pout2);
+    //apply(&foo3,a,p,pout2);
 }
 
 using i128t = int __attribute__((aligned(128)));
@@ -1854,14 +1935,23 @@ TEST(ArgumentUnpacking, test2)
     ::mpirpc::internal::apply_stream(&foo,a,p,pout);
 }
 
-template<typename Alloc>
-struct direct_initializer<B,Alloc>
+template<>
+struct direct_initializer<B>
 {
     template<typename Allocator>
-    static void construct(const Allocator& a, B* t, parameter_buffer& s)
+    static void placementnew_construct(const Allocator& a, B* t, parameter_buffer& s)
     {
         auto tup = s.get<B>(a);
         new (t) B(std::get<1>(tup), std::get<2>(tup));
+    }
+
+    template<typename Allocator>
+    static void construct(const Allocator& a, B* t, parameter_buffer& s)
+    {
+        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<B>;
+        AllocatorType na(a);
+        auto tup = s.get<B>(a);
+        std::allocator_traits<AllocatorType>::construct(na,t,std::get<1>(tup),std::get<2>(tup));
     }
 };
 
@@ -1872,7 +1962,7 @@ TEST(ParameterBuffer,scalars)
     int intval = 4;
     float floatval = 2.17f;
     double doubleval = 3.14;
-    B bval(7,9);
+    mpirpc::pointer_wrapper<B> bval(new B(7,9));
     b.put(boolval);
     b.put(intval);
     b.put(floatval);
@@ -1888,10 +1978,14 @@ TEST(ParameterBuffer,scalars)
     ASSERT_EQ(true,b.get<bool>(a));
     ASSERT_EQ(4,b.get<int>(a));
     ASSERT_EQ(2.17f,b.get<float>(a));
-    ASSERT_EQ(3.14,b.get<double>(a));
-    ASSERT_EQ((std::tuple<int,int>(7,9)),b.get<B>(a));
+    //ASSERT_EQ(3.14,b.get<double>(a));
+    direct_initializer<double>::placementnew_construct(a,&doubleval,b);
+    ASSERT_EQ(3.14,doubleval);
+    //ASSERT_EQ((std::tuple<int,int>(7,9)),b.get<B>(a));
     mpirpc::pointer_wrapper<B> *bptr = (mpirpc::pointer_wrapper<B>*) malloc(sizeof(mpirpc::pointer_wrapper<B>));
-    direct_initializer<mpirpc::pointer_wrapper<B>,std::allocator<B>>::construct(a,bptr,b);
+    direct_initializer<mpirpc::pointer_wrapper<B>>::placementnew_construct(a,bptr,b);
+    ASSERT_EQ(7,(*bptr)->a);
+    ASSERT_EQ(9,(*bptr)->b);
 }
 
 int main(int argc, char **argv) {

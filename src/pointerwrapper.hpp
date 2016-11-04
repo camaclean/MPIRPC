@@ -71,6 +71,7 @@ public:
     T const& operator[](std::size_t n) const { return m_pointer[n]; }
     explicit operator T*() const { return m_pointer; }
     T operator*() const { return *m_pointer; }
+    T* operator->() const { return m_pointer; }
 
     bool is_pass_back() const { return m_pass_back; }
     bool is_pass_ownership() const { return m_pass_ownership; }
