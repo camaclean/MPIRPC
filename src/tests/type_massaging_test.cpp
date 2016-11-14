@@ -1086,26 +1086,6 @@ struct get_last_integer_sequence<Int,I>
     constexpr static Int last = I;
 };*/
 
-void foo(double d, int i, float f,  bool b, int(&ai)[4], double(&ad)[3], float(&af)[5], double *pd)
-{
-    int ai2[4]{2,4,6,8};
-    double ad2[3]{4.6,8.2,9.1};
-    float af2[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
-
-    ASSERT_EQ(2.3,d);
-    ASSERT_EQ(4,i);
-    ASSERT_EQ(1.2f,f);
-    ASSERT_EQ(true, b);
-    for(std::size_t index = 0; index < 4; ++index)
-        ASSERT_EQ(ai2[index],ai[index]);
-    for(std::size_t index = 0; index < 3; ++index)
-        ASSERT_EQ(ad2[index],ad[index]);
-    for(std::size_t index = 0; index < 5; ++index)
-        ASSERT_EQ(af2[index],af[index]);
-    ASSERT_EQ(3.14159,*pd);
-    std::cout << "ran foo" << std::endl;
-}
-
 class Foo2
 {
 public:
@@ -1389,7 +1369,7 @@ public:
     A(A&&) = delete;
     A() : a(1) {}
     virtual void test() {}
-    virtual ~A() {}
+    virtual ~A() { std::cout << "A destructor" << std::endl; }
     int a;
 };
 
@@ -1400,7 +1380,7 @@ public:
     B(B&&) = delete;
     B() : A(), b(2) {}
     virtual void test() {}
-    virtual ~B() {}
+    virtual ~B() { std::cout << "B destructor" << std::endl; }
     int b;
 };
 
@@ -1529,124 +1509,6 @@ struct direct_initializer
 };
 
 template<typename T>
-struct polymorphic_direct_initializer;
-
-template<>
-struct polymorphic_direct_initializer<B>
-{
-    template<typename Allocator>
-    static void allocate(Allocator& a, B*& p, mpirpc::TypeId id, std::size_t count)
-    {
-        std::cout << "id: " << id << " " << type_id<A>() << " " << type_id<B>() << " " << count << std::endl;
-        if (id == type_id<B>())
-        {
-            using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<B>;
-            AllocatorType na(a);
-            p = std::allocator_traits<AllocatorType>::allocate(na,count);
-        }
-        else
-        {
-            throw std::bad_alloc();
-        }
-    }
-
-    template<typename Allocator, typename Buffer>
-    static void construct(Allocator& a, B*& p, Buffer&& b, mpirpc::TypeId id)
-    {
-        if (id == type_id<B>())
-        {
-            using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<B>;
-            AllocatorType na(a);
-            piecewise_allocator_traits<AllocatorType>::construct(na,p,get<B>(std::forward<Buffer>(b),na));
-        }
-        else
-        {
-            throw std::bad_typeid();
-        }
-    }
-
-    template<typename Allocator, typename Buffer>
-    static void construct_n(Allocator& a, B* p, Buffer&& b, mpirpc::TypeId id, std::size_t count)
-    {
-        if (id == type_id<B>())
-        {
-            for (std::size_t i = 0; i < count; ++i)
-            {
-                construct(a,p,std::forward<Buffer>(b),id);
-            }
-        }
-        else
-        {
-            throw std::bad_typeid();
-        }
-    }
-};
-
-template<>
-struct polymorphic_direct_initializer<A>
-{
-    template<typename Allocator>
-    static void allocate(Allocator& a, A*& p, mpirpc::TypeId id, std::size_t count)
-    {
-        std::cout << "id: " << id << " " << type_id<A>() << " " << type_id<B>() << std::endl;
-        if (id == type_id<A>())
-        {
-            using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<A>;
-            AllocatorType na(a);
-            p = std::allocator_traits<AllocatorType>::allocate(na,count);
-        }
-        else if (id == type_id<B>())
-        {
-            polymorphic_direct_initializer<B>::allocate(a,static_cast<B*>(p),count,id);
-        }
-        else
-        {
-            throw std::bad_alloc();
-        }
-    }
-
-    template<typename Allocator, typename Buffer>
-    static void construct(Allocator& a, A* p, Buffer&& b, mpirpc::TypeId id)
-    {
-        if (id == type_id<A>())
-        {
-            using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<A>;
-            AllocatorType na(a);
-            piecewise_allocator_traits<AllocatorType>::construct(na,p,get<A>(std::forward<Buffer>(b),na));
-        }
-        else if (id == type_id<B>())
-        {
-            polymorphic_direct_initializer<B>::construct(a,static_cast<B>(p),std::forward<Buffer>(b),id);
-        }
-        else
-        {
-            throw std::bad_typeid();
-        }
-    }
-
-    template<typename Allocator, typename Buffer>
-    static void construct_n(Allocator& a, A* p, Buffer&& b, mpirpc::TypeId id, std::size_t count)
-    {
-        if (id == type_id<A>())
-        {
-            for (std::size_t i = 0; i < count; ++i)
-            {
-                construct(a,p,std::forward<Buffer>(b),id);
-            }
-        }
-        else if (id == type_id<B>())
-        {
-            B* bptr = static_cast<B*>(p);
-            polymorphic_direct_initializer<B>::construct_n(a,bptr,std::forward<Buffer>(b),id,count);
-        }
-        else
-        {
-            throw std::bad_typeid();
-        }
-    }
-};
-
-template<typename T>
 struct direct_initializer<mpirpc::pointer_wrapper<T>>
 {
     template<typename Allocator, typename Buffer,
@@ -1703,7 +1565,6 @@ struct direct_initializer<mpirpc::pointer_wrapper<T>>
         mpirpc::TypeId type = get<uintptr_t>(s,a);
         std::cout << "type: " << type << std::endl;
         U* ptr = static_cast<U*>(polymorphic_map.at(safe_type_index_map.at(type))->build(a,s,size));
-
         //polymorphic_direct_initializer<U>::allocate(a,ptr,type,size);
         //polymorphic_direct_initializer<U>::construct_n(a,ptr,s,type,size);
         new (t) mpirpc::pointer_wrapper<U>(ptr,size,pass_back,pass_ownership);
@@ -1718,7 +1579,7 @@ struct direct_initializer<mpirpc::pointer_wrapper<T>>
         AllocatorTypeT ta(a);
         if (!t->is_pass_ownership())
         {
-            T* ptr = (T*) t;
+            T* ptr = (T*) *t;
             for (std::size_t i = 0; i < t->size(); ++i)
                 direct_initializer<T>::destruct(ta, &ptr[i]);
             //std::allocator_traits<AllocatorType>::destroy(na,t);
@@ -1860,7 +1721,7 @@ struct remarshaller<parameter_buffer, alignment>
 };
 
 template<std::size_t Alignment, typename Allocator, typename T, typename Buffer, std::enable_if_t<is_buildtype<T,Buffer>>* = nullptr>
-void get_from_stream(const Allocator &a, T*& t, Buffer&& s)
+void get_from_stream(Allocator &a, T*& t, Buffer&& s)
 {
     std::cout << "get from stream: " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << " " << is_buildtype<T,Buffer> << std::endl;
     std::cout << "get from stream: " << abi::__cxa_demangle(typeid(t).name(),0,0,0) << std::endl;
@@ -1869,7 +1730,7 @@ void get_from_stream(const Allocator &a, T*& t, Buffer&& s)
 }
 
 template<std::size_t Alignment, typename Allocator, typename T, typename Buffer, std::enable_if_t<!is_buildtype<T,Buffer>>* = nullptr>
-void get_from_stream(const Allocator &a, T*& t, Buffer&& s)
+void get_from_stream(Allocator &a, T*& t, Buffer&& s)
 {
     get_pointer_from_buffer<Alignment>(s,t);
 }
@@ -1908,56 +1769,6 @@ void print(T&& t)
     std::cout << t << std::endl;
 }
 
-template<typename F, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t... Is, std::size_t... Alignments,
-         std::enable_if_t<std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
-void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
-{
-    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts))) : nullptr)...};
-    using swallow = int[];
-    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
-    std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
-    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
-    (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
-}
-
-template<typename F, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is, std::size_t... Alignments,
-         std::enable_if_t<!std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
-void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
-{
-    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts))) : nullptr)...};
-    using swallow = int[];
-    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
-    auto&& ret = std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
-    os << mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret));
-    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
-    (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
-}
-
-template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is, std::size_t... Alignments,
-         std::enable_if_t<std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
-void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
-{
-    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts))) : nullptr)...};
-    using swallow = int[];
-    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
-    ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
-    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
-    (void)swallow{(cleanup<InBuffer>(a,std::get<Is>(t)), 0)...};
-}
-
-template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is, std::size_t... Alignments,
-         std::enable_if_t<!std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
-void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
-{
-    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(alloca(sizeof(Ts))) : nullptr)...};
-    using swallow = int[];
-    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
-    auto&& ret = ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
-    os << mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret));
-    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
-    (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
-}
-
 template<typename Buffer,bool SkipBuildTypes, bool SkipNonBuildTypes, std::size_t Pos, typename...Ts>
 struct alignment_padding_helper_impl
 {
@@ -1984,20 +1795,94 @@ struct alignment_padding_helper_impl<Buffer,SkipBuildTypes,SkipNonBuildTypes,0,T
     static constexpr std::size_t total_size = sizeof(type);
 };
 
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes>
+struct alignment_padding_helper_impl<Buffer,SkipBuildTypes,SkipNonBuildTypes,0>
+{
+    using type = std::nullptr_t;
+    static constexpr bool predicate = false;
+    static constexpr std::size_t prev_end_address_offset = 0;
+    static constexpr std::size_t delta = 0;
+    static constexpr std::size_t start_address_offset = 0;
+    static constexpr std::size_t end_address_offset = 0;
+    static constexpr std::size_t total_padding = 0;
+    static constexpr std::size_t total_size = 0;
+};
+
 template<typename...Ts,std::size_t...Is>
 void test_alignment_padding(std::index_sequence<Is...>)
 {
     using swallow = int[];
     std::cout << "-------" << std::endl;
-    (void)swallow{( std::cout << alignment_padding_helper_impl<parameter_buffer,false,false,Is,Ts...>::delta << std::endl, 0)...};
+    (void)swallow{( std::cout << "alignment padding: " << alignment_padding_helper_impl<parameter_buffer,false,false,Is,Ts...>::delta << std::endl, 0)...};
     std::cout << "-------" << std::endl;
 }
 
 template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename... Ts>
-constexpr std::size_t alignment_padding = alignment_padding_helper_impl<Buffer,SkipBuildTypes, SkipNonBuildTypes, sizeof...(Ts)-1,Ts...>::total_padding;
+constexpr std::size_t alignment_padding = alignment_padding_helper_impl<Buffer, SkipBuildTypes, SkipNonBuildTypes, (sizeof...(Ts) > 0) ? (sizeof...(Ts)-1) : 0,Ts...>::total_padding;
 
 template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename... Ts>
-constexpr std::size_t align_buffer_size = alignment_padding_helper_impl<Buffer,SkipBuildTypes, SkipNonBuildTypes, sizeof...(Ts)-1,Ts...>::total_size;
+constexpr std::size_t align_buffer_size = alignment_padding_helper_impl<Buffer, SkipBuildTypes, SkipNonBuildTypes, (sizeof...(Ts) > 0) ? (sizeof...(Ts)-1) : 0,Ts...>::total_size;
+
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, std::size_t index, typename...Ts>
+constexpr std::size_t align_buffer_address_offset = alignment_padding_helper_impl<Buffer, SkipBuildTypes, SkipNonBuildTypes, index, Ts...>::start_address_offset;
+
+template<typename F, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t... Is, std::size_t... Alignments,
+         std::enable_if_t<std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
+void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
+{
+    constexpr std::size_t buffer_size = align_buffer_size<InBuffer,false,true,Ts...>;
+    char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + align_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
+    using swallow = int[];
+    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
+    std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
+    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
+    (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
+}
+
+template<typename F, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is, std::size_t... Alignments,
+         std::enable_if_t<!std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
+void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
+{
+    constexpr std::size_t buffer_size = align_buffer_size<InBuffer,false,true,Ts...>;
+    char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + align_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
+    using swallow = int[];
+    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
+    auto&& ret = std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
+    os << mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret));
+    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
+    (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
+}
+
+template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is, std::size_t... Alignments,
+         std::enable_if_t<std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
+void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
+{
+    constexpr std::size_t buffer_size = align_buffer_size<InBuffer,false,true,Ts...>;
+    char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + align_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
+    using swallow = int[];
+    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
+    ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
+    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
+    (void)swallow{(cleanup<InBuffer>(a,std::get<Is>(t)), 0)...};
+}
+
+template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is, std::size_t... Alignments,
+         std::enable_if_t<!std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
+void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
+{
+    constexpr std::size_t buffer_size = align_buffer_size<InBuffer,false,true,Ts...>;
+    char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + align_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
+    using swallow = int[];
+    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
+    auto&& ret = ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
+    os << mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret));
+    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
+    (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
+}
 
 template<typename T1, typename T2,typename = void>
 struct choose_custom_alignment;
@@ -2046,10 +1931,13 @@ using custom_alignments = typename choose_custom_alignment<T1,T2>::type;
  * custom types that can be correctly accessed by a reinterpret_cast<T*> on the buffer location (objects with standard layout
  * and no pointer/reference type member variables).
  *
- * Next, types for which is_buildtype<T> is true call direct_initializer<T,alloca_allocator<T>>::construct(Allocator,T*,Stream).
- * This is a specialization of direct_initializer<T,Alloc>::construct(Allocator,T*,Stream) and ensures that these variables in
- * the stack are allocated using placment new rather than Allocator, which is allowed to do more and could potentially expect
- * the memory to be allocated with its type of allocator. Allocator is used when these stack allocated variables need to heap
+ * Next, types for which is_buildtype<T> is true call direct_initializer<T>::placementnew_construct(Allocator,T*,Stream).
+ * This constructs a T using placement new, which is suitable for constructing types in the stack buffer. Types which have pointers
+ * of their own should use direct_initializer<T>::construct(Allocator,T*,Buffer), which uses the (possibly custom) Allocator for
+ * construction. The arguments for construction of T are provided by parameterbuffer_unmarshaller<T>::unmarshal(Allocator,parameter_buffer).
+ * This struct should be specialized to add support for custom types. If the constructor of of T takes more than one argument,
+ * then a tuple containing the constructor parameters should be returned.
+ * Allocator is used when these stack allocated variables need to heap
  * allocate memory. For instance, the pointer owned by mpirpc::pointer_wrapper is allocated using Allocator, std::tuple is
  * constructed using the allocator aware constructors, and allocator aware containers are be passed the Allocator instance.
  *
@@ -2087,12 +1975,31 @@ void apply(F&& f, Class *c, Allocator&& a, InBuffer&& s, OutBuffer&& os)
     apply_impl(std::forward<F>(f),c,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
 }
 
+void foo(double d, int i, float f,  bool b, int(&ai)[4], double(&ad)[3], float(&af)[5], double *pd, B* a)
+{
+    int ai2[4]{2,4,6,8};
+    double ad2[3]{4.6,8.2,9.1};
+    float af2[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
+
+    ASSERT_EQ(2.3,d);
+    ASSERT_EQ(4,i);
+    ASSERT_EQ(1.2f,f);
+    ASSERT_EQ(true, b);
+    for(std::size_t index = 0; index < 4; ++index)
+        ASSERT_EQ(ai2[index],ai[index]);
+    for(std::size_t index = 0; index < 3; ++index)
+        ASSERT_EQ(ad2[index],ad[index]);
+    for(std::size_t index = 0; index < 5; ++index)
+        ASSERT_EQ(af2[index],af[index]);
+    ASSERT_EQ(3.14159,*pd);
+    ASSERT_EQ(8,a->a);
+    std::cout << "ran foo" << a->a << std::endl;
+}
+
 int foo3()
 {
     return 3;
 }
-
-
 
 void foo4(bool b, i128t i128)
 {
@@ -2101,13 +2008,14 @@ void foo4(bool b, i128t i128)
 
 TEST(ArgumentUnpacking, test0)
 {
+    register_polymorphism<A>();
+    register_polymorphism<B>();
     parameter_buffer p;
     int ai[4]{2,4,6,8};
     double ad[3]{4.6,8.2,9.1};
     float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
     double pd = 3.14159;
 
-    //p.put(ai);
     p.put(2.3);
     p.put(4);
     p.put(1.2f);
@@ -2116,6 +2024,8 @@ TEST(ArgumentUnpacking, test0)
     p.put(ad);
     p.put(af);
     p.put(mpirpc::pointer_wrapper<double>(&pd));
+    B b(8,11);
+    p.put(mpirpc::pointer_wrapper<B>(&b));
     std::cout << std::hex;
     for (std::size_t i = 0; i < p.position(); ++i)
         std::cout << (unsigned int) p.data()[i] << " ";
@@ -2207,7 +2117,7 @@ TEST(ArgumentUnpacking, test1)
     //std::cout << abi::__cxa_demangle(typeid(blah).name(),0,0,0) << std::endl;
 }
 
-TEST(ArgumentUnpacking, test2)
+/*TEST(ArgumentUnpacking, test2)
 {
     mpirpc::parameter_stream p;
     int ai[4]{2,4,6,8};
@@ -2218,32 +2128,10 @@ TEST(ArgumentUnpacking, test2)
     std::allocator<void> a;
     mpirpc::parameter_stream pout;
     ::mpirpc::internal::apply_stream(&foo,a,p,pout);
-}
-
-template<>
-struct direct_initializer<B>
-{
-    template<typename Allocator>
-    static void placementnew_construct(const Allocator& a, B* t, parameter_buffer& s)
-    {
-        auto tup = s.get<B>(a);
-        new (t) B(std::get<1>(tup), std::get<2>(tup));
-    }
-
-    template<typename Allocator>
-    static void construct(const Allocator& a, B* t, parameter_buffer& s)
-    {
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<B>;
-        AllocatorType na(a);
-        auto tup = s.get<B>(a);
-        std::allocator_traits<AllocatorType>::construct(na,t,std::get<1>(tup),std::get<2>(tup));
-    }
-};
+}*/
 
 TEST(ParameterBuffer,scalars)
 {
-    register_polymorphism<A>();
-    register_polymorphism<B>();
     parameter_buffer b{};
     bool boolval = true;
     int intval = 4;
@@ -2258,7 +2146,7 @@ TEST(ParameterBuffer,scalars)
     std::cout << std::hex;
     for (std::size_t i = 0; i < b.position(); ++i)
         std::cout << (unsigned int) b.data()[i] << " ";
-        std::cout << std::dec << std::endl;
+    std::cout << std::dec << std::endl;
     b.seek(0);
     std::allocator<void> a;
     ASSERT_EQ(true,b.get<bool>(a));
