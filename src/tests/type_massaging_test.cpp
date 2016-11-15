@@ -1126,13 +1126,13 @@ constexpr bool is_aligned_binary_buffer = aligned_binary_buffer_identifier<std::
 template<typename T, typename Buffer>
 struct buildtype_helper
 {
-    constexpr static bool value = !(std::is_scalar<std::remove_reference_t<T>>::value && is_aligned_binary_buffer<Buffer>);
+    constexpr static bool value = !(std::is_scalar<std::remove_reference_t<T>>::value && is_aligned_binary_buffer<Buffer> && !std::is_pointer<T>::value);
 };
 
 template<typename T, std::size_t N, typename Buffer>
 struct buildtype_helper<T[N],Buffer>
 {
-    constexpr static bool value = !(std::is_scalar<std::remove_reference_t<T>>::value && is_aligned_binary_buffer<Buffer>);
+    constexpr static bool value = !(std::is_scalar<std::remove_reference_t<T>>::value && is_aligned_binary_buffer<Buffer> && !std::is_pointer<T>::value);
 };
 
 template<typename T, typename Buffer>
@@ -1242,7 +1242,7 @@ public:
     template<typename T>
     void put(T&& t)
     {
-        std::cout << "put alignment: " << alignof(T) << std::endl;
+        std::cout << "put alignment: " << alignof(T) << " of type " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
         parameterbuffer_marshaller<std::remove_reference_t<T>,alignof(T)>::marshal(*this,std::forward<T>(t));
     }
 
@@ -1304,26 +1304,36 @@ struct polymorphic_factory : polymorphic_factory_base<Allocator,Buffer>
 };
 
 std::map<uintptr_t,std::type_index> safe_type_index_map;
-std::map<std::type_index,polymorphic_factory_base<std::allocator<void>,parameter_buffer>*> polymorphic_map;
+std::map<std::type_index,polymorphic_factory_base<std::allocator<char>,parameter_buffer>*> polymorphic_map;
 
 template<typename T>
 void register_polymorphism()
 {
+    std::cout << "registering " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << " " << type_identifier<T>::id() << std::endl;
     safe_type_index_map.insert({type_identifier<T>::id(),std::type_index{typeid(T)}});
-    polymorphic_map.insert({std::type_index{typeid(T)},new polymorphic_factory<T,std::allocator<void>,parameter_buffer>()});
+    polymorphic_map.insert({std::type_index{typeid(T)},new polymorphic_factory<T,std::allocator<char>,parameter_buffer>()});
 }
 
 template<typename T, std::size_t alignment>
-struct parameterbuffer_marshaller<T,alignment>//,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,parameter_buffer>::value>>
+struct parameterbuffer_marshaller<T,alignment,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,parameter_buffer>::value>>
 {
     template<typename U>//,std::enable_if_t<std::is_same<std::decay_t<T>,std::decay_t<U>>::value>* = nullptr>
     static void marshal(parameter_buffer& b, U&& val)
     {
-        std::cout << "marshalling alignment: " << alignment<< std::endl;
+        std::cout << "marshalling alignment: " << alignment << " for type " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
         const char* p = reinterpret_cast<const char*>(&val);
         b.append<alignment>(p, p+sizeof(T));
     }
 };
+
+/*template<typename T, std::size_t alignment>
+struct parameterbuffer_marshaller<T,alignment,std::enable_if_t<std::is_pointer<T>::value>>
+{
+    static void marshal(parameter_buffer& b, const T& t)
+    {
+        parameterbuffer_marshaller<mpirpc::pointer_wrapper<std::remove_pointer_t<T>>,alignof(std::remove_pointer_t<T>)>::marshal(b,mpirpc::pointer_wrapper<std::remove_pointer_t<T>>(t));
+    }
+};*/
 
 template<typename T>
 struct parameterbuffer_unmarshaller<T,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,parameter_buffer>::value>>
@@ -1509,6 +1519,40 @@ struct direct_initializer
 };
 
 template<typename T>
+struct parameterbuffer_unmarshaller<mpirpc::pointer_wrapper<T>>
+{
+    template<typename Allocator, typename Buffer>
+    static std::tuple<T*,std::size_t,bool,bool> unmarshal(Allocator& a, Buffer &b)
+    {
+        T *ptr;
+        std::size_t size = get<std::size_t>(b,a);
+        bool pass_back = false, pass_ownership = false;
+
+        if (pass_ownership || is_buildtype<T,Buffer>)
+        {
+            if (std::is_polymorphic<T>::value)
+            {
+                using VoidAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<char>;
+                VoidAllocatorType va(a);
+                uintptr_t type = get<uintptr_t>(b,a);
+                ptr = static_cast<T*>(polymorphic_map.at(safe_type_index_map.at(type))->build(va,b,size));
+            }
+            else
+            {
+                using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
+                AllocatorType na(a);
+                ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
+                for (std::size_t i = 0; i < size; ++i)
+                    direct_initializer<U>::construct(na,&ptr[i],b);
+            }
+        }
+        else
+            get_pointer_from_buffer<alignof(T)>(b,ptr);
+        return std::tuple<T*,std::size_t,bool,bool>{ptr,size,pass_back,pass_ownership};
+    }
+};
+
+/*template<typename T>
 struct direct_initializer<mpirpc::pointer_wrapper<T>>
 {
     template<typename Allocator, typename Buffer,
@@ -1646,7 +1690,7 @@ struct direct_initializer<mpirpc::pointer_wrapper<T>>
             std::allocator_traits<AllocatorType>::destroy(na,t);
         }
     }
-};
+};*/
 
 template<typename T, std::size_t N>
 struct direct_initializer<T[N]>
@@ -2031,7 +2075,7 @@ TEST(ArgumentUnpacking, test0)
         std::cout << (unsigned int) p.data()[i] << " ";
     std::cout << std::dec << std::endl;
     p.seek(0);
-    std::allocator<void> a;
+    std::allocator<char> a;
     parameter_buffer pout;
     apply(&foo,a,p,pout);
     parameter_buffer pout2;
@@ -2063,7 +2107,7 @@ TEST(ArgumentUnpacking, test1)
     double ad[3]{4.6,8.2,9.1};
     float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
     p << 2.3 << 4 << 1.2f << true << ai << ad << af;
-    std::allocator<void> a;
+    std::allocator<char> a;
     Foo2 fo;
 
     type2 t;
@@ -2125,7 +2169,7 @@ TEST(ArgumentUnpacking, test1)
     float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
     double pd = 3.14159;
     p << 2.3 << 4 << 1.2f << true << ai << ad << af << mpirpc::pointer_wrapper<double>(&pd);
-    std::allocator<void> a;
+    std::allocator<char> a;
     mpirpc::parameter_stream pout;
     ::mpirpc::internal::apply_stream(&foo,a,p,pout);
 }*/
@@ -2143,6 +2187,9 @@ TEST(ParameterBuffer,scalars)
     b.put(floatval);
     b.put(doubleval);
     b.put(bval);
+    std::cout << "---------------\n";
+    //b.put(new B(5,10));
+    std::cout << "---------------\n";
     std::cout << std::hex;
     for (std::size_t i = 0; i < b.position(); ++i)
         std::cout << (unsigned int) b.data()[i] << " ";
@@ -2157,10 +2204,12 @@ TEST(ParameterBuffer,scalars)
     ASSERT_EQ(3.14,doubleval);
     //ASSERT_EQ((std::tuple<int,int>(7,9)),b.get<B>(a));
     mpirpc::pointer_wrapper<B> *bptr = (mpirpc::pointer_wrapper<B>*) malloc(sizeof(mpirpc::pointer_wrapper<B>));
-    direct_initializer<mpirpc::pointer_wrapper<A>>::placementnew_construct(a,bptr,b);
-    ASSERT_EQ(7,(*bptr)->a);
-    ASSERT_EQ(9,(*bptr)->b);
+    //direct_initializer<mpirpc::pointer_wrapper<A>>::placementnew_construct(a,bptr,b);
+    //ASSERT_EQ(7,(*bptr)->a);
+    //ASSERT_EQ(9,(*bptr)->b);
 }
+
+
 
 TEST(PolymorphicLookup,test)
 {
@@ -2178,7 +2227,7 @@ TEST(PolymorphicLookup,test)
         std::cout << (unsigned int) b.data()[i] << " ";
     std::cout << std::dec << std::endl;
     b.seek(0);
-    std::allocator<void> a;
+    std::allocator<char> a;
     std::size_t size = get<std::size_t>(b,a);
     uintptr_t id = get<uintptr_t>(b,a);
     B* test = static_cast<B*>(polymorphic_map.at(safe_type_index_map.at(id))->build(a,b,size));
