@@ -1021,20 +1021,6 @@ void ordered_call_rref_array(int(&&v)[3][4])
     ASSERT_EQ(13,v[2][3]);
 }
 
-/*TEST(OrderedCallTest, rref_array)
-{
-    //int t[3][4]{1,2,3,4,5,6,7,8,9,10,11,12};
-    using T = int(&&)[3][4];
-    int *p = new int[3*4]{1,2,3,4,5,6,7,8,9,10,11,12};
-    //T a1 = std::move(t);
-    T a1 = (T) *p;
-    std::allocator<void> a;
-    {
-        mpirpc::internal::ordered_call<decltype(&ordered_call_rref_array),std::allocator<void>> oc{&ordered_call_rref_array, a, a1};
-        oc();
-    } //make ordered_call go out of scope
-}*/
-
 class Bar
 {
 public:
@@ -1172,11 +1158,11 @@ struct aligned_binary_buffer_delta_helper
 template<typename Buffer, std::size_t addr, std::size_t alignment>
 constexpr std::size_t aligned_binary_buffer_delta = aligned_binary_buffer_delta_helper<Buffer,addr,alignment>::value;
 
-template<typename T, std::size_t alignment, typename = void>
-struct parameterbuffer_marshaller;
+template<typename T, typename Buffer, std::size_t alignment, typename = void>
+struct marshaller;
 
-template<typename T, typename = void>
-struct parameterbuffer_unmarshaller;
+template<typename T, typename Buffer, std::size_t alignment, typename = void>
+struct unmarshaller;
 
 class parameter_buffer
 {
@@ -1201,13 +1187,6 @@ public:
     std::size_t position() const noexcept { return m_position; }
 
     void seek(std::size_t pos) noexcept { m_position = pos; }
-
-    template<typename T>
-    parameter_buffer& operator<<(T&& t)
-    {
-        put(std::forward<T>(t));
-        return *this;
-    }
 
     template<typename T>
     T* reinterpret_and_advance(std::size_t size) noexcept { T* ret = reinterpret_cast<T*>(&m_buffer->data()[m_position]); m_position+=size; return ret; }
@@ -1236,14 +1215,14 @@ public:
     decltype(auto) get(Allocator&& a)
     {
         realign<alignof(T)>();
-        return parameterbuffer_unmarshaller<std::remove_reference_t<T>>::unmarshal(std::forward<Allocator>(a),*this);
+        return unmarshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,alignof(T)>::unmarshal(std::forward<Allocator>(a),*this);
     }
 
     template<typename T>
     void put(T&& t)
     {
         std::cout << "put alignment: " << alignof(T) << " of type " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
-        parameterbuffer_marshaller<std::remove_reference_t<T>,alignof(T)>::marshal(*this,std::forward<T>(t));
+        marshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,alignof(T)>::marshal(*this,std::forward<T>(t));
     }
 
 protected:
@@ -1314,10 +1293,10 @@ void register_polymorphism()
     polymorphic_map.insert({std::type_index{typeid(T)},new polymorphic_factory<T,std::allocator<char>,parameter_buffer>()});
 }
 
-template<typename T, std::size_t alignment>
-struct parameterbuffer_marshaller<T,alignment,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,parameter_buffer>::value>>
+template<typename T, typename Buffer, std::size_t alignment>
+struct marshaller<T,Buffer,alignment,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,Buffer>::value && std::is_same<Buffer,parameter_buffer>::value>>
 {
-    template<typename U>//,std::enable_if_t<std::is_same<std::decay_t<T>,std::decay_t<U>>::value>* = nullptr>
+    template<typename U,std::enable_if_t<std::is_same<std::decay_t<T>,std::decay_t<U>>::value>* = nullptr>
     static void marshal(parameter_buffer& b, U&& val)
     {
         std::cout << "marshalling alignment: " << alignment << " for type " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
@@ -1335,8 +1314,8 @@ struct parameterbuffer_marshaller<T,alignment,std::enable_if_t<std::is_pointer<T
     }
 };*/
 
-template<typename T>
-struct parameterbuffer_unmarshaller<T,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,parameter_buffer>::value>>
+template<typename T, typename Buffer, std::size_t Alignment>
+struct unmarshaller<T,Buffer,Alignment,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,Buffer>::value && std::is_same<Buffer,parameter_buffer>::value>>
 {
     template<typename Allocator>
     static T unmarshal(Allocator&&, parameter_buffer& b)
@@ -1345,28 +1324,30 @@ struct parameterbuffer_unmarshaller<T,std::enable_if_t<!buildtype_helper<std::re
     }
 };
 
-template<typename T, std::size_t alignment>
-struct parameterbuffer_marshaller<mpirpc::pointer_wrapper<T>, alignment, void>
+template<typename T, typename Buffer, std::size_t Alignment>
+struct marshaller<mpirpc::pointer_wrapper<T>, Buffer, Alignment>
 {
     template<typename U = T, std::enable_if_t<!std::is_polymorphic<U>::value>* = nullptr>
-    static void marshal(parameter_buffer& b, const mpirpc::pointer_wrapper<U>& val)
+    static void marshal(Buffer& b, const mpirpc::pointer_wrapper<U>& val)
     {
         b.put(val.size());
         for (std::size_t i = 0; i < val.size(); ++i)
         {
-            parameterbuffer_marshaller<U,alignment>::marshal(b,val[i]);
+            b.put(val[i]);
+            //marshaller<U,Buffer,Alignment>::marshal(b,val[i]);
         }
     }
 
     template<typename U = T, std::enable_if_t<std::is_polymorphic<U>::value>* = nullptr>
-    static void marshal(parameter_buffer& b, const mpirpc::pointer_wrapper<U>& val)
+    static void marshal(Buffer& b, const mpirpc::pointer_wrapper<U>& val)
     {
         std::cout << "marshalling polymorphic " << type_id(*val) << std::endl;
         b.put(val.size());
         b.put(type_identifier<U>::id());
         for (std::size_t i = 0; i < val.size(); ++i)
         {
-            parameterbuffer_marshaller<U,alignment>::marshal(b,val[i]);
+            b.put(val[i]);
+            //marshaller<U,Buffer,Alignment>::marshal(b,val[i]);
         }
     }
 };
@@ -1394,45 +1375,45 @@ public:
     int b;
 };
 
-template<std::size_t alignment>
-struct parameterbuffer_marshaller<A,alignment,void>
+template<typename Buffer, std::size_t Alignment>
+struct marshaller<A,Buffer,Alignment>
 {
-    static void marshal(parameter_buffer& b, const A& val)
+    static void marshal(Buffer& b, const A& val)
     {
         b.put(val.a);
     }
 };
 
-template<>
-struct parameterbuffer_unmarshaller<A,void>
+template<typename Buffer, std::size_t Alignment>
+struct unmarshaller<A,Buffer,Alignment>
 {
     template<typename Allocator>
-    static std::tuple<int> unmarshal(Allocator&& alloc, parameter_buffer& buff)
+    static std::tuple<int> unmarshal(Allocator& alloc, Buffer& buff)
     {
-        int a = buff.get<int>(alloc);
-        return std::tuple<int>(std::allocator_arg,alloc,std::move(a));
+        int a = get<int>(buff,alloc);
+        return std::tuple<int>(std::move(a));
     }
 };
 
-template<std::size_t alignment>
-struct parameterbuffer_marshaller<B,alignment,void>
+template<typename Buffer, std::size_t Alignment>
+struct marshaller<B,Buffer,Alignment>
 {
-    static void marshal(parameter_buffer& b, const B& val)
+    static void marshal(Buffer& b, const B& val)
     {
         b.put(val.a);
         b.put(val.b);
     }
 };
 
-template<>
-struct parameterbuffer_unmarshaller<B,void>
+template<typename Buffer, std::size_t Alignment>
+struct unmarshaller<B,Buffer,Alignment>
 {
     template<typename Allocator>
-    static std::tuple<int,int> unmarshal(Allocator&& alloc, parameter_buffer& buff)
+    static std::tuple<int,int> unmarshal(Allocator& alloc, Buffer& buff)
     {
-        int a = buff.get<int>(alloc);
-        int b = buff.get<int>(alloc);
-        return std::tuple<int,int>(std::allocator_arg,alloc,std::move(a),std::move(b));
+        int a = buff.template get<int>(alloc);
+        int b = buff.template get<int>(alloc);
+        return std::tuple<int,int>(std::move(a),std::move(b));
     }
 };
 
@@ -1518,10 +1499,10 @@ struct direct_initializer
     }
 };
 
-template<typename T>
-struct parameterbuffer_unmarshaller<mpirpc::pointer_wrapper<T>>
+template<typename T, typename Buffer, std::size_t Alignment>
+struct unmarshaller<mpirpc::pointer_wrapper<T>,Buffer,Alignment>
 {
-    template<typename Allocator, typename Buffer>
+    template<typename Allocator>
     static std::tuple<T*,std::size_t,bool,bool> unmarshal(Allocator& a, Buffer &b)
     {
         T *ptr;
@@ -1543,7 +1524,7 @@ struct parameterbuffer_unmarshaller<mpirpc::pointer_wrapper<T>>
                 AllocatorType na(a);
                 ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
                 for (std::size_t i = 0; i < size; ++i)
-                    direct_initializer<U>::construct(na,&ptr[i],b);
+                    direct_initializer<T>::construct(na,&ptr[i],b);
             }
         }
         else
@@ -1732,37 +1713,28 @@ struct direct_initializer<T[N]>
     }
 };
 
-template<typename T,std::size_t alignment>
-struct parameterbuffer_remarshaller
+template<typename T, typename Buffer, std::size_t Alignment, typename = void>
+struct remarshaller
 {
-    template<typename U, std::enable_if_t<std::is_convertible<T,std::remove_reference_t<U>>::value>* = nullptr>
-    static void marshal(parameter_buffer& s, U&& val)
+    static void marshal(Buffer& s, std::remove_reference_t<T>&& val)
     {
-        parameterbuffer_marshaller<std::remove_reference_t<U>,alignment>::marshal(s, std::forward<U>(val));
+        marshaller<T,Buffer,Alignment>::marshal(s,val);
+    }
+    
+    static void marshal(Buffer& s, std::remove_reference_t<T>& val)
+    {
+        marshaller<T,Buffer,Alignment>::marshal(s,val);
     }
 };
 
-template<typename T, std::size_t N, std::size_t alignment>
+/*template<typename T, std::size_t N, std::size_t alignment>
 struct parameterbuffer_remarshaller<T(&)[N],alignment>
 {
     static void marshal(parameter_buffer& s, T(&val)[N])
     {
         parameterbuffer_marshaller<T[N],alignment>::marshal(s,val);
     }
-};
-
-template<typename Buffer, std::size_t alignment>
-struct remarshaller;
-
-template<std::size_t alignment>
-struct remarshaller<parameter_buffer, alignment>
-{
-    template<typename T>
-    static void marshal(parameter_buffer& b, T&& val)
-    {
-        parameterbuffer_remarshaller<std::remove_reference_t<T>,alignment>::marshal(b,std::forward<T>(val));
-    }
-};
+};*/
 
 template<std::size_t Alignment, typename Allocator, typename T, typename Buffer, std::enable_if_t<is_buildtype<T,Buffer>>* = nullptr>
 void get_from_stream(Allocator &a, T*& t, Buffer&& s)
@@ -1880,7 +1852,7 @@ void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::intern
     using swallow = int[];
     (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
-    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
+    (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
 }
 
@@ -1889,13 +1861,15 @@ template<typename F, typename Allocator, typename InBuffer, typename OutBuffer, 
 void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
 {
     constexpr std::size_t buffer_size = align_buffer_size<InBuffer,false,true,Ts...>;
+    using PointerTuple = std::tuple<std::add_pointer_t<Ts>...>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
-    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + align_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
+    PointerTuple t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + align_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
     using swallow = int[];
     (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     auto&& ret = std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
-    os << mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret));
-    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
+    using R = mpirpc::internal::function_return_type<F>;
+    remarshaller<R,OutBuffer,alignof(R)>::marshal(os,mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret)));
+    (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
 }
 
@@ -1909,7 +1883,7 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpir
     using swallow = int[];
     (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
-    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
+    (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     (void)swallow{(cleanup<InBuffer>(a,std::get<Is>(t)), 0)...};
 }
 
@@ -1923,8 +1897,8 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpir
     using swallow = int[];
     (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     auto&& ret = ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
-    os << mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret));
-    (void)swallow{((PBs) ? (parameterbuffer_remarshaller<mpirpc::internal::autowrapped_type<FArgs>,Alignments>::marshal(os, *std::get<Is>(t)), 0) : 0)...};
+    os.put(mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret)));
+    (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
 }
 
