@@ -1257,6 +1257,10 @@ struct type_identifier
     }
 };
 
+struct piecewise_construct_type {};
+
+constexpr piecewise_construct_type piecewise_construct{};
+
 template<typename Allocator>
 struct piecewise_allocator_traits;
 
@@ -1388,10 +1392,10 @@ template<typename Buffer, std::size_t Alignment>
 struct unmarshaller<A,Buffer,Alignment>
 {
     template<typename Allocator>
-    static std::tuple<int> unmarshal(Allocator& alloc, Buffer& buff)
+    static std::tuple<piecewise_construct_type,int> unmarshal(Allocator& alloc, Buffer& buff)
     {
         int a = get<int>(buff,alloc);
-        return std::tuple<int>(std::move(a));
+        return std::tuple<piecewise_construct_type,int>(piecewise_construct,std::move(a));
     }
 };
 
@@ -1409,11 +1413,11 @@ template<typename Buffer, std::size_t Alignment>
 struct unmarshaller<B,Buffer,Alignment>
 {
     template<typename Allocator>
-    static std::tuple<int,int> unmarshal(Allocator& alloc, Buffer& buff)
+    static std::tuple<piecewise_construct_type,int,int> unmarshal(Allocator& alloc, Buffer& buff)
     {
         int a = buff.template get<int>(alloc);
         int b = buff.template get<int>(alloc);
-        return std::tuple<int,int>(std::move(a),std::move(b));
+        return std::tuple<piecewise_construct_type,int,int>(piecewise_construct,std::move(a),std::move(b));
     }
 };
 
@@ -1445,20 +1449,21 @@ struct piecewise_allocator_traits
     template<typename T, typename Tuple, std::size_t...Is>
     static void tuple_construct(Allocator& a, T* p, Tuple&& tup, std::index_sequence<Is...>)
     {
-        std::allocator_traits<Allocator>::construct(a,p,std::move(std::get<Is>(tup))...);
+        std::allocator_traits<Allocator>::construct(a,p,std::move(std::get<Is+1>(tup))...);
     }
 
     template<typename T,
-             typename U,
-             std::enable_if_t<!is_tuple<typename std::allocator_traits<Allocator>::value_type>::value && is_tuple<U>::value>* = nullptr>
-    static void construct(Allocator& a, T* p, U&& val)
+             typename... Args,
+             std::enable_if_t<std::is_constructible<T,Args...>::value>* = nullptr>  //!is_tuple<typename std::allocator_traits<Allocator>::value_type>::value && is_tuple<U>::value>* = nullptr>
+    static void construct(Allocator& a, T* p, std::tuple<piecewise_construct_type,Args...>&& val)
     {
-        tuple_construct(a,p,std::forward<U>(val),std::make_index_sequence<std::tuple_size<U>::value>{});
+        std::cout << "size: " << sizeof(std::tuple<Args...>) << " " << sizeof(std::tuple<piecewise_construct_type,Args...>) << std::endl;
+        tuple_construct(a,p,std::move(val),std::make_index_sequence<sizeof...(Args)>{});
     }
 
     template<typename T,
              typename U,
-             std::enable_if_t<!(!is_tuple<typename std::allocator_traits<Allocator>::value_type>::value && is_tuple<U>::value)>* = nullptr>
+             std::enable_if_t<std::is_constructible<T,U>::value>* = nullptr>
     static void construct(Allocator& a, T *p, U &&val)
     {
         std::allocator_traits<Allocator>::construct(a,p,std::forward<U>(val));
@@ -1503,7 +1508,7 @@ template<typename T, typename Buffer, std::size_t Alignment>
 struct unmarshaller<mpirpc::pointer_wrapper<T>,Buffer,Alignment>
 {
     template<typename Allocator>
-    static std::tuple<T*,std::size_t,bool,bool> unmarshal(Allocator& a, Buffer &b)
+    static std::tuple<piecewise_construct_type,T*,std::size_t,bool,bool> unmarshal(Allocator& a, Buffer &b)
     {
         T *ptr;
         std::size_t size = get<std::size_t>(b,a);
@@ -1529,149 +1534,9 @@ struct unmarshaller<mpirpc::pointer_wrapper<T>,Buffer,Alignment>
         }
         else
             get_pointer_from_buffer<alignof(T)>(b,ptr);
-        return std::tuple<T*,std::size_t,bool,bool>{ptr,size,pass_back,pass_ownership};
+        return std::tuple<piecewise_construct_type,T*,std::size_t,bool,bool>{piecewise_construct,ptr,size,pass_back,pass_ownership};
     }
 };
-
-/*template<typename T>
-struct direct_initializer<mpirpc::pointer_wrapper<T>>
-{
-    template<typename Allocator, typename Buffer,
-             typename U = T, std::enable_if_t<std::is_scalar<U>::value>* = nullptr>
-    static void placementnew_construct(Allocator&a, mpirpc::pointer_wrapper<U>* t, Buffer&&s)
-    {
-        std::size_t size = get<std::size_t>(s,a);
-        bool pass_ownership = false;
-        bool pass_back = false;
-        U* ptr;
-        if (pass_ownership)
-        {
-            using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-            AllocatorType na(a);
-            ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
-            for (std::size_t i = 0; i < size; ++i)
-                direct_initializer<T>::construct(na,&ptr[i],s);
-        }
-        else
-        {
-            get_pointer_from_buffer<alignof(U)>(s,ptr);
-        }
-        new (t) mpirpc::pointer_wrapper<U>(ptr,size,pass_back,true);
-    }
-
-    template<typename Allocator, typename Buffer,
-             typename U = T,
-             std::enable_if_t<!std::is_scalar<U>::value>* = nullptr,
-             std::enable_if_t<!std::is_polymorphic<U>::value>* = nullptr>
-    static void placementnew_construct(Allocator&a, mpirpc::pointer_wrapper<U>* t, Buffer&& s)
-    {
-        std::size_t size = s.template get<std::size_t>(a);
-        std::cout << "size: " << size << std::endl;
-        bool pass_back = false;
-        bool pass_ownership = false;
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-        AllocatorType na(a);
-        U* ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
-        for (std::size_t i = 0; i < size; ++i)
-            direct_initializer<U>::construct(na,&ptr[i],s);
-        new (t) mpirpc::pointer_wrapper<U>(ptr,size,pass_back,pass_ownership);
-    }
-
-    template<typename Allocator, typename Buffer,
-             typename U = T,
-             std::enable_if_t<!std::is_scalar<U>::value>* = nullptr,
-             std::enable_if_t<std::is_polymorphic<U>::value>* = nullptr>
-    static void placementnew_construct(Allocator&a, mpirpc::pointer_wrapper<U>* t, Buffer&& s)
-    {
-        std::size_t size = s.template get<std::size_t>(a);
-        std::cout << "(polymorphic) size: " << size << std::endl;
-        bool pass_back = false;
-        bool pass_ownership = false;
-        mpirpc::TypeId type = get<uintptr_t>(s,a);
-        std::cout << "type: " << type << std::endl;
-        U* ptr = static_cast<U*>(polymorphic_map.at(safe_type_index_map.at(type))->build(a,s,size));
-        //polymorphic_direct_initializer<U>::allocate(a,ptr,type,size);
-        //polymorphic_direct_initializer<U>::construct_n(a,ptr,s,type,size);
-        new (t) mpirpc::pointer_wrapper<U>(ptr,size,pass_back,pass_ownership);
-    }
-
-    template<typename Allocator>
-    static void placementnew_destruct(Allocator& a, mpirpc::pointer_wrapper<T>* t)
-    {
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<mpirpc::pointer_wrapper<T>>;
-        using AllocatorTypeT = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-        AllocatorType na(a);
-        AllocatorTypeT ta(a);
-        if (!t->is_pass_ownership())
-        {
-            T* ptr = (T*) *t;
-            for (std::size_t i = 0; i < t->size(); ++i)
-                direct_initializer<T>::destruct(ta, &ptr[i]);
-            //std::allocator_traits<AllocatorType>::destroy(na,t);
-            t->~pointer_wrapper();
-        }
-    }
-
-
-    template<typename Allocator, typename Buffer,
-             typename U = T, std::enable_if_t<std::is_scalar<std::remove_all_extents_t<U>>::value>* = nullptr>
-    static void construct(Allocator&a, mpirpc::pointer_wrapper<U>* t, Buffer&&s)
-    {
-        std::size_t size = get<std::size_t>(s,a);
-        bool pass_ownership = false;
-        bool pass_back = false;
-        U* ptr;
-        if (pass_ownership)
-        {
-            using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-            AllocatorType na(a);
-            ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
-            for (std::size_t i = 0; i < size; ++i)
-                direct_initializer<T>::construct(na,&ptr[i],s);
-        }
-        else
-        {
-            get_pointer_from_buffer(s,ptr);
-        }
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<mpirpc::pointer_wrapper<U>>;
-        AllocatorType na(a);
-        std::allocator_traits<AllocatorType>::construct(na,t,ptr,size,pass_back,true);
-    }
-
-    template<typename Allocator, typename Buffer,
-             typename U = T, std::enable_if_t<!std::is_scalar<U>::value>* = nullptr>
-    static void construct(Allocator&a, mpirpc::pointer_wrapper<U>* t, Buffer&& s)
-    {
-        std::size_t size = get<std::size_t>(s,a);
-        std::cout << "size: " << size << std::endl;
-        bool pass_back = false;
-        bool pass_ownership = false;
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-        AllocatorType na(a);
-        U* ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
-        for (std::size_t i = 0; i < size; ++i)
-            direct_initializer<U>::construct(na,&ptr[i],s);
-        using AllocatorType2 = typename std::allocator_traits<Allocator>::template rebind_alloc<mpirpc::pointer_wrapper<U>>;
-        AllocatorType2 na2(a);
-        std::allocator_traits<AllocatorType2>::construct(na2,t,ptr,size,pass_back,pass_ownership);
-    }
-
-    template<typename Allocator>
-    static void destruct(Allocator& a, mpirpc::pointer_wrapper<T>* t)
-    {
-        using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<mpirpc::pointer_wrapper<T>>;
-        using AllocatorTypeT = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-        AllocatorType na(a);
-        AllocatorTypeT ta(a);
-        if (!t->is_pass_ownership())
-        {
-            T* ptr = (T*) t;
-            for (std::size_t i = 0; i < t->size(); ++i)
-                direct_initializer<T>::destruct(ta, &ptr[i]);
-            std::allocator_traits<AllocatorType>::destroy(na,t);
-        }
-    }
-};*/
 
 template<typename T, std::size_t N>
 struct direct_initializer<T[N]>
@@ -1737,7 +1602,7 @@ struct parameterbuffer_remarshaller<T(&)[N],alignment>
 };*/
 
 template<std::size_t Alignment, typename Allocator, typename T, typename Buffer, std::enable_if_t<is_buildtype<T,Buffer>>* = nullptr>
-void get_from_stream(Allocator &a, T*& t, Buffer&& s)
+void get_from_buffer(Allocator &a, T*& t, Buffer&& s)
 {
     std::cout << "get from stream: " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << " " << is_buildtype<T,Buffer> << std::endl;
     std::cout << "get from stream: " << abi::__cxa_demangle(typeid(t).name(),0,0,0) << std::endl;
@@ -1746,7 +1611,7 @@ void get_from_stream(Allocator &a, T*& t, Buffer&& s)
 }
 
 template<std::size_t Alignment, typename Allocator, typename T, typename Buffer, std::enable_if_t<!is_buildtype<T,Buffer>>* = nullptr>
-void get_from_stream(Allocator &a, T*& t, Buffer&& s)
+void get_from_buffer(Allocator &a, T*& t, Buffer&& s)
 {
     get_pointer_from_buffer<Alignment>(s,t);
 }
@@ -1850,7 +1715,7 @@ void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::intern
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
     std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + align_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
     using swallow = int[];
-    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
+    (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
     (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
@@ -1865,7 +1730,7 @@ void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::intern
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
     PointerTuple t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + align_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
     using swallow = int[];
-    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
+    (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     auto&& ret = std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
     using R = mpirpc::internal::function_return_type<F>;
     remarshaller<R,OutBuffer,alignof(R)>::marshal(os,mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret)));
@@ -1881,7 +1746,7 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpir
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
     std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + align_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
     using swallow = int[];
-    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
+    (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
     (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     (void)swallow{(cleanup<InBuffer>(a,std::get<Is>(t)), 0)...};
@@ -1895,7 +1760,7 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpir
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
     std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + align_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
     using swallow = int[];
-    (void)swallow{(get_from_stream<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
+    (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     auto&& ret = ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
     os.put(mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret)));
     (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
@@ -1930,7 +1795,7 @@ using custom_alignments = typename choose_custom_alignment<T1,T2>::type;
  * std::tuple containing an array and an mpirpc::pointer_wrapper. An array type is not MoveConstructible or CopyConstructible.
  * The array could be initialized and then the values from the stream applied to it, but mpirpc::pointer_wrapper is not
  * DefaultConstructible. An array type also can't be returned by an unmarshalling function and references to an array can't be
- * used, either, unless it was initialized outside of the unmarshaller. Otherwise, the result would be a dangling reference. An
+ * used, ei,ther, unless it was initialized outside of the unmarshaller. Otherwise, the result would be a dangling reference. An
  * array type could be created from a std::initializer_list instead, but this would not solve the general case of types with
  * deleted default, copy, and move constructors. For these types, direct initialization is needed. Unfortunately, std::tuple
  * lacks direct initialization capabilities.
@@ -1952,20 +1817,84 @@ using custom_alignments = typename choose_custom_alignment<T1,T2>::type;
  * Next, types for which is_buildtype<T> is true call direct_initializer<T>::placementnew_construct(Allocator,T*,Stream).
  * This constructs a T using placement new, which is suitable for constructing types in the stack buffer. Types which have pointers
  * of their own should use direct_initializer<T>::construct(Allocator,T*,Buffer), which uses the (possibly custom) Allocator for
- * construction. The arguments for construction of T are provided by parameterbuffer_unmarshaller<T>::unmarshal(Allocator,parameter_buffer).
- * This struct should be specialized to add support for custom types. If the constructor of of T takes more than one argument,
- * then a tuple containing the constructor parameters should be returned.
- * Allocator is used when these stack allocated variables need to heap
- * allocate memory. For instance, the pointer owned by mpirpc::pointer_wrapper is allocated using Allocator, std::tuple is
- * constructed using the allocator aware constructors, and allocator aware containers are be passed the Allocator instance.
+ * construction. If T is polymorphic, register_polymorphism<T>() must be called before invocation of apply(). The arguments for
+ * construction of T are provided by unmarshaller<T,Buffer,Alignment>::unmarshal(Allocator,Buffer).
  *
  * Next, the function is run by unpacking each element of the tuple as each parameter. If the function has a non-void return
- * type, it is autowrapped and added to the parameter buffer.
+ * type, it is autowrapped and added to the output parameter buffer using remarshaller<T,Buffer,Alignment>::marshal(Buffer,T).
  *
- * Then, passback types from the parameter tuple are appended to the parameter buffer.
+ * Then, passback types from the parameter tuple are appended to the parameter buffer using
+ * remarshaller<T,Buffer,Alignment>::marshal(Buffer,T).
  *
  * Finally, for each element of the parameter tuple for which the value of is_buildtype<T> is true the tuple element is passed
  * to a cleanup function to run the destructor on the constructed types.
+ *
+ * Call graph:
+ *                                                    apply()
+ *                                                      |
+ *                                                      v
+ *                                                 apply_impl()
+ *                                                      |
+ *                                                      v
+ *                                              get_from_buffer<Alignment>()
+ *                                                      |
+ *                                                      v
+ *                                            is_buildtype<T,Buffer>?
+ *                                            No /              \ Yes
+ *                          get_pointer_from_buffer()          direct_initializer<T>::placementnew_construct()
+ *                                              |                |
+ *                                              v                v
+ *                  Buffer::reinterpret_and_advance<T>()     unmarshaller<T,Buffer,Alignment,typename=void>::unmarshal()
+ *                                              |                |
+ *                                              |                v
+ *                                              |             get<T>(Buffer,Allocator)
+ *                                              |                |
+ *                                              |                v
+ *                                              |        piecewise_allocator_traits<Allocator>::construct()
+ *                                               \_____________/
+ *                                                      |
+ *                                                      v
+ *                                                    call f()
+ *                                                      |
+ *                                                      v
+ *                                               (result == void)?
+ *                                             No /            \ Yes
+ *             remarshaller<T,Buffer,Alignment>::marshal()     |
+ *                                                |            |
+ *                                                v            |
+ *               marshaller<T,Buffer,Alignment>::marshal()     |
+ *                                                \____________/
+ *                                                      |
+ *                                                      v
+ *                                                  cleanup()
+ *
+ * The implementation of remarshaller<T,Buffer,Alignment>::marshal() simply calls marshaller<T,Buffer,Alignment>::marshal().
+ * However, this struct can be specialized if different behavior is required when passing back (such as noting and skipping
+ * unmodified parameters).
+ *
+ * is_buildtype<T,Buffer> is used to determine if the type stored in the Buffer can be read simply by a reinterpret_cast<T> at
+ * the current location of the buffer. Therefore, is_buildtype<T> should always be true for Buffer implementations that use
+ * non-binary data or packed data structures.
+ *
+ * unmarshaller<T,Buffer,Alignment> specializations: call parameterbuffer_unmarshaller<T,Alignment> for non-pointer scalar types
+ *                                                   unmarshaller<pointer_wrapper<T>,Buffer,Alignment,void>
+ *                                                   user-defined unmarshallers
+ *
+ *
+ *        unmarshaller<pointer_wrapper<T>,Buffer,Alignment,typename=void>
+ *                                      |
+ *                                      v
+ *                            std::is_polymorphic<T>?
+ *                          No /                   \ Yes
+ *   direct_initializer<T>::construct              polymorphic_factory<T>->build()
+ *                      U = T |                     | U = from id -> polymorphic_factory map
+ *                            v                     v
+ *                  unmarshaller<U,Buffer,Alignment>::unmarshal
+ *
+ * To add support for custom types, unmarshaller<T,Buffer,Alignment> should be specialized. To avoid template ambiguity, only the first
+ * template parameter should be specialized. If the unmarshaller is specific to a Buffer type or alignment, SFINAE should be used for the
+ * last template parameter. unmarshaller<T,Buffer,Alignment> should return either a single type to be passed as a single argument to the
+ * constructor or a tuple of types which will be unpacked as constructor arguments.
  *
  */
 template<typename F,typename Allocator, typename InBuffer, typename OutBuffer, std::size_t... Alignments,
