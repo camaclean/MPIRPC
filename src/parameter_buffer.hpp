@@ -74,18 +74,19 @@ public:
         m_position += (m_position % Alignment) ? (Alignment - (m_position % Alignment)) : 0;
     }
 
-    template<typename T, typename Allocator>
+    template<typename T, typename Allocator, std::size_t Alignment = alignof(T)>
     decltype(auto) pop(Allocator&& a)
     {
-        realign<alignof(T)>();
-        return mpirpc::unmarshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,alignof(T)>::unmarshal(std::forward<Allocator>(a),*this);
+        realign<Alignment>();
+        return mpirpc::unmarshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,Alignment>::unmarshal(std::forward<Allocator>(a),*this);
     }
 
-    template<typename T>
-    void put(T&& t)
+    template<typename T, std::size_t Alignment = alignof(T), typename U,
+             std::enable_if_t<std::is_same<std::remove_cv_t<std::remove_reference_t<T>>,std::remove_cv_t<std::remove_reference_t<U>>>::value>* = nullptr>
+    void push(U&& t)
     {
-        std::cout << "put alignment: " << alignof(T) << " of type " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
-        mpirpc::marshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,alignof(T)>::marshal(*this,std::forward<T>(t));
+        std::cout << "put alignment: " << Alignment << " of type " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+        mpirpc::marshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,Alignment>::marshal(*this,std::forward<U>(t));
     }
 
 protected:

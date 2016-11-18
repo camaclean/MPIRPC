@@ -1072,21 +1072,6 @@ void ordered_call_rref_array_Bar(Bar(&&v)[1])
     } //make ordered_call go out of scope
 }*/
 
-/*template<typename Int, Int...Is>
-struct get_last_integer_sequence;
-
-template<typename Int, Int I1, Int I2, Int...Is>
-struct get_last_integer_sequence<Int,I1,I2,Is...>
-{
-    constexpr static Int last = get_last_integer_sequence<Int,I2,Is...>::last;
-};
-
-template<typename Int, Int I>
-struct get_last_integer_sequence<Int,I>
-{
-    constexpr static Int last = I;
-};*/
-
 class Foo2
 {
 public:
@@ -1113,26 +1098,6 @@ public:
 
 using i128t = int __attribute__((aligned(128)));
 
-/*template<typename Buffer, typename...Ts>
-struct buildtype_tuple_helper;
-
-template<typename Buffer, typename T, typename...Ts>
-struct buildtype_tuple_helper<Buffer,T,Ts...>
-{
-    using prepend_type = std::conditional_t<is_buildtype<T,Buffer>,std::tuple<std::add_pointer_t<T>>,std::tuple<>>;
-    using next_elems_type = typename buildtype_tuple_helper<Buffer,Ts...>::type;
-    using type = mpirpc::internal::tuple_cat_type<prepend_type, next_elems_type>;
-};
-
-template<typename Buffer>
-struct buildtype_tuple_helper<Buffer>
-{
-    using type = std::tuple<>;
-};
-
-template<typename...Ts>
-using buildtype_tuple_type = typename buildtype_tuple_helper<Ts...>::type;*/
-
 template<typename T>
 inline constexpr uintptr_t type_id()
 {
@@ -1145,8 +1110,8 @@ inline uintptr_t type_id(T&& t)
     return reinterpret_cast<uintptr_t>(&typeid(t));
 }
 
-template<typename Allocator>
-struct piecewise_allocator_traits;
+/*template<typename Allocator>
+struct piecewise_allocator_traits;*/
 
 /*template<typename T, std::size_t alignment>
 struct parameterbuffer_marshaller<T,alignment,std::enable_if_t<std::is_pointer<T>::value>>
@@ -1206,8 +1171,8 @@ struct marshaller<B,Buffer,Alignment>
 {
     static void marshal(Buffer& b, const B& val)
     {
-        b.put(val.a);
-        b.put(val.b);
+        b.template push<int>(val.a);
+        b.template push<int>(val.b);
     }
 };
 
@@ -1225,21 +1190,6 @@ struct unmarshaller<B,Buffer,Alignment>
 
 }
 
-template<typename T>
-struct is_std_allocator;
-
-template <template <typename> class Alloc, typename T>
-struct is_std_allocator<Alloc<T>> : std::false_type{};
-
-template <typename T>
-struct is_std_allocator<std::allocator<T>> : std::true_type{};
-
-template<typename T>
-struct is_tuple : std::false_type{};
-
-template<typename...Ts>
-struct is_tuple<std::tuple<Ts...>> : std::true_type{};
-
 template<typename T, std::size_t N, std::enable_if_t<!std::is_same<T,char>::value>* = nullptr>
 std::ostream& operator<<(std::ostream& o, const T(&d)[N])
 {
@@ -1255,13 +1205,6 @@ std::ostream& operator<<(std::ostream& o, const mpirpc::pointer_wrapper<T>& v)
 {
     o << *v;
     return o;
-}
-
-template<typename T>
-void print(T&& t)
-{
-    //std::cout << abi::__cxa_demangle(typeid(void(*)(T)).name(),0,0,0) << ": " << t << std::endl;
-    std::cout << t << std::endl;
 }
 
 template<typename...Ts,std::size_t...Is>
@@ -1314,16 +1257,16 @@ TEST(ArgumentUnpacking, test0)
     float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
     double pd = 3.14159;
 
-    p.put(2.3);
-    p.put(4);
-    p.put(1.2f);
-    p.put(true);
-    p.put(ai);
-    p.put(ad);
-    p.put(af);
-    p.put(mpirpc::pointer_wrapper<double>(&pd));
+    p.push<double>(2.3);
+    p.push<int>(4);
+    p.push<float>(1.2f);
+    p.push<bool>(true);
+    p.push<int(&)[4]>(ai);
+    p.push<double(&)[3]>(ad);
+    p.push<float(&)[5]>(af);
+    p.push<mpirpc::pointer_wrapper<double>>(mpirpc::pointer_wrapper<double>(&pd));
     B b(8,11);
-    p.put(mpirpc::pointer_wrapper<B>(&b));
+    p.push<mpirpc::pointer_wrapper<B>>(mpirpc::pointer_wrapper<B>(&b));
     std::cout << std::hex;
     for (std::size_t i = 0; i < p.position(); ++i)
         std::cout << (unsigned int) p.data()[i] << " ";
@@ -1335,9 +1278,9 @@ TEST(ArgumentUnpacking, test0)
     mpirpc::parameter_buffer pout2;
     mpirpc::internal::apply(&foo3,a,p,pout2);
     mpirpc::parameter_buffer p2;
-    p2.put(true);
+    p2.push<bool>(true);
     //p2 << ((i128t) 5);
-    p2.put<i128t>((i128t) 4);
+    p2.push<i128t,128>(4);
     std::cout << std::hex;
     for (std::size_t i = 0; i < p2.position(); ++i)
         std::cout << (unsigned int) p2.data()[i] << " ";
@@ -1367,11 +1310,11 @@ TEST(ParameterBuffer,scalars)
     float floatval = 2.17f;
     double doubleval = 3.14;
     mpirpc::pointer_wrapper<B> bval(new B(7,9));
-    b.put(boolval);
-    b.put(intval);
-    b.put(floatval);
-    b.put(doubleval);
-    b.put(bval);
+    b.push<bool>(boolval);
+    b.push<int>(intval);
+    b.push<float>(floatval);
+    b.push<double>(doubleval);
+    b.push<mpirpc::pointer_wrapper<B>>(bval);
     std::cout << "---------------\n";
     //b.put(new B(5,10));
     std::cout << "---------------\n";
@@ -1403,7 +1346,7 @@ TEST(PolymorphicLookup,test)
     mpirpc::register_polymorphism<B>();
     mpirpc::parameter_buffer b{};
     mpirpc::pointer_wrapper<B> bval(new B(7,9));
-    b.put(bval);
+    b.push<mpirpc::pointer_wrapper<B>>(bval);
     //b.put(type_identifier<B>::id());
     //b.put(7);
     //b.put(9);
