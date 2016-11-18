@@ -17,30 +17,28 @@
  *
  */
 
-#ifndef MPIRPC__EXCEPTIONS_HPP
-#define MPIRPC__EXCEPTIONS_HPP
+#ifndef MPIRPC__POLYMORPHIC_HPP
+#define MPIRPC__POLYMORPHIC_HPP
+
+#include "internal/polymorphic.hpp"
 
 namespace mpirpc
 {
 
-struct unregistered_function_exception : std::exception
-{
-    const char* what() const noexcept override
-    {
-        return "Unregistered Function\n";
-    }
-};
+static std::map<uintptr_t,std::type_index> safe_type_index_map;
 
-struct unregistered_object_exception : std::exception
+template<typename Buffer>
+static std::map<std::type_index,internal::polymorphic_factory_base<std::allocator<char>,Buffer>*> polymorphic_map;
+
+class parameter_buffer;
+
+template<typename T, typename Buffer=parameter_buffer>
+void register_polymorphism()
 {
-    const char* what() const noexcept override
-    {
-        return "Unregistered Object\n";
-    }
-};
+    safe_type_index_map.insert({mpirpc::type_identifier<T>::id(),std::type_index{typeid(T)}});
+    polymorphic_map<Buffer>[std::type_index{typeid(T)}] = new internal::polymorphic_factory<T,std::allocator<char>,Buffer>();
+}
 
 }
 
-#endif /* MPIRPC__EXCEPTIONS_HPP */
-
-// kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;
+#endif /* MPIRPC__POLYMORPHIC_HPP */

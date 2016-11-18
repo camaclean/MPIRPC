@@ -17,22 +17,25 @@
  *
  */
 
-#ifndef MPIRPC__MARSHALLING_HPP
-#define MPIRPC__MARSHALLING_HPP
-
-#include "../parameterstream.hpp"
+#ifndef MPIRPC__EXCEPTIONS_HPP
+#define MPIRPC__EXCEPTIONS_HPP
 
 namespace mpirpc
 {
 
-template<typename T>
-inline void marshal(mpirpc::parameter_stream& s, T&& val)
+template<typename T, typename Buffer, typename Allocator>
+inline decltype(auto) get(Buffer& b, Allocator&& a)
 {
-    s << val;
+    return b.template pop<T>(std::forward<Allocator>(a));
+}
+
+template<std::size_t Alignment, typename Buffer, typename T>
+void get_pointer_from_buffer(Buffer& b, T*& t)
+{
+    b.template realign<Alignment>();
+    t = b.template reinterpret_and_advance<T>(sizeof(T));
 }
 
 }
 
-#endif /* MPIRPC__MARSHALLING_HPP */
-
-// kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;
+#endif /* MPIRPC__EXCEPTIONS_HPP */

@@ -23,7 +23,9 @@
 #include "function_attributes.hpp"
 #include "marshalling.hpp"
 #include "utility.hpp"
-#include "../marshalling.hpp"
+#include "../types.hpp"
+#include "../parameter_buffer.hpp"
+#include "../marshaller.hpp"
 
 #include <functional>
 
@@ -43,33 +45,34 @@ struct fn_type_marshaller;
 template<typename R, typename... FArgs>
 struct fn_type_marshaller<R(*)(FArgs...)>
 {
-    template<class Stream, typename... Args>
-    static void marshal(Stream& ps, Args&&... args)
+    template<class Buffer, typename... Args>
+    static void marshal(Buffer& ps, Args&&... args)
     {
         using swallow = int[];
-        (void)swallow{(/*std::cout << "marshalling: " << abi::__cxa_demangle(typeid(argument_types<FArgs,Args>).name(),0,0,0) << " (" << abi::__cxa_demangle(typeid(autowrap<FArgs,Args>(args)).name(),0,0,0) << ")" << std::endl,*/ ::mpirpc::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+        (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,alignof(autowrapped_type<FArgs>)>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
     }
 };
 
 template<typename R, typename Class, typename... FArgs>
 struct fn_type_marshaller<R(Class::*)(FArgs...)>
 {
-    template<class Stream, typename... Args>
-    static void marshal(Stream& ps, Args&&... args)
+    template<class Buffer, typename... Args>
+    static void marshal(Buffer& ps, Args&&... args)
     {
         using swallow = int[];
-        (void)swallow{(::mpirpc::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+        (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,alignof(autowrapped_type<FArgs>)>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
     }
 };
+
 
 template<typename R, typename... FArgs>
 struct fn_type_marshaller<std::function<R(FArgs...)>>
 {
-    template<class Stream, typename... Args>
-    static void marshal(Stream& ps, Args&&... args)
+    template<class Buffer, typename... Args>
+    static void marshal(Buffer& ps, Args&&... args)
     {
         using swallow = int[];
-        (void)swallow{(::mpirpc::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+        (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,alignof(autowrapped_type<FArgs>)>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
     }
 };
 

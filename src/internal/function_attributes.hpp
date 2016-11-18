@@ -227,15 +227,6 @@ struct function_parts<std::function<R(Args...)>>
     constexpr static std::size_t num_args = sizeof...(Args);
 };
 
-template<typename Arg>
-struct storage_type_helper
-{
-    using type = autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Arg>>::value,std::remove_reference_t<Arg>,std::decay_t<std::remove_reference_t<Arg>>>>;
-};
-
-template<typename Arg>
-using storage_type = typename storage_type_helper<Arg>::type;
-
 /*************************************************************************************/
 /*                      mpirpc::internal::storage_function_parts                     */
 /*************************************************************************************/

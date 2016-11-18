@@ -1,0 +1,122 @@
+/*
+ * MPIRPC: MPI based invocation of functions on other ranks
+ * Copyright (C) 2014-2016 Colin MacLean <cmaclean@illinois.edu>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#ifndef MPIRPC__PARAMETER_BUFFER_HPP
+#define MPIRPC__PARAMETER_BUFFER_HPP
+
+#include "types.hpp"
+#include "marshaller.hpp"
+#include "unmarshaller.hpp"
+
+namespace mpirpc
+{
+
+class parameter_buffer
+{
+public:
+    parameter_buffer(std::vector<char> *buf) noexcept
+        : m_buffer{buf}, m_position{}
+    {}
+
+    template<typename Allocator>
+    parameter_buffer(Allocator&& a)
+        : m_buffer{new std::vector<char>{std::forward<Allocator>(a)}}, m_position{}
+    {}
+
+    parameter_buffer()
+        : m_buffer{new std::vector<char>()}, m_position{}
+    {}
+
+    char* data() noexcept { return m_buffer->data(); }
+    const char* data() const noexcept { return m_buffer->data(); }
+    char* data_here() noexcept { return &m_buffer->data()[m_position]; }
+    const char* data_here() const noexcept { return &m_buffer->data()[m_position]; }
+    std::size_t position() const noexcept { return m_position; }
+
+    void seek(std::size_t pos) noexcept { m_position = pos; }
+
+    template<typename T>
+    T* reinterpret_and_advance(std::size_t size) noexcept { T* ret = reinterpret_cast<T*>(&m_buffer->data()[m_position]); m_position+=size; return ret; }
+
+    template<std::size_t alignment>
+    void append(const char * start, const char * end)
+    {
+        std::size_t padding = mpirpc::internal::calculate_alignment_padding(m_position,alignment);
+        std::size_t delta = padding + (end-start);
+        std::size_t new_size = m_buffer->size() + delta;
+        std::cout << "padding: " << padding << " " << alignment << std::endl;
+        m_buffer->reserve(new_size);
+        m_buffer->resize(m_buffer->size() + padding);
+        m_buffer->insert(m_buffer->end(),start,end);
+        m_position += delta;
+    }
+
+    template<std::size_t Alignment>
+    void realign()
+    {
+        std::cout << "realigning by " << " " << ((m_position % Alignment) ? (Alignment - (m_position % Alignment)) : 0) << std::endl;// << " for " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+        m_position += (m_position % Alignment) ? (Alignment - (m_position % Alignment)) : 0;
+    }
+
+    template<typename T, typename Allocator>
+    decltype(auto) pop(Allocator&& a)
+    {
+        realign<alignof(T)>();
+        return mpirpc::unmarshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,alignof(T)>::unmarshal(std::forward<Allocator>(a),*this);
+    }
+
+    template<typename T>
+    void put(T&& t)
+    {
+        std::cout << "put alignment: " << alignof(T) << " of type " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
+        mpirpc::marshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,alignof(T)>::marshal(*this,std::forward<T>(t));
+    }
+
+protected:
+    std::size_t m_position;
+    std::vector<char> *m_buffer;
+};
+
+template<>
+struct aligned_binary_buffer_identifier<parameter_buffer> : std::true_type {};
+
+template<typename T, typename Buffer, std::size_t Alignment>
+struct marshaller<T,Buffer,Alignment,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,Buffer>::value && std::is_same<Buffer,parameter_buffer>::value>>
+{
+    template<typename U,std::enable_if_t<std::is_same<std::decay_t<T>,std::decay_t<U>>::value>* = nullptr>
+    static void marshal(parameter_buffer& b, U&& val)
+    {
+        const char* p = reinterpret_cast<const char*>(&val);
+        b.template append<Alignment>(p, p+sizeof(T));
+    }
+};
+
+template<typename T, typename Buffer, std::size_t Alignment>
+struct unmarshaller<T,Buffer,Alignment,std::enable_if_t<!mpirpc::buildtype_helper<std::remove_reference_t<T>,Buffer>::value && std::is_same<Buffer,parameter_buffer>::value>>
+{
+    template<typename Allocator>
+    static T unmarshal(Allocator&&, parameter_buffer& b)
+    {
+        return *b.template reinterpret_and_advance<std::remove_reference_t<T>>(sizeof(std::remove_reference_t<T>));
+    }
+};
+
+}
+
+#endif /* MPIRPC__PARAMETER_BUFFER_HPP */

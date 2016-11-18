@@ -33,26 +33,35 @@ if(MPI_FOUND)
     include_directories("${MPI_CXX_INCLUDE_PATH}")
 endif(MPI_FOUND)
 
-set(SRC_LIST common.hpp exceptions.hpp
+set(SRC_LIST buffer.hpp common.hpp exceptions.hpp
              manager.hpp mpitype.cpp mpitype.hpp
-             marshalling.hpp
+             marshaller.hpp
              objectwrapper.cpp objectwrapper.cpp
+             parameter_buffer.hpp
              parameterstream.cpp parameterstream.hpp
-             pointerwrapper.hpp reduce.cpp reduce.hpp
-             unmarshalling.hpp
+             pointerwrapper.hpp polymorphic.hpp
+             reduce.cpp reduce.hpp
+             remarshaller.hpp
+             types.hpp
+             unmarshaller.hpp
              concepts/stl.hpp
              detail/manager/function.hpp
              detail/manager/invoke.hpp
              detail/manager/manager.hpp
              detail/manager/register.hpp
+             internal/alignment.hpp
+             internal/direct_initializer.hpp
              internal/function_attributes.hpp
              internal/marshalling.hpp
              internal/orderedcall.hpp
              internal/parameterstream.hpp
              internal/pass_back.hpp
+             internal/piecewise_allocator_traits.hpp
+             internal/polymorphic.hpp
              internal/type_massaging.hpp
              internal/unmarshalling.hpp
              internal/utility.hpp
+             internal/detail/alignment.hpp
              internal/detail/orderedcall.hpp
              internal/detail/utility.hpp
     )
@@ -73,15 +82,6 @@ configure_package_config_file(MPIRPCConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/
                               PATH_VARS INCLUDE_INSTALL_DIR)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/MPIRPCConfig.cmake
         DESTINATION ${LIB_INSTALL_DIR}/cmake/mpirpc)
-
-#set(CMAKE_AUTOMOC ON)
-#find_package(Qt5 COMPONENTS Core Test)
-#if(Qt5Test_FOUND)
-    #enable_testing()
-    #add_definitions(${Qt5Core_DEFINITIONS} ${Qt5Core_EXECUTABLE_COMPILE_FLAGS})
-    #include_directories(${Qt5Core_INCLUDE_DIRS} ${Qt5Concurrent_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR})
-    #add_subdirectory(tests)
-#endif(Qt5Test_FOUND)
 
 include(FindGTest)
 if(GTEST_FOUND)

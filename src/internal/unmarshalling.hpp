@@ -21,40 +21,55 @@
 #define MPIRPC__INTERNAL__UNMARSHALLING_HPP
 
 #include <utility>
-#include "../unmarshalling.hpp"
+#include "type_massaging.hpp"
+#include "../unmarshaller.hpp"
 
 namespace mpirpc
 {
 
-class parameter_stream;
-
-//template<typename R, typename Allocator>
-//R unmarshal(mpirpc:: parameter_stream& s);
-
-
 namespace internal
 {
 
-namespace detail {
-template<typename Allocator, typename Stream, typename... Ts, std::size_t... Is>
-std::tuple<storage_type<Ts>...> unmarshal_into_tuple_impl(Allocator &a, Stream &s, std::index_sequence<Is...>)
+namespace detail
 {
-    using R = std::tuple<storage_type<Ts>...>;
-    std::cout << abi::__cxa_demangle(typeid(R).name(),0,0,0) << " " << abi::__cxa_demangle(typeid(std::tuple<Ts...>).name(),0,0,0) << std::endl;
-    R ret{(::mpirpc::unmarshaller_remote<storage_type<Ts>>::unmarshal(a,s))...};
-    return ret;
+
+template<typename T, typename... Args, std::size_t... Is>
+T make_from_tuple_impl(std::tuple<std::piecewise_construct_t,Args...> t, std::index_sequence<Is...>)
+{
+    return T(std::get<Is+1>(t)...);
+}
+
+template<typename T, typename...Args>
+T make_from_tuple(std::tuple<std::piecewise_construct_t,Args...> t)
+{
+    return make_from_tuple_impl<T>(t,std::make_index_sequence<sizeof...(Args)>());
+}
+
+template<typename T, typename Arg>
+T make_from_tuple(Arg&& a)
+{
+    return a;
+}
+
+template<typename Allocator, typename Buffer, typename... Ts, std::size_t... Is>
+std::tuple<storage_type<Ts>...> unmarshal_into_tuple_impl(Allocator &a, Buffer &s, std::index_sequence<Is...>)
+{
+   using R = std::tuple<storage_type<Ts>...>;
+   std::cout << abi::__cxa_demangle(typeid(R).name(),0,0,0) << " " << abi::__cxa_demangle(typeid(std::tuple<Ts...>).name(),0,0,0) << std::endl;
+   R ret{make_from_tuple<storage_type<Ts>>(mpirpc::unmarshaller<storage_type<Ts>,Buffer,alignof(Ts)>::unmarshal(a,s))...};
+   return ret;
 }
 
 }
 
 template<typename... Ts>
-struct tuple_unmarshaller_remote
+struct tuple_unmarshaller
 {
-    template<typename Allocator, typename Stream>
-    static std::tuple<storage_type<Ts>...> unmarshal(Allocator &a, Stream &s)
-    {
-        return detail::unmarshal_into_tuple_impl<Allocator, Stream, Ts...>(a, s, std::make_index_sequence<sizeof...(Ts)>{});
-    }
+   template<typename Allocator, typename Buffer>
+   static std::tuple<storage_type<Ts>...> unmarshal(Allocator &a, Buffer &s)
+   {
+       return detail::unmarshal_into_tuple_impl<Allocator, Buffer, Ts...>(a, s, std::make_index_sequence<sizeof...(Ts)>{});
+   }
 };
 
 }

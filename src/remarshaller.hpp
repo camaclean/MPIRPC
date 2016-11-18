@@ -17,30 +17,28 @@
  *
  */
 
-#ifndef MPIRPC__EXCEPTIONS_HPP
-#define MPIRPC__EXCEPTIONS_HPP
+#ifndef MPIRPC__REMARSHALLER_HPP
+#define MPIRPC__REMARSHALLER_HPP
+
+#include "marshaller.hpp"
 
 namespace mpirpc
 {
 
-struct unregistered_function_exception : std::exception
+template<typename T, typename Buffer, std::size_t Alignment, typename = void>
+struct remarshaller
 {
-    const char* what() const noexcept override
+    static void marshal(Buffer& s, std::remove_reference_t<T>&& val)
     {
-        return "Unregistered Function\n";
+        marshaller<T,Buffer,Alignment>::marshal(s,val);
     }
-};
 
-struct unregistered_object_exception : std::exception
-{
-    const char* what() const noexcept override
+    static void marshal(Buffer& s, std::remove_reference_t<T>& val)
     {
-        return "Unregistered Object\n";
+        marshaller<T,Buffer,Alignment>::marshal(s,val);
     }
 };
 
 }
 
-#endif /* MPIRPC__EXCEPTIONS_HPP */
-
-// kate: space-indent on; indent-width 4; mixedindent off; indent-mode cstyle;
+#endif /* MPIRPC__REMARSHALLER_HPP */

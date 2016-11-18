@@ -364,6 +364,15 @@ struct remove_all_const<const T&>
     using type =  typename remove_all_const<T>::type&;
 };
 
+template<typename Arg>
+struct storage_type_helper
+{
+    using type = autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Arg>>::value,std::remove_reference_t<Arg>,std::decay_t<std::remove_reference_t<Arg>>>>;
+};
+
+template<typename Arg>
+using storage_type = typename storage_type_helper<Arg>::type;
+
 }
 
 }

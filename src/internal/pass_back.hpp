@@ -120,35 +120,6 @@ struct can_realloc<T*&,U*&>
     constexpr static bool value = std::is_same<std::remove_const_t<T>,std::remove_const_t<U>>::value;
 };
 
-/*template <typename Stream, typename Tuple, size_t... I>
-decltype(auto) pass_back_impl(Stream& p, Tuple&& t, std::index_sequence<I...>)
-{
-    using swallow = int[];
-    (void)swallow{(marshal(p,std::get<I>(std::forward<Tuple>(t))), 0)...};
-}
-
-template <typename Stream, typename F, typename Tuple>
-decltype(auto) pass_back(F&& f, Stream& p, Tuple&& t)
-{
-    using Indices = std::make_index_sequence<std::tuple_size<std::decay_t<Tuple>>::value>;
-    return pass_back_impl(std::forward<F>(f), p, std::forward<Tuple>(t), Indices{});
-}
-
-template<std::size_t Pos, bool Head, bool... Tails>
-struct bool_vartem_pos
-{
-    static constexpr bool value = (Pos == sizeof...(Tails)+1) ? Head : bool_vartem_pos<Pos,Tails...>::value;
-};
-
-template<std::size_t Pos, typename T>
-struct get_pass_back_at;
-
-template<std::size_t Pos, bool...Vs>
-struct get_pass_back_at<Pos,bool_template_list<Vs...>>
-{
-    static constexpr bool value = bool_vartem_pos<Pos,Vs...>::value;
-};*/
-
 }
 
 }
