@@ -1787,6 +1787,7 @@ using custom_alignments = typename choose_custom_alignment<T1,T2>::type;
 
 
 /**
+ * @details
  * Mechanism:
  *
  * Applying a datagram as arguments with any type to a function is a non-trivial task. The naive approach would be to unpack
@@ -1807,28 +1808,29 @@ using custom_alignments = typename choose_custom_alignment<T1,T2>::type;
  * MoveConstructible. Types requiring direct initialization would still be unsupported.
  *
  * This implementation gets around this problem by creating a tuple of pointers to each parameter type. How this tuple is
- * initialized depends on the type. If is_buildtype<T> is true for that type, then the std::tuple element will be initialized
- * to a pointer within a stack buffer which is properly aligned for an element of that type. If is_buildtype<T> is false, then
- * the pointer points to the location of the data in the stream buffer. By default, is_buildtype<T> is true if T is a scalar
- * type or an array of scalar types. Otherwise, it is false. Users may specialize is_buildtype<T> to a boolean true value for
- * custom types that can be correctly accessed by a reinterpret_cast<T*> on the buffer location (objects with standard layout
+ * initialized depends on the type. If is_buildtype\<T> is true for that type, then the std::tuple element will be initialized
+ * to a pointer within a stack buffer which is properly aligned for an element of that type. If is_buildtype\<T> is false, then
+ * the pointer points to the location of the data in the stream buffer. By default, is_buildtype\<T> is true if T is a scalar
+ * type or an array of scalar types. Otherwise, it is false. Users may specialize is_buildtype\<T> to a boolean true value for
+ * custom types that can be correctly accessed by a reinterpret_cast\<T*> on the buffer location (objects with standard layout
  * and no pointer/reference type member variables).
  *
- * Next, types for which is_buildtype<T> is true call direct_initializer<T>::placementnew_construct(Allocator,T*,Stream).
+ * Next, types for which is_buildtype\<T> is true call direct_initializer\<T>::placementnew_construct(Allocator,T*,Stream).
  * This constructs a T using placement new, which is suitable for constructing types in the stack buffer. Types which have pointers
- * of their own should use direct_initializer<T>::construct(Allocator,T*,Buffer), which uses the (possibly custom) Allocator for
- * construction. If T is polymorphic, register_polymorphism<T>() must be called before invocation of apply(). The arguments for
- * construction of T are provided by unmarshaller<T,Buffer,Alignment>::unmarshal(Allocator,Buffer).
+ * of their own should use direct_initializer\<T>::construct(Allocator,T*,Buffer), which uses the (possibly custom) Allocator for
+ * construction. If T is polymorphic, register_polymorphism\<T>() must be called before invocation of apply(). The arguments for
+ * construction of T are provided by unmarshaller\<T,Buffer,Alignment>::unmarshal(Allocator,Buffer).
  *
  * Next, the function is run by unpacking each element of the tuple as each parameter. If the function has a non-void return
- * type, it is autowrapped and added to the output parameter buffer using remarshaller<T,Buffer,Alignment>::marshal(Buffer,T).
+ * type, it is autowrapped and added to the output parameter buffer using remarshaller\< T, Buffer, Alignment >::marshal(Buffer,T).
  *
  * Then, passback types from the parameter tuple are appended to the parameter buffer using
- * remarshaller<T,Buffer,Alignment>::marshal(Buffer,T).
+ * remarshaller\<T,Buffer,Alignment>::marshal(Buffer,T).
  *
- * Finally, for each element of the parameter tuple for which the value of is_buildtype<T> is true the tuple element is passed
+ * Finally, for each element of the parameter tuple for which the value of is_buildtype\< T > is true the tuple element is passed
  * to a cleanup function to run the destructor on the constructed types.
  *
+ * @verbatim
  * Call graph:
  *                                                    apply()
  *                                                      |
@@ -1867,33 +1869,34 @@ using custom_alignments = typename choose_custom_alignment<T1,T2>::type;
  *                                                      |
  *                                                      v
  *                                                  cleanup()
+ * @endverbatim
  *
- * The implementation of remarshaller<T,Buffer,Alignment>::marshal() simply calls marshaller<T,Buffer,Alignment>::marshal().
+ * The implementation of remarshaller\<T,Buffer,Alignment>::marshal() simply calls marshaller\<T,Buffer,Alignment>::marshal().
  * However, this struct can be specialized if different behavior is required when passing back (such as noting and skipping
  * unmodified parameters).
  *
- * is_buildtype<T,Buffer> is used to determine if the type stored in the Buffer can be read simply by a reinterpret_cast<T> at
- * the current location of the buffer. Therefore, is_buildtype<T> should always be true for Buffer implementations that use
+ * is_buildtype\<T,Buffer> is used to determine if the type stored in the Buffer can be read simply by a reinterpret_cast\<T> at
+ * the current location of the buffer. Therefore, is_buildtype\<T> should always be true for Buffer implementations that use
  * non-binary data or packed data structures.
  *
- * unmarshaller<T,Buffer,Alignment> specializations: call parameterbuffer_unmarshaller<T,Alignment> for non-pointer scalar types
- *                                                   unmarshaller<pointer_wrapper<T>,Buffer,Alignment,void>
+ * unmarshaller\<T,Buffer,Alignment> specializations: call parameterbuffer_unmarshaller\<T,Alignment> for non-pointer scalar types
+ *                                                   unmarshaller\<pointer_wrapper\<T>,Buffer,Alignment,void>
  *                                                   user-defined unmarshallers
  *
  *
- *        unmarshaller<pointer_wrapper<T>,Buffer,Alignment,typename=void>
+ *        unmarshaller\<pointer_wrapper\<T>,Buffer,Alignment,typename=void>
  *                                      |
  *                                      v
- *                            std::is_polymorphic<T>?
+ *                            std::is_polymorphic\<T>?
  *                          No /                   \ Yes
- *   direct_initializer<T>::construct              polymorphic_factory<T>->build()
+ *   direct_initializer\<T>::construct              polymorphic_factory\<T>->build()
  *                      U = T |                     | U = from id -> polymorphic_factory map
  *                            v                     v
- *                  unmarshaller<U,Buffer,Alignment>::unmarshal
+ *                  unmarshaller\<U,Buffer,Alignment>::unmarshal
  *
- * To add support for custom types, unmarshaller<T,Buffer,Alignment> should be specialized. To avoid template ambiguity, only the first
+ * To add support for custom types, unmarshaller\<T,Buffer,Alignment> should be specialized. To avoid template ambiguity, only the first
  * template parameter should be specialized. If the unmarshaller is specific to a Buffer type or alignment, SFINAE should be used for the
- * last template parameter. unmarshaller<T,Buffer,Alignment> should return either a single type to be passed as a single argument to the
+ * last template parameter. unmarshaller\<T,Buffer,Alignment> should return either a single type to be passed as a single argument to the
  * constructor or a tuple of types which will be unpacked as constructor arguments.
  *
  */
