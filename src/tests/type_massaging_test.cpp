@@ -741,6 +741,7 @@ TEST(FnTypeMarshaller, p5T_pT)
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
     mpirpc::parameter_buffer s;
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
+    s.seek(0);
     std::allocator<void> a;
     StorageTupleType st(mpirpc::internal::tuple_unmarshaller<double*>::unmarshal(a,s));
     double *a1 = (double*) std::get<0>(st);
@@ -748,7 +749,7 @@ TEST(FnTypeMarshaller, p5T_pT)
         ASSERT_EQ(p1[i],a1[i]);
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
     NewAllocatorType na(a);
-    std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
+    //std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
     delete[] p1;
 }
 
@@ -759,6 +760,7 @@ TEST(FnTypeMarshaller, p5T_lpT)
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
     mpirpc::parameter_buffer s;
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
+    s.seek(0);
     std::allocator<void> a;
     StorageTupleType st(mpirpc::internal::tuple_unmarshaller<double*&>::unmarshal(a,s));
     double *a1 = (double*) std::get<0>(st);
@@ -766,7 +768,7 @@ TEST(FnTypeMarshaller, p5T_lpT)
         ASSERT_EQ(p1[i],a1[i]);
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
     NewAllocatorType na(a);
-    std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
+    //std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
     delete[] p1;
 }
 
@@ -777,6 +779,7 @@ TEST(FnTypeMarshaller, p5T_rpT)
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
     mpirpc::parameter_buffer s;
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
+    s.seek(0);
     std::allocator<void> a;
     StorageTupleType st(mpirpc::internal::tuple_unmarshaller<double*&&>::unmarshal(a,s));
     double *a1 = (double*) std::get<0>(st);
@@ -784,7 +787,7 @@ TEST(FnTypeMarshaller, p5T_rpT)
         ASSERT_EQ(p1[i],a1[i]);
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
     NewAllocatorType na(a);
-    std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
+    //std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
     delete[] p1;
 }
 
@@ -799,6 +802,7 @@ TEST(FnTypeMarshaller, la5T_pT)
     //std::cout << "StorageTupleType: " << abi::__cxa_demangle(typeid(StorageTupleType).name(),0,0,0) << std::endl; \
     //std::cout << abi::__cxa_demangle(typeid(argument_tuple).name(),0,0,0) << std::endl;
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
+    s.seek(0);
     std::allocator<void> a;
     StorageTupleType st(mpirpc::internal::tuple_unmarshaller<mpirpc::pointer_wrapper<double>>::unmarshal(a,s));
     double *a1 = (double*) std::get<0>(st);
@@ -806,7 +810,7 @@ TEST(FnTypeMarshaller, la5T_pT)
         ASSERT_EQ(p1[i],a1[i]);
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
     NewAllocatorType na(a);
-    std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
+    //std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
 }
 
 TEST(FnTypeMarshaller, la5T_lpT)
@@ -820,6 +824,7 @@ TEST(FnTypeMarshaller, la5T_lpT)
     //std::cout << "StorageTupleType: " << abi::__cxa_demangle(typeid(StorageTupleType).name(),0,0,0) << std::endl; \
     //std::cout << abi::__cxa_demangle(typeid(argument_tuple).name(),0,0,0) << std::endl;
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
+    s.seek(0);
     std::allocator<void> a;
     StorageTupleType st(mpirpc::internal::tuple_unmarshaller<double*&>::unmarshal(a,s));
     double *a1 = (double*) std::get<0>(st);
@@ -827,7 +832,7 @@ TEST(FnTypeMarshaller, la5T_lpT)
         ASSERT_EQ(p1[i],a1[i]);
     using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
     NewAllocatorType na(a);
-    std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
+    //std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
 }
 
 /*TEST(FnTypeMarshaller, la5T_la5T)

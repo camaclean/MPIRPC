@@ -71,7 +71,7 @@ struct ordered_call<R(*)(FArgs...), Allocator>
 
     ~ordered_call()
     {
-        //internal::detail::clean_up_args_tuple(alloc, args_tuple);
+        internal::detail::clean_up_args_tuple(alloc, args_tuple);
     }
 
     internal::unwrapped_function_type<function_type> function;
@@ -100,7 +100,7 @@ struct ordered_call<R(Class::*)(FArgs...), Allocator>
 
     ~ordered_call()
     {
-        //internal::detail::clean_up_args_tuple(alloc, args_tuple);
+        internal::detail::clean_up_args_tuple(alloc, args_tuple);
     }
 
     internal::unwrapped_function_type<function_type> function;
@@ -130,7 +130,7 @@ struct ordered_call<std::function<R(FArgs...)>, Allocator>
 
     ~ordered_call()
     {
-        //internal::detail::clean_up_args_tuple(alloc, args_tuple);
+        internal::detail::clean_up_args_tuple(alloc, args_tuple);
     }
 
     internal::unwrapped_function_type<function_type> function;

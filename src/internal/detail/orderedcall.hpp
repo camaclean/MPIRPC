@@ -110,6 +110,17 @@ struct arg_cleanup<const char*>
     }
 };
 
+template<typename Allocator, typename... Ts, std::size_t... Is>
+void clean_up_args_tuple_impl(Allocator&& a, std::tuple<Ts...>& t, std::index_sequence<Is...>)
+{
+    (void)(int[]){ (std::cout << abi::__cxa_demangle(typeid(void(*)(Ts)).name(),0,0,0) << std::endl, arg_cleanup<Ts>::apply(a, std::forward<Ts>(std::get<Is>(t))),0)... };
+}
+
+template<typename Allocator, typename... Args>
+void clean_up_args_tuple(Allocator&& a, std::tuple<Args...> &t)
+{
+    clean_up_args_tuple_impl(a,t,std::make_index_sequence<sizeof...(Args)>{});
+}
 
 } //detail
 
