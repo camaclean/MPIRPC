@@ -45,7 +45,6 @@ struct marshaller<mpirpc::pointer_wrapper<T>, Buffer, Alignment>
     template<typename U = T, std::enable_if_t<std::is_polymorphic<U>::value>* = nullptr>
     static void marshal(Buffer& b, const mpirpc::pointer_wrapper<U>& val)
     {
-        std::cout << "marshalling polymorphic " << type_id(*val) << std::endl;
         b.template push<std::size_t>(val.size());
         b.template push<uintptr_t>(type_identifier<U>::id());
         for (std::size_t i = 0; i < val.size(); ++i)

@@ -235,7 +235,6 @@ mpirpc::pointer_wrapper<std::remove_pointer_t<std::remove_reference_t<FT>>> auto
     constexpr bool is_mutable = !std::is_const<std::remove_pointer_t<std::remove_reference_t<FT>>>::value && !std::is_const<U>::value;
     constexpr bool pass_back = !std::is_rvalue_reference<T>::value && is_mutable;
     constexpr bool pass_ownership = false;
-    //std::cout << "autowrapping array: " << extent << std::endl;
     return ::mpirpc::pointer_wrapper<U>(static_cast<std::decay_t<T>>(t),extent,pass_back,pass_ownership);
 }
 
@@ -249,7 +248,6 @@ mpirpc::pointer_wrapper<std::remove_pointer_t<std::remove_reference_t<FT>>> auto
     constexpr bool is_mutable = !std::is_const<std::remove_pointer_t<std::remove_reference_t<FT>>>::value && !std::is_const<U>::value;
     constexpr bool pass_back = !std::is_rvalue_reference<T>::value && is_mutable;
     constexpr bool pass_ownership = false;
-    //std::cout << "autowrapping array: " << extent << std::endl;
     return ::mpirpc::pointer_wrapper<U>(static_cast<std::decay_t<T>>(t),extent,pass_back,pass_ownership);
 }
 
@@ -367,7 +365,7 @@ struct remove_all_const<const T&>
 template<typename Arg>
 struct storage_type_helper
 {
-    using type = autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Arg>>::value,std::remove_reference_t<Arg>,std::decay_t<std::remove_reference_t<Arg>>>>;
+    using type = autowrapped_type<std::conditional_t<std::is_array<std::remove_reference_t<Arg>>::value,std::remove_reference_t<Arg>&,std::decay_t<std::remove_reference_t<Arg>>>>;
 };
 
 template<typename Arg>

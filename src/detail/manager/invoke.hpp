@@ -41,7 +41,6 @@ auto mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(int rank, A
     {
         return f(std::forward<Args>(args)...);
     } else {
-        std::cout << "pass backs for function: " << typeid(internal::wrapped_function_type<F>).name() << " " << typeid(typename internal::marshaller_function_signature<internal::wrapped_function_type<F>,internal::autowrapped_type<Args>...>::pass_backs).name() << std::endl;
         send_function_invocation<internal::wrapped_function_type<F>,f>(rank, true, internal::autowrap<Args>(args)...);
         return process_return<internal::function_return_type<F>>(rank,
                                                                  typename internal::marshaller_function_signature<internal::wrapped_function_type<F>,internal::autowrapped_type<Args>...>::parameter_types{},

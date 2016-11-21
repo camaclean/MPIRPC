@@ -39,16 +39,10 @@ template<typename T>
 struct arg_cleanup
 {
     template<typename Allocator>
-    static void apply(Allocator&& a, typename std::remove_reference<T>::type&)
-    {
-        std::cout << "blank clean up for " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
-    }
+    static void apply(Allocator&& a, typename std::remove_reference<T>::type& ) {}
 
     template<typename Allocator>
-    static void apply(Allocator&& a, typename std::remove_reference<T>::type&&)
-    {
-        std::cout << "generic rvalue " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
-    }
+    static void apply(Allocator&& a, typename std::remove_reference<T>::type&&) {}
 };
 
 template<typename T>
@@ -57,7 +51,6 @@ struct arg_cleanup<pointer_wrapper<T>>
     template<typename Allocator, typename U, std::enable_if_t<std::is_same<std::decay_t<pointer_wrapper<T>>,std::decay_t<U>>::value>* = nullptr>
     static void apply(Allocator&& a, U&& t)
     {
-        std::cout << "cleaned up C Array of " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
         t.free(a);
     }
 };
@@ -68,7 +61,6 @@ struct arg_cleanup<T(&)[N]>
     template<typename Allocator>
     static void apply(Allocator&& a, T(&v)[N])
     {
-        //std::cout << "cleaning up reference to array" << std::endl;
         using NA = typename std::allocator_traits<std::remove_reference_t<Allocator>>::template rebind_alloc<std::remove_const_t<T>>;
         NA na(a);
         for (std::size_t i = 0; i < N; ++i)
@@ -83,7 +75,6 @@ struct arg_cleanup<T(&&)[N]>
     template<typename Allocator>
     static void apply(Allocator&& a, T(&&v)[N])
     {
-        std::cout << "cleaning up rvalue reference to array" << std::endl;
         using NA = typename std::allocator_traits<std::remove_reference_t<Allocator>>::template rebind_alloc<std::remove_const_t<T>>;
         NA na(a);
         for (std::size_t i = 0; i < N; ++i)
@@ -96,7 +87,7 @@ template<>
 struct arg_cleanup<char*>
 {
     template<typename Allocator>
-    static void apply(Allocator&& a, char*&& s) { delete[] s; std::cout << "deleted char*" << std::endl; }
+    static void apply(Allocator&& a, char*&& s) { delete[] s; }
 };
 
 template<>
@@ -106,14 +97,13 @@ struct arg_cleanup<const char*>
     static void apply(Allocator&& a, const char*&& s)
     {
         delete[] s;
-        std::cout << "deleted const char*" << std::endl;
     }
 };
 
 template<typename Allocator, typename... Ts, std::size_t... Is>
 void clean_up_args_tuple_impl(Allocator&& a, std::tuple<Ts...>& t, std::index_sequence<Is...>)
 {
-    (void)(int[]){ (std::cout << abi::__cxa_demangle(typeid(void(*)(Ts)).name(),0,0,0) << std::endl, arg_cleanup<Ts>::apply(a, std::forward<Ts>(std::get<Is>(t))),0)... };
+    (void)(int[]){ (arg_cleanup<Ts>::apply(a, std::forward<Ts>(std::get<Is>(t))),0)... };
 }
 
 template<typename Allocator, typename... Args>

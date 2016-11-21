@@ -11,6 +11,7 @@
 #include "../internal/marshalling.hpp"
 #include "../internal/orderedcall.hpp"
 #include "../internal/parameterstream.hpp"
+#include "../internal/type_massaging.hpp"
 #include "../internal/unmarshalling.hpp"
 #include "../internal/utility.hpp"
 
@@ -136,11 +137,11 @@ TEST_STORAGE_TUPLE_TYPE(pscalar ,void(*)(int*)       , std::tuple<mpirpc::pointe
 TEST_STORAGE_TUPLE_TYPE(lscalar ,void(*)(int&)       , std::tuple<int>        )
 TEST_STORAGE_TUPLE_TYPE(rscalar ,void(*)(int&&)      , std::tuple<int>        )
 TEST_STORAGE_TUPLE_TYPE(Ascalar ,void(*)(int[4])     , std::tuple<mpirpc::pointer_wrapper<int>>       )
-TEST_STORAGE_TUPLE_TYPE(Alscalar,void(*)(int(&)[4])  , std::tuple<int[4]>  )
-TEST_STORAGE_TUPLE_TYPE(Arscalar,void(*)(int(&&)[4]) , std::tuple<int[4]> )
+TEST_STORAGE_TUPLE_TYPE(Alscalar,void(*)(int(&)[4])  , std::tuple<int(&)[4]>  )
+TEST_STORAGE_TUPLE_TYPE(Arscalar,void(*)(int(&&)[4]) , std::tuple<int(&)[4]> )
 TEST_STORAGE_TUPLE_TYPE(Achar   ,void(*)(char[4])    , std::tuple<char*>      )
-TEST_STORAGE_TUPLE_TYPE(Alchar  ,void(*)(char(&)[4]) , std::tuple<char[4]> )
-TEST_STORAGE_TUPLE_TYPE(Archar  ,void(*)(char(&&)[4]), std::tuple<char[4]>)
+TEST_STORAGE_TUPLE_TYPE(Alchar  ,void(*)(char(&)[4]) , std::tuple<char(&)[4]> )
+TEST_STORAGE_TUPLE_TYPE(Archar  ,void(*)(char(&&)[4]), std::tuple<char(&)[4]>)
 
 
 /**
@@ -680,6 +681,47 @@ TEST_FORWARD_PARAMETER_PRVALUE(T_rU , float   , double&&, double  , 3.0)
 //TEST_FORWARD_PARAMETER_LVALUE (lT_rU, float&  , double&&, double  , 3.0)
 TEST_FORWARD_PARAMETER_XVALUE (rT_rU, float&& , double&&, double  , 3.0)
 
+namespace detail
+{
+
+template<typename T, typename... Args, std::size_t... Is>
+T make_from_tuple_impl(std::tuple<std::piecewise_construct_t,Args...> t, std::index_sequence<Is...>)
+{
+    return T(std::get<Is+1>(t)...);
+}
+
+template<typename T, typename...Args>
+T make_from_tuple(std::tuple<std::piecewise_construct_t,Args...> t)
+{
+    return make_from_tuple_impl<T>(t,std::make_index_sequence<sizeof...(Args)>());
+}
+
+template<typename T, typename Arg>
+T make_from_tuple(Arg&& a)
+{
+    return a;
+}
+
+template<typename Allocator, typename Buffer, typename... Ts, std::size_t... Is>
+std::tuple<mpirpc::internal::storage_type<Ts>...> unmarshal_into_tuple_impl(Allocator &a, Buffer &s, std::index_sequence<Is...>)
+{
+   using R = std::tuple<mpirpc::internal::storage_type<Ts>...>;
+   R ret{make_from_tuple<mpirpc::internal::storage_type<Ts>>(mpirpc::unmarshaller<mpirpc::internal::storage_type<Ts>,Buffer,alignof(Ts)>::unmarshal(a,s))...};
+   return ret;
+}
+
+}
+
+template<typename... Ts>
+struct tuple_unmarshaller
+{
+   template<typename Allocator, typename Buffer>
+   static std::tuple<mpirpc::internal::storage_type<Ts>...> unmarshal(Allocator &a, Buffer &s)
+   {
+       return detail::unmarshal_into_tuple_impl<Allocator, Buffer, Ts...>(a, s, std::make_index_sequence<sizeof...(Ts)>{});
+   }
+};
+
 template<typename T>
 struct unmarshal_into_tuple_helper;
 
@@ -689,7 +731,7 @@ struct unmarshal_into_tuple_helper<std::tuple<Ts...>>
     template<typename Allocator, typename Stream>
     static std::tuple<Ts...> unmarshal(Allocator &a, Stream &s)
     {
-        return mpirpc::internal::tuple_unmarshaller<Ts...>::unmarshal(a,s);
+        return tuple_unmarshaller<Ts...>::unmarshal(a,s);
     }
 };
 
@@ -701,15 +743,9 @@ struct unmarshal_into_tuple_helper<std::tuple<Ts...>>
         auto argument_tuple = std::make_tuple(Arguments); \
         mpirpc::parameter_buffer s; \
         mpirpc::internal::fn_type_marshaller<F>::marshal(s, Arguments); \
-        /*std::cout << std::hex; \
-        for (std::size_t i = 0; i < s.position(); ++i) \
-            std::cout << (unsigned int) s.data()[i] << " "; \
-        std::cout << std::dec << std::endl;*/ \
         s.seek(0); \
         std::allocator<void> a; \
         StorageTupleType st(unmarshal_into_tuple_helper<StorageTupleType>::unmarshal(a,s)); \
-        /*std::cout << abi::__cxa_demangle(typeid(StorageTupleType).name(),0,0,0) << std::endl; \
-        std::cout << abi::__cxa_demangle(typeid(argument_tuple).name(),0,0,0) << std::endl; */ \
         ASSERT_EQ(argument_tuple,st); \
     }
 
@@ -743,13 +779,10 @@ TEST(FnTypeMarshaller, p5T_pT)
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
     s.seek(0);
     std::allocator<void> a;
-    StorageTupleType st(mpirpc::internal::tuple_unmarshaller<double*>::unmarshal(a,s));
+    StorageTupleType st(tuple_unmarshaller<double*>::unmarshal(a,s));
     double *a1 = (double*) std::get<0>(st);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
-    using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
-    NewAllocatorType na(a);
-    //std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
     delete[] p1;
 }
 
@@ -762,13 +795,10 @@ TEST(FnTypeMarshaller, p5T_lpT)
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
     s.seek(0);
     std::allocator<void> a;
-    StorageTupleType st(mpirpc::internal::tuple_unmarshaller<double*&>::unmarshal(a,s));
+    StorageTupleType st(tuple_unmarshaller<double*&>::unmarshal(a,s));
     double *a1 = (double*) std::get<0>(st);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
-    using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
-    NewAllocatorType na(a);
-    //std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
     delete[] p1;
 }
 
@@ -781,13 +811,10 @@ TEST(FnTypeMarshaller, p5T_rpT)
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
     s.seek(0);
     std::allocator<void> a;
-    StorageTupleType st(mpirpc::internal::tuple_unmarshaller<double*&&>::unmarshal(a,s));
+    StorageTupleType st(tuple_unmarshaller<double*&&>::unmarshal(a,s));
     double *a1 = (double*) std::get<0>(st);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
-    using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
-    NewAllocatorType na(a);
-    //std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
     delete[] p1;
 }
 
@@ -797,20 +824,13 @@ TEST(FnTypeMarshaller, la5T_pT)
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
     mpirpc::parameter_buffer s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
-    //auto t = mpirpc::internal::autowrap(p1);
-    //std::cout << t.size() << std::endl;
-    //std::cout << "StorageTupleType: " << abi::__cxa_demangle(typeid(StorageTupleType).name(),0,0,0) << std::endl; \
-    //std::cout << abi::__cxa_demangle(typeid(argument_tuple).name(),0,0,0) << std::endl;
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
     s.seek(0);
     std::allocator<void> a;
-    StorageTupleType st(mpirpc::internal::tuple_unmarshaller<mpirpc::pointer_wrapper<double>>::unmarshal(a,s));
+    StorageTupleType st(tuple_unmarshaller<mpirpc::pointer_wrapper<double>>::unmarshal(a,s));
     double *a1 = (double*) std::get<0>(st);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
-    using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
-    NewAllocatorType na(a);
-    //std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
 }
 
 TEST(FnTypeMarshaller, la5T_lpT)
@@ -819,107 +839,84 @@ TEST(FnTypeMarshaller, la5T_lpT)
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
     mpirpc::parameter_buffer s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
-    //auto t = mpirpc::internal::autowrap(p1);
-    //std::cout << t.size() << std::endl;
-    //std::cout << "StorageTupleType: " << abi::__cxa_demangle(typeid(StorageTupleType).name(),0,0,0) << std::endl; \
-    //std::cout << abi::__cxa_demangle(typeid(argument_tuple).name(),0,0,0) << std::endl;
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
     s.seek(0);
     std::allocator<void> a;
-    StorageTupleType st(mpirpc::internal::tuple_unmarshaller<double*&>::unmarshal(a,s));
+    StorageTupleType st(tuple_unmarshaller<double*&>::unmarshal(a,s));
     double *a1 = (double*) std::get<0>(st);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
-    using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
-    NewAllocatorType na(a);
-    //std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
 }
 
-/*TEST(FnTypeMarshaller, la5T_la5T)
+TEST(FnTypeMarshaller, la5T_la5T)
 {
     using F = void(*)(double(&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_stream s;
+    mpirpc::parameter_buffer s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
+    s.seek(0);
     std::allocator<void> a;
-    StorageTupleType st(mpirpc::internal::tuple_unmarshaller_remote<double(&)[5]>::unmarshal(a,s));
-    std::tuple<double(&)[5]> test_tuple(p1);
-    double *a1 = std::get<0>(st);
+    double* a1 = mpirpc::get<double(&)[5]>(s,a);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
-    using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
-    NewAllocatorType na(a);
-    std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
 }
 
 TEST(FnTypeMarshaller, ra5T_la5T)
 {
     using F = void(*)(double(&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_stream s;
+    mpirpc::parameter_buffer s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, std::move(p1));
+    s.seek(0);
     std::allocator<void> a;
-    StorageTupleType st(mpirpc::internal::tuple_unmarshaller_remote<double(&)[5]>::unmarshal(a,s));
-    double *a1 = std::get<0>(st);
+    double *a1 = mpirpc::get<double(&)[5]>(s,a);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
-    using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
-    NewAllocatorType na(a);
-    std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
 }
 
 TEST(FnTypeMarshaller, ra5T_ra5T)
 {
     using F = void(*)(double(&&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_stream s;
+    mpirpc::parameter_buffer s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, std::move(p1));
+    s.seek(0);
     std::allocator<void> a;
-    StorageTupleType st(mpirpc::internal::tuple_unmarshaller_remote<double(&&)[5]>::unmarshal(a,s));
-    double *a1 = std::get<0>(st);
+    double *a1 = mpirpc::get<double(&)[5]>(s,a);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
-    using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
-    NewAllocatorType na(a);
-    std::allocator_traits<std::allocator<double>>::deallocate(na,a1,5);
 }
 
 TEST(FnTypeMarshaller, la5T_la5cT)
 {
     using F = void(*)(const double(&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_stream s;
+    mpirpc::parameter_buffer s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
+    s.seek(0);
     std::allocator<void> a;
-    StorageTupleType st(mpirpc::internal::tuple_unmarshaller_remote<const double(&)[5]>::unmarshal(a,s));
-    const double *a1 = std::get<0>(st);
+    double *a1 = mpirpc::get<double(&)[5]>(s,a);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
-    using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
-    NewAllocatorType na(a);
-    std::allocator_traits<std::allocator<double>>::deallocate(na,(double*) a1,5);
 }
 
 TEST(FnTypeMarshaller, la5cT_la5cT)
 {
     using F = void(*)(const double(&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_stream s;
+    mpirpc::parameter_buffer s;
     const double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
+    s.seek(0);
     std::allocator<void> a;
-    StorageTupleType st(mpirpc::internal::tuple_unmarshaller_remote<const double(&)[5]>::unmarshal(a,s));
-    const double *a1 = std::get<0>(st);
+    double *a1 = mpirpc::get<double(&)[5]>(s,a);
     for (std::size_t i = 0; i < 5; ++i)
         ASSERT_EQ(p1[i],a1[i]);
-    using NewAllocatorType = typename std::allocator_traits<std::allocator<void>>::template rebind_alloc<double>;
-    NewAllocatorType na(a);
-    std::allocator_traits<std::allocator<double>>::deallocate(na,(double*) a1,5);
-}*/
+}
 
 void ordered_call_basic_test() {}
 
@@ -973,69 +970,6 @@ TEST(OrderedCallTest, class_pFoo)
     ASSERT_EQ(2, Foo::ordered_call_class_Foo_value);
 }
 
-void ordered_call_ref_array(int(&v)[3][4])
-{
-    for (std::size_t i = 0; i < 3; ++i)
-    {
-        for (std::size_t j = 0; j < 4; ++j)
-        {
-            std:: cout << v[i][j] << " ";
-            ++v[i][j];
-        }
-        std::cout << std::endl;
-    }
-}
-
-/*TEST(OrderedCallTest, ref_array)
-{
-    using T = int(&)[3][4];
-    int *p = new int[3*4]{1,2,3,4,5,6,7,8,9,10,11,12};
-    T a1 = (T) *p;
-    std::allocator<void> a;
-    {
-        mpirpc::internal::ordered_call<decltype(&ordered_call_ref_array),std::allocator<void>> oc{&ordered_call_ref_array, a, a1};
-        oc();
-        int(&v)[3][4] = std::get<0>(oc.args_tuple);
-        ASSERT_EQ(2 ,v[0][0]);
-        ASSERT_EQ(3 ,v[0][1]);
-        ASSERT_EQ(4 ,v[0][2]);
-        ASSERT_EQ(5 ,v[0][3]);
-        ASSERT_EQ(6 ,v[1][0]);
-        ASSERT_EQ(7 ,v[1][1]);
-        ASSERT_EQ(8 ,v[1][2]);
-        ASSERT_EQ(9 ,v[1][3]);
-        ASSERT_EQ(10,v[2][0]);
-        ASSERT_EQ(11,v[2][1]);
-        ASSERT_EQ(12,v[2][2]);
-        ASSERT_EQ(13,v[2][3]);
-    } //make ordered_call go out of scope
-}*/
-
-void ordered_call_rref_array(int(&&v)[3][4])
-{
-    /*for (std::size_t i = 0; i < 3; ++i)
-    {
-        for (std::size_t j = 0; j < 4; ++j)
-        {
-            std:: cout << v[i][j] << " ";
-            ++v[i][j];
-        }
-        std::cout << std::endl;
-    }*/
-    ASSERT_EQ(2 ,v[0][0]);
-    ASSERT_EQ(3 ,v[0][1]);
-    ASSERT_EQ(4 ,v[0][2]);
-    ASSERT_EQ(5 ,v[0][3]);
-    ASSERT_EQ(6 ,v[1][0]);
-    ASSERT_EQ(7 ,v[1][1]);
-    ASSERT_EQ(8 ,v[1][2]);
-    ASSERT_EQ(9 ,v[1][3]);
-    ASSERT_EQ(10,v[2][0]);
-    ASSERT_EQ(11,v[2][1]);
-    ASSERT_EQ(12,v[2][2]);
-    ASSERT_EQ(13,v[2][3]);
-}
-
 class Bar
 {
 public:
@@ -1045,32 +979,6 @@ public:
     Bar(Bar&&) { moved = true; }
     bool moved;
 };
-
-void ordered_call_rref_array_Bar(Bar(&&v)[1])
-{
-    //std::cout << v[0].moved << " " << v << std::endl;
-    /*
-     * This should be moving the array location, not the elements of the array itself
-     */
-    ASSERT_FALSE(v[0].moved);
-}
-
-/*TEST(OrderedCallTest, rref_array_Bar)
-{
-    using T = Bar(&&)[1];
-    Bar *p = new Bar[1]();
-    Bar t[1]{};
-    std::cout << &t << std::endl;
-    std::cout << p << std::endl;
-    ordered_call_rref_array_Bar(std::move(t));
-    //T a1 = std::move(t);
-    T a1 = (T) *p;
-    std::allocator<void> a;
-    {
-        mpirpc::internal::ordered_call<decltype(&ordered_call_rref_array_Bar),std::allocator<void>> oc{&ordered_call_rref_array_Bar, a, a1};
-        oc();
-    } //make ordered_call go out of scope
-}*/
 
 class Foo2
 {
@@ -1098,18 +1006,6 @@ public:
 
 using i128t = int __attribute__((aligned(128)));
 
-template<typename T>
-inline constexpr uintptr_t type_id()
-{
-    return reinterpret_cast<uintptr_t>(&typeid(T));
-}
-
-template<typename T>
-inline uintptr_t type_id(T&& t)
-{
-    return reinterpret_cast<uintptr_t>(&typeid(t));
-}
-
 /*template<typename Allocator>
 struct piecewise_allocator_traits;*/
 
@@ -1130,7 +1026,7 @@ public:
     A(A&&) = delete;
     A() : a(1) {}
     virtual void test() {}
-    virtual ~A() { std::cout << "A destructor" << std::endl; }
+    virtual ~A() {}
     int a;
 };
 
@@ -1141,30 +1037,11 @@ public:
     B(B&&) = delete;
     B() : A(), b(2) {}
     virtual void test() {}
-    virtual ~B() { std::cout << "B destructor" << std::endl; }
+    virtual ~B() {}
     int b;
 };
 
 namespace mpirpc {
-
-template<typename Buffer, std::size_t Alignment>
-struct marshaller<A,Buffer,Alignment>
-{
-    static void marshal(Buffer& b, const A& val)
-    {
-        b.put(val.a);
-    }
-};
-
-template<typename Buffer, std::size_t Alignment>
-struct unmarshaller<A,Buffer,Alignment>
-{
-    template<typename Allocator>
-    static decltype(auto) unmarshal(Allocator& alloc, Buffer& buff)
-    {
-        return get<int>(buff,alloc);
-    }
-};
 
 template<typename Buffer, std::size_t Alignment>
 struct marshaller<B,Buffer,Alignment>
@@ -1207,15 +1084,6 @@ std::ostream& operator<<(std::ostream& o, const mpirpc::pointer_wrapper<T>& v)
     return o;
 }
 
-template<typename...Ts,std::size_t...Is>
-void test_alignment_padding(std::index_sequence<Is...>)
-{
-    using swallow = int[];
-    std::cout << "-------" << std::endl;
-    (void)swallow{( std::cout << "alignment padding: " << mpirpc::internal::aligned_buffer_delta<mpirpc::parameter_buffer,false,false,Is,Ts...> << std::endl, 0)...};
-    std::cout << "-------" << std::endl;
-}
-
 void foo(double d, int i, float f,  bool b, int(&ai)[4], double(&ad)[3], float(&af)[5], double *pd, B* a)
 {
     int ai2[4]{2,4,6,8};
@@ -1234,7 +1102,6 @@ void foo(double d, int i, float f,  bool b, int(&ai)[4], double(&ad)[3], float(&
         ASSERT_EQ(af2[index],af[index]);
     ASSERT_EQ(3.14159,*pd);
     ASSERT_EQ(8,a->a);
-    std::cout << "ran foo" << a->a << std::endl;
 }
 
 int foo3()
@@ -1244,33 +1111,20 @@ int foo3()
 
 void foo4(bool b, i128t i128)
 {
-    std::cout << alignof(i128) << " " << alignof(i128t) << " " << abi::__cxa_demangle(typeid(i128).name(),0,0,0) << std::endl;
+    //std::cout << alignof(i128) << " " << alignof(i128t) << " " << abi::__cxa_demangle(typeid(i128).name(),0,0,0) << std::endl;
 };
 
 TEST(ArgumentUnpacking, test0)
 {
-    mpirpc::register_polymorphism<A>();
     mpirpc::register_polymorphism<B>();
     mpirpc::parameter_buffer p;
     int ai[4]{2,4,6,8};
     double ad[3]{4.6,8.2,9.1};
     float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
     double pd = 3.14159;
-
-    p.push<double>(2.3);
-    p.push<int>(4);
-    p.push<float>(1.2f);
-    p.push<bool>(true);
-    p.push<int(&)[4]>(ai);
-    p.push<double(&)[3]>(ad);
-    p.push<float(&)[5]>(af);
-    p.push<mpirpc::pointer_wrapper<double>>(mpirpc::pointer_wrapper<double>(&pd));
     B b(8,11);
-    p.push<mpirpc::pointer_wrapper<B>>(mpirpc::pointer_wrapper<B>(&b));
-    std::cout << std::hex;
-    for (std::size_t i = 0; i < p.position(); ++i)
-        std::cout << (unsigned int) p.data()[i] << " ";
-    std::cout << std::dec << std::endl;
+
+    mpirpc::internal::fn_type_marshaller<decltype(&foo)>::marshal(p, 2.3, 4, 1.2f, true, ai, ad, af, mpirpc::pointer_wrapper<double>(&pd),mpirpc::pointer_wrapper<B>(&b));
     p.seek(0);
     std::allocator<char> a;
     mpirpc::parameter_buffer pout;
@@ -1281,26 +1135,16 @@ TEST(ArgumentUnpacking, test0)
     p2.push<bool>(true);
     //p2 << ((i128t) 5);
     p2.push<i128t,128>(4);
-    std::cout << std::hex;
-    for (std::size_t i = 0; i < p2.position(); ++i)
-        std::cout << (unsigned int) p2.data()[i] << " ";
-    std::cout << std::dec << std::endl;
     p2.seek(0);
     mpirpc::internal::apply(&foo4,a,p2,pout);
 }
 
-/*TEST(ArgumentUnpacking, test2)
+namespace std
 {
-    mpirpc::parameter_stream p;
-    int ai[4]{2,4,6,8};
-    double ad[3]{4.6,8.2,9.1};
-    float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
-    double pd = 3.14159;
-    p << 2.3 << 4 << 1.2f << true << ai << ad << af << mpirpc::pointer_wrapper<double>(&pd);
-    std::allocator<char> a;
-    mpirpc::parameter_stream pout;
-    ::mpirpc::internal::apply_stream(&foo,a,p,pout);
-}*/
+
+bool operator==(std::piecewise_construct_t, std::piecewise_construct_t) { return true; }
+
+}
 
 TEST(ParameterBuffer,scalars)
 {
@@ -1315,26 +1159,12 @@ TEST(ParameterBuffer,scalars)
     b.push<float>(floatval);
     b.push<double>(doubleval);
     b.push<mpirpc::pointer_wrapper<B>>(bval);
-    std::cout << "---------------\n";
-    //b.put(new B(5,10));
-    std::cout << "---------------\n";
-    std::cout << std::hex;
-    for (std::size_t i = 0; i < b.position(); ++i)
-        std::cout << (unsigned int) b.data()[i] << " ";
-    std::cout << std::dec << std::endl;
     b.seek(0);
     std::allocator<void> a;
     ASSERT_EQ(true,mpirpc::get<bool>(b,a));
     ASSERT_EQ(4,mpirpc::get<int>(b,a));
     ASSERT_EQ(2.17f,mpirpc::get<float>(b,a));
-    //ASSERT_EQ(3.14,b.get<double>(a));
-    mpirpc::internal::direct_initializer<double>::placementnew_construct(a,&doubleval,b);
-    ASSERT_EQ(3.14,doubleval);
-    //ASSERT_EQ((std::tuple<int,int>(7,9)),b.get<B>(a));
-    mpirpc::pointer_wrapper<B> *bptr = (mpirpc::pointer_wrapper<B>*) malloc(sizeof(mpirpc::pointer_wrapper<B>));
-    //direct_initializer<mpirpc::pointer_wrapper<A>>::placementnew_construct(a,bptr,b);
-    //ASSERT_EQ(7,(*bptr)->a);
-    //ASSERT_EQ(9,(*bptr)->b);
+    ASSERT_EQ(3.14,mpirpc::get<double>(b,a));
 }
 
 
@@ -1342,30 +1172,21 @@ TEST(ParameterBuffer,scalars)
 TEST(PolymorphicLookup,test)
 {
     constexpr const std::type_info &i = typeid(A);
-    mpirpc::register_polymorphism<A>();
     mpirpc::register_polymorphism<B>();
     mpirpc::parameter_buffer b{};
     mpirpc::pointer_wrapper<B> bval(new B(7,9));
     b.push<mpirpc::pointer_wrapper<B>>(bval);
-    //b.put(type_identifier<B>::id());
-    //b.put(7);
-    //b.put(9);
-    std::cout << std::hex;
-    for (std::size_t i = 0; i < b.position(); ++i)
-        std::cout << (unsigned int) b.data()[i] << " ";
-    std::cout << std::dec << std::endl;
     b.seek(0);
     std::allocator<char> a;
     std::size_t size = mpirpc::get<std::size_t>(b,a);
     uintptr_t id = mpirpc::get<uintptr_t>(b,a);
     B* test = static_cast<B*>(mpirpc::polymorphic_map<mpirpc::parameter_buffer>.at(mpirpc::safe_type_index_map.at(id))->build(a,b,size));
-    //constexpr const intptr_t id = i.hash_code();
     ASSERT_EQ(7,test->a);
     ASSERT_EQ(9,test->b);
 }
 
 int main(int argc, char **argv) {
-    std::cout << std::boolalpha;
+    //std::cout << std::boolalpha;
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

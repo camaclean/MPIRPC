@@ -60,9 +60,7 @@ struct ordered_call<R(*)(FArgs...), Allocator>
     template<typename... Args>
     ordered_call(internal::unwrapped_function_type<function_type> func, Allocator &a, Args&&... args)
         : function(func), args_tuple(std::forward<Args>(args)...), alloc(a)
-    {
-        //std::cout << abi::__cxa_demangle(typeid(argument_types<Args&&...>).name(),0,0,0) << std::endl;
-    }
+    {}
 
     R operator()()
     {

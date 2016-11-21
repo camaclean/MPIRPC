@@ -40,7 +40,6 @@ struct piecewise_allocator_traits
              std::enable_if_t<std::is_constructible<T,Args...>::value>* = nullptr>
     static void construct(Allocator& a, T* p, std::tuple<std::piecewise_construct_t,Args...>&& val)
     {
-        std::cout << "size: " << sizeof(std::tuple<Args...>) << " " << sizeof(std::tuple<std::piecewise_construct_t,Args...>) << std::endl;
         tuple_construct(a,p,std::move(val),std::make_index_sequence<sizeof...(Args)>{});
     }
 

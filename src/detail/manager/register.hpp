@@ -44,7 +44,6 @@ template<typename F, internal::unwrapped_function_type<F> f>
 FnHandle mpirpc::manager<MessageInterface, Allocator>::register_function()
 {
     function_base *b = new function<internal::wrapped_function_type<F>>(f);
-    std::cout << "registered function: " << typeid(internal::wrapped_function_type<F>(f)).name() << std::endl;
     m_registered_functions[b->id()] = b;
     m_registered_function_typeids[std::type_index(typeid(internal::function_identifier<internal::wrapped_function_type<F>,f>))] = b->id();
     return b->id();

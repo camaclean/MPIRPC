@@ -60,7 +60,6 @@ public:
         std::size_t padding = mpirpc::internal::calculate_alignment_padding(m_position,alignment);
         std::size_t delta = padding + (end-start);
         std::size_t new_size = m_buffer->size() + delta;
-        std::cout << "padding: " << padding << " " << alignment << std::endl;
         m_buffer->reserve(new_size);
         m_buffer->resize(m_buffer->size() + padding);
         m_buffer->insert(m_buffer->end(),start,end);
@@ -70,7 +69,6 @@ public:
     template<std::size_t Alignment>
     void realign()
     {
-        std::cout << "realigning by " << " " << ((m_position % Alignment) ? (Alignment - (m_position % Alignment)) : 0) << std::endl;// << " for " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
         m_position += (m_position % Alignment) ? (Alignment - (m_position % Alignment)) : 0;
     }
 
@@ -78,14 +76,14 @@ public:
     decltype(auto) pop(Allocator&& a)
     {
         realign<Alignment>();
-        return mpirpc::unmarshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,Alignment>::unmarshal(std::forward<Allocator>(a),*this);
+        using U = mpirpc::internal::storage_type<T>;
+        return mpirpc::unmarshaller<U,parameter_buffer,Alignment>::unmarshal(std::forward<Allocator>(a),*this);
     }
 
     template<typename T, std::size_t Alignment = alignof(T), typename U,
              std::enable_if_t<std::is_same<std::remove_cv_t<std::remove_reference_t<T>>,std::remove_cv_t<std::remove_reference_t<U>>>::value>* = nullptr>
     void push(U&& t)
     {
-        std::cout << "put alignment: " << Alignment << " of type " << abi::__cxa_demangle(typeid(T).name(),0,0,0) << std::endl;
         mpirpc::marshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,Alignment>::marshal(*this,std::forward<U>(t));
     }
 

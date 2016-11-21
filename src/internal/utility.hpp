@@ -207,7 +207,7 @@ decltype(auto) apply(F&& f, Class *c, Tuple&& t)
  */
 template<typename F,typename Allocator, typename InBuffer, typename OutBuffer, std::size_t... Alignments,
          std::enable_if_t<std::is_function<std::remove_pointer_t<F>>::value && !std::is_member_function_pointer<F>::value>* = nullptr>
-void apply(F&& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, std::integer_sequence<std::size_t,Alignments...> = std::integer_sequence<std::size_t>{})
+void apply(F&& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false, std::integer_sequence<std::size_t,Alignments...> = std::integer_sequence<std::size_t>{})
 {
     using fargs = typename mpirpc::internal::function_parts<F>::arg_types;
     using ts = typename mpirpc::internal::wrapped_function_parts<F>::storage_types;
@@ -219,7 +219,7 @@ void apply(F&& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, std::integer_sequ
 
 template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer,
          std::enable_if_t<std::is_member_function_pointer<F>::value>* = nullptr>
-void apply(F&& f, Class *c, Allocator&& a, InBuffer&& s, OutBuffer&& os)
+void apply(F&& f, Class *c, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false)
 {
     using fargs = typename mpirpc::internal::function_parts<F>::arg_types;
     using ts = typename mpirpc::internal::wrapped_function_parts<F>::storage_types;
