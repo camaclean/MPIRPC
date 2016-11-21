@@ -21,7 +21,6 @@
 #define MPIRPC__MARSHALLER_HPP
 
 #include "types.hpp"
-#include "pointerwrapper.hpp"
 
 namespace mpirpc
 {
@@ -29,30 +28,16 @@ namespace mpirpc
 template<typename T, typename Buffer, std::size_t Alignment, typename = void>
 struct marshaller;
 
+/*
 template<typename T, typename Buffer, std::size_t Alignment>
-struct marshaller<mpirpc::pointer_wrapper<T>, Buffer, Alignment>
+struct marshaller<T,Buffer,Alignment,std::enable_if_t<std::is_pointer<T>::value>>
 {
-    template<typename U = T, std::enable_if_t<!std::is_polymorphic<U>::value>* = nullptr>
-    static void marshal(Buffer& b, const mpirpc::pointer_wrapper<U>& val)
+    static void marshal(Buffer& b, const T& t)
     {
-        b.template push<std::size_t>(val.size());
-        for (std::size_t i = 0; i < val.size(); ++i)
-        {
-            b.template push<U>(val[i]);
-        }
-    }
-
-    template<typename U = T, std::enable_if_t<std::is_polymorphic<U>::value>* = nullptr>
-    static void marshal(Buffer& b, const mpirpc::pointer_wrapper<U>& val)
-    {
-        b.template push<std::size_t>(val.size());
-        b.template push<uintptr_t>(type_identifier<U>::id());
-        for (std::size_t i = 0; i < val.size(); ++i)
-        {
-            b.template push<U>(val[i]);
-        }
+        parameterbuffer_marshaller<mpirpc::pointer_wrapper<std::remove_pointer_t<T>>,alignof(mpirpc::pointer_wrapper<std::remove_pointer_t<T>>)>::marshal(b,mpirpc::pointer_wrapper<std::remove_pointer_t<T>>(t));
     }
 };
+*/
 
 }
 

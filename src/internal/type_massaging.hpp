@@ -28,6 +28,9 @@
 namespace mpirpc
 {
 
+template<typename T>
+class pointer_wrapper;
+
 namespace internal
 {
 

@@ -71,7 +71,7 @@ decltype(auto) apply_impl(F&& f, Class *c, Tuple&& t, std::index_sequence<I...>)
 
 template<typename F, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t... Is, std::size_t... Alignments,
          std::enable_if_t<std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
-void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
+void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_return, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
 {
     constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,Ts...>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
@@ -79,13 +79,14 @@ void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::intern
     using swallow = int[];
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
-    (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
+    if (get_return)
+        (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
 }
 
 template<typename F, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is, std::size_t... Alignments,
          std::enable_if_t<!std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
-void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
+void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_return, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
 {
     constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,Ts...>;
     using PointerTuple = std::tuple<std::add_pointer_t<Ts>...>;
@@ -94,15 +95,18 @@ void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::intern
     using swallow = int[];
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     auto&& ret = std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
-    using R = mpirpc::internal::function_return_type<F>;
-    remarshaller<R,OutBuffer,alignof(R)>::marshal(os,mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret)));
-    (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
+    if (get_return)
+    {
+        using R = mpirpc::internal::function_return_type<F>;
+        remarshaller<R,OutBuffer,alignof(R)>::marshal(os,mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret)));
+        (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
+    }
     (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
 }
 
 template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is, std::size_t... Alignments,
          std::enable_if_t<std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
-void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
+void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_return, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
 {
     constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,Ts...>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
@@ -110,13 +114,14 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpir
     using swallow = int[];
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
-    (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
+    if (get_return)
+        (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     (void)swallow{(cleanup<InBuffer>(a,std::get<Is>(t)), 0)...};
 }
 
 template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t...Is, std::size_t... Alignments,
          std::enable_if_t<!std::is_same<mpirpc::internal::function_return_type<F>,void>::value>* = nullptr>
-void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
+void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_return, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::integer_sequence<std::size_t,Alignments...>)
 {
     constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,Ts...>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
@@ -124,9 +129,12 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, mpir
     using swallow = int[];
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     auto&& ret = ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
-    using R = mpirpc::internal::function_return_type<F>;
-    remarshaller<R,OutBuffer,alignof(R)>::marshal(os,mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret)));
-    (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
+    if (get_return)
+    {
+        using R = mpirpc::internal::function_return_type<F>;
+        remarshaller<R,OutBuffer,alignof(R)>::marshal(os,mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret)));
+        (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
+    }
     (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
 }
 

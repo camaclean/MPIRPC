@@ -28,59 +28,6 @@ namespace mpirpc
 namespace internal
 {
 
-/**
- * \internal
- * Get the number of elements from the mpirpc::pointer_wrapper.
- * Now that static and dynamic sized mpirpc::pointer_wrapers, this is not
- * strictly required, since the size is now always written to the stream,
- * but it does check if the received size matches the expected size for
- * static sized wrappers.
- */
-template<std::size_t N>
-struct pointer_wrapper_stream_size;
-
-/**
- * \internal
- * Create a mpirpc::pointer_wrapper. This allows for always passing the size,
- * even though static sized pointers do not take a size argument.
- */
-template<typename T, std::size_t N, bool PassOwnership, bool PassBack, typename Allocator>
-struct pointer_wrapper_factory;
-
-/*************************************************************************************/
-/*************************************************************************************/
-/*                                  Implementation                                   */
-/*************************************************************************************/
-/*************************************************************************************/
-
-/*************************************************************************************/
-/*                   mpirpc::internal::pointer_wrapper_stream_size                   */
-/*************************************************************************************/
-
-template<std::size_t N>
-struct pointer_wrapper_stream_size
-{
-    static std::size_t get(::mpirpc::parameter_stream& s)
-    {
-        std::size_t size;
-        s >> size;
-        if (size != N)
-            std::cerr << "Warning! Data size in stream does not match expected size (" << size << " != " << N << ")!" << std::endl;
-        return size;
-    }
-};
-
-template<>
-struct pointer_wrapper_stream_size<0>
-{
-    static std::size_t get(::mpirpc::parameter_stream& s)
-    {
-        std::size_t size;
-        s >> size;
-        return size;
-    }
-};
-
 }
 
 }

@@ -20,12 +20,6 @@
 #ifndef MPIRPC__UNMARSHALLER_HPP
 #define MPIRPC__UNMARSHALLER_HPP
 
-#include "parameterstream.hpp"
-#include "polymorphic.hpp"
-#include "internal/direct_initializer.hpp"
-#include "internal/parameterstream.hpp"
-#include "internal/polymorphic.hpp"
-
 namespace mpirpc
 {
 
@@ -40,42 +34,8 @@ namespace mpirpc
  * Remote unmarshalling, on the other hand, often requires allocating memory.
  */
 
-template<typename T, typename Buffer, std::size_t alignment, typename = void>
+template<typename T, typename Buffer, std::size_t Alignment, typename = void>
 struct unmarshaller;
-
-template<typename T, typename Buffer, std::size_t Alignment>
-struct unmarshaller<mpirpc::pointer_wrapper<T>,Buffer,Alignment>
-{
-    template<typename Allocator>
-    static std::tuple<std::piecewise_construct_t,T*,std::size_t,bool,bool> unmarshal(Allocator& a, Buffer &b)
-    {
-        T *ptr;
-        std::size_t size = mpirpc::get<std::size_t>(b,a);
-        bool pass_back = false, pass_ownership = false;
-
-        if (pass_ownership || is_buildtype<T,Buffer>)
-        {
-            if (std::is_polymorphic<T>::value)
-            {
-                using VoidAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<char>;
-                VoidAllocatorType va(a);
-                uintptr_t type = mpirpc::get<uintptr_t>(b,a);
-                ptr = static_cast<T*>(mpirpc::polymorphic_map<Buffer>.at(mpirpc::safe_type_index_map.at(type))->build(va,b,size));
-            }
-            else
-            {
-                using AllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<T>;
-                AllocatorType na(a);
-                ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
-                for (std::size_t i = 0; i < size; ++i)
-                    internal::direct_initializer<T>::construct(na,&ptr[i],b);
-            }
-        }
-        else
-            get_pointer_from_buffer<alignof(T)>(b,ptr);
-        return std::tuple<std::piecewise_construct_t,T*,std::size_t,bool,bool>{std::piecewise_construct,ptr,size,pass_back,pass_ownership};
-    }
-};
 
 }
 

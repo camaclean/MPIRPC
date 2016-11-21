@@ -23,6 +23,8 @@
 #include "types.hpp"
 #include "marshaller.hpp"
 #include "unmarshaller.hpp"
+#include "internal/detail/alignment.hpp"
+#include "internal/type_massaging.hpp"
 
 namespace mpirpc
 {
@@ -54,10 +56,10 @@ public:
     template<typename T>
     T* reinterpret_and_advance(std::size_t size) noexcept { T* ret = reinterpret_cast<T*>(&m_buffer->data()[m_position]); m_position+=size; return ret; }
 
-    template<std::size_t alignment>
+    template<std::size_t Alignment>
     void append(const char * start, const char * end)
     {
-        std::size_t padding = mpirpc::internal::calculate_alignment_padding(m_position,alignment);
+        std::size_t padding = mpirpc::internal::calculate_alignment_padding(m_position,Alignment);
         std::size_t delta = padding + (end-start);
         std::size_t new_size = m_buffer->size() + delta;
         m_buffer->reserve(new_size);
@@ -66,9 +68,16 @@ public:
         m_position += delta;
     }
 
+    void realign(std::size_t alignment)
+    {
+        std::cout << "realign: " << alignment << std::endl;
+        m_position += (m_position % alignment) ? (alignment - (m_position % alignment)) : 0;
+    }
+
     template<std::size_t Alignment>
     void realign()
     {
+        std::cout << "realign: " << Alignment << std::endl;
         m_position += (m_position % Alignment) ? (Alignment - (m_position % Alignment)) : 0;
     }
 

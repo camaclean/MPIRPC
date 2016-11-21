@@ -20,6 +20,9 @@
 #ifndef MPIRPC__INTERNAL__POLYMORPHIC_HPP
 #define MPIRPC__INTERNAL__POLYMORPHIC_HPP
 
+#include "piecewise_allocator_traits.hpp"
+#include "../buffer.hpp"
+
 namespace mpirpc
 {
 

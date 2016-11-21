@@ -214,7 +214,7 @@ void apply(F&& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return =
     using pass_backs = typename mpirpc::internal::wrapped_function_parts<F>::pass_backs;
     using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<F>::default_alignments,std::integer_sequence<std::size_t,Alignments...>>;
     constexpr std::size_t num_args = mpirpc::internal::function_parts<F>::num_args;
-    detail::apply_impl(std::forward<F>(f),std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
+    detail::apply_impl(std::forward<F>(f),std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
 }
 
 template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer,
@@ -226,7 +226,7 @@ void apply(F&& f, Class *c, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool ge
     using pass_backs = typename mpirpc::internal::wrapped_function_parts<F>::pass_backs;
     using default_alignments = typename mpirpc::internal::function_parts<F>::default_alignments;
     constexpr std::size_t num_args = mpirpc::internal::function_parts<F>::num_args;
-    detail::apply_impl(std::forward<F>(f),c,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
+    detail::apply_impl(std::forward<F>(f),c,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
 }
 
 template<typename T1, typename T2>

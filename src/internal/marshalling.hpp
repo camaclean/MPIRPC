@@ -45,22 +45,40 @@ struct fn_type_marshaller;
 template<typename R, typename... FArgs>
 struct fn_type_marshaller<R(*)(FArgs...)>
 {
+    template<class Buffer, typename... Args, std::size_t... Alignments>
+    static void marshal_impl(Buffer& ps, std::integer_sequence<std::size_t, Alignments...>, Args&&... args)
+    {
+        using swallow = int[];
+        (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+    }
+
     template<class Buffer, typename... Args>
     static void marshal(Buffer& ps, Args&&... args)
     {
-        using swallow = int[];
-        (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,alignof(autowrapped_type<FArgs>)>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+        std::cout << abi::__cxa_demangle(typeid(typename mpirpc::internal::function_parts<R(*)(FArgs...)>::default_alignments).name(),0,0,0) << std::endl;
+        using default_alignments = typename function_parts<R(*)(FArgs...)>::default_alignments;
+        using alignments = default_alignments;
+        marshal_impl(ps,alignments{},std::forward<Args>(args)...);
     }
 };
 
 template<typename R, typename Class, typename... FArgs>
 struct fn_type_marshaller<R(Class::*)(FArgs...)>
 {
+    template<class Buffer, typename... Args, std::size_t... Alignments>
+    static void marshal_impl(Buffer& ps, std::integer_sequence<std::size_t, Alignments...>, Args&&... args)
+    {
+        using swallow = int[];
+        (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+    }
+
     template<class Buffer, typename... Args>
     static void marshal(Buffer& ps, Args&&... args)
     {
-        using swallow = int[];
-        (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,alignof(autowrapped_type<FArgs>)>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+
+        using default_alignments = typename function_parts<R(*)(FArgs...)>::default_alignments;
+        using alignments = default_alignments;
+        marshal_impl(ps,alignments{},std::forward<Args>(args)...);
     }
 };
 
@@ -68,11 +86,20 @@ struct fn_type_marshaller<R(Class::*)(FArgs...)>
 template<typename R, typename... FArgs>
 struct fn_type_marshaller<std::function<R(FArgs...)>>
 {
+    template<class Buffer, typename... Args, std::size_t... Alignments>
+    static void marshal_impl(Buffer& ps, std::integer_sequence<std::size_t, Alignments...>, Args&&... args)
+    {
+      using swallow = int[];
+      (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+    }
+
     template<class Buffer, typename... Args>
     static void marshal(Buffer& ps, Args&&... args)
     {
-        using swallow = int[];
-        (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,alignof(autowrapped_type<FArgs>)>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+
+      using default_alignments = typename function_parts<R(*)(FArgs...)>::default_alignments;
+      using alignments = default_alignments;
+      marshal_impl(ps,alignments{},std::forward<Args>(args)...);
     }
 };
 

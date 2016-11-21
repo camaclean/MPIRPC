@@ -1006,18 +1006,6 @@ public:
 
 using i128t = int __attribute__((aligned(128)));
 
-/*template<typename Allocator>
-struct piecewise_allocator_traits;*/
-
-/*template<typename T, std::size_t alignment>
-struct parameterbuffer_marshaller<T,alignment,std::enable_if_t<std::is_pointer<T>::value>>
-{
-    static void marshal(parameter_buffer& b, const T& t)
-    {
-        parameterbuffer_marshaller<mpirpc::pointer_wrapper<std::remove_pointer_t<T>>,alignof(std::remove_pointer_t<T>)>::marshal(b,mpirpc::pointer_wrapper<std::remove_pointer_t<T>>(t));
-    }
-};*/
-
 class A
 {
 public:
@@ -1109,9 +1097,11 @@ int foo3()
     return 3;
 }
 
-void foo4(bool b, i128t i128)
+void foo4(bool b, i128t i128, i128t* t2)
 {
-    //std::cout << alignof(i128) << " " << alignof(i128t) << " " << abi::__cxa_demangle(typeid(i128).name(),0,0,0) << std::endl;
+    ASSERT_EQ(true,b);
+    ASSERT_EQ(4,i128);
+    ASSERT_EQ(5,*t2);
 };
 
 TEST(ArgumentUnpacking, test0)
@@ -1124,6 +1114,7 @@ TEST(ArgumentUnpacking, test0)
     double pd = 3.14159;
     B b(8,11);
 
+    std::cout << alignof(B) << std::endl;
     mpirpc::internal::fn_type_marshaller<decltype(&foo)>::marshal(p, 2.3, 4, 1.2f, true, ai, ad, af, mpirpc::pointer_wrapper<double>(&pd),mpirpc::pointer_wrapper<B>(&b));
     p.seek(0);
     std::allocator<char> a;
@@ -1131,11 +1122,18 @@ TEST(ArgumentUnpacking, test0)
     mpirpc::internal::apply(&foo,a,p,pout);
     mpirpc::parameter_buffer pout2;
     mpirpc::internal::apply(&foo3,a,p,pout2);
+}
+
+TEST(ArgumentUnpacking, overaligned)
+{
+    std::allocator<char> a;
     mpirpc::parameter_buffer p2;
+    mpirpc::parameter_buffer pout;
     p2.push<bool>(true);
     //p2 << ((i128t) 5);
     p2.push<i128t,128>(4);
     p2.seek(0);
+    std::cout << abi::__cxa_demangle(typeid(typename mpirpc::internal::function_parts<decltype(&foo4)>::default_alignments).name(),0,0,0) << std::endl;
     mpirpc::internal::apply(&foo4,a,p2,pout);
 }
 

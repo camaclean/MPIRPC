@@ -20,6 +20,8 @@
 #ifndef MPIRPC__POLYMORPHIC_HPP
 #define MPIRPC__POLYMORPHIC_HPP
 
+#include <map>
+#include <typeindex>
 #include "internal/polymorphic.hpp"
 
 namespace mpirpc
