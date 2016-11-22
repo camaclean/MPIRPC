@@ -68,6 +68,16 @@ public:
         m_position += delta;
     }
 
+    void realign_append(std::size_t alignment)
+    {
+        std::size_t padding = mpirpc::internal::calculate_alignment_padding(m_position,alignment);
+        std::size_t delta = padding;
+        std::size_t new_size = m_buffer->size() + delta;
+        m_buffer->reserve(new_size);
+        m_buffer->resize(m_buffer->size() + padding);
+        m_position += delta;
+    }
+
     void realign(std::size_t alignment)
     {
         std::cout << "realign: " << alignment << std::endl;

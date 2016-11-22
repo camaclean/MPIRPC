@@ -65,7 +65,7 @@ class pointer_wrapper
 public:
     using type = T;
 
-    explicit pointer_wrapper(T* data, std::size_t size = 1, std::size_t alignment = alignof(T), bool pass_back = false, bool pass_ownership = false)
+    explicit pointer_wrapper(T* data, std::size_t size = 1, bool pass_back = false, bool pass_ownership = false, std::size_t alignment = alignof(T))
         : m_pointer(data),
           m_size(size),
           m_alignment(alignment),
@@ -130,11 +130,11 @@ struct marshaller<mpirpc::pointer_wrapper<T>, Buffer, Alignment>
     static void marshal(Buffer& b, const mpirpc::pointer_wrapper<U>& val)
     {
         b.template push<std::size_t>(val.size());
-        //b.template push<std::size_t>(val.alignment());
-        //b.template push<bool>(val.is_pass_back());
-        //b.template push<bool>(val.is_pass_ownership());
+        b.template push<std::size_t>(val.alignment());
+        b.template push<bool>(val.is_pass_back());
+        b.template push<bool>(val.is_pass_ownership());
         std::cout << (uintptr_t) b.data_here() << std::endl;
-        //b.realign(val.alignment());
+        b.realign_append(val.alignment());
         std::cout << (uintptr_t) b.data_here() << std::endl;
         for (std::size_t i = 0; i < val.size(); ++i)
         {
@@ -146,13 +146,14 @@ struct marshaller<mpirpc::pointer_wrapper<T>, Buffer, Alignment>
     static void marshal(Buffer& b, const mpirpc::pointer_wrapper<U>& val)
     {
         b.template push<std::size_t>(val.size());
-        //b.template push<std::size_t>(val.alignment());
+        b.template push<std::size_t>(val.alignment());
         std::cout << "alignment: " << val.alignment() << std::endl;
-        //b.template push<bool>(val.is_pass_back());
-        //b.template push<bool>(val.is_pass_ownership());
+        b.template push<bool>(val.is_pass_back());
+        b.template push<bool>(val.is_pass_ownership());
         b.template push<uintptr_t>(type_identifier<U>::id());
+        std::cout << "type id: " << type_identifier<U>::id() << std::endl;
         std::cout << (uintptr_t) b.data_here() << std::endl;
-        //b.realign(val.alignment());
+        b.realign_append(val.alignment());
         std::cout << (uintptr_t) b.data_here() << std::endl;
         for (std::size_t i = 0; i < val.size(); ++i)
         {
@@ -169,22 +170,22 @@ struct unmarshaller<mpirpc::pointer_wrapper<T>,Buffer,Alignment>
     {
         T *ptr;
         std::size_t size = mpirpc::get<std::size_t>(b,a);
-        std::size_t alignment = 0;// mpirpc::get<std::size_t>(b,a);
-        bool pass_back = false;//get<bool>(b,a);
-        bool pass_ownership = false; //get<bool>(b,a);
+        std::size_t alignment = mpirpc::get<std::size_t>(b,a);
+        bool pass_back = get<bool>(b,a);
+        bool pass_ownership = get<bool>(b,a);
         std::cout << "realignment: " << size << " " <<  alignment << " " << pass_back << " " << pass_ownership << std::endl;
         std::cout << (uintptr_t) b.data_here() << std::endl;
-        //b.realign(alignment);
+        b.realign(alignment);
         std::cout << (uintptr_t) b.data_here() << std::endl;
 
         if (pass_ownership || is_buildtype<T,Buffer>)
         {
             if (std::is_polymorphic<T>::value)
             {
-                std::cout << "polymorphic" << std::endl;
                 using VoidAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<char>;
                 VoidAllocatorType va(a);
                 uintptr_t type = mpirpc::get<uintptr_t>(b,a);
+                std::cout << "polymorphic" << type << std::endl;
                 ptr = static_cast<T*>(mpirpc::polymorphic_map<Buffer>.at(mpirpc::safe_type_index_map.at(type))->build(va,b,size));
             }
             else

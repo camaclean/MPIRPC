@@ -743,6 +743,10 @@ struct unmarshal_into_tuple_helper<std::tuple<Ts...>>
         auto argument_tuple = std::make_tuple(Arguments); \
         mpirpc::parameter_buffer s; \
         mpirpc::internal::fn_type_marshaller<F>::marshal(s, Arguments); \
+        std::cout << std::hex; \
+        for (std::size_t i = 0; i < s.position(); ++i) \
+            std::cout << (unsigned int) s.data()[i] << " "; \
+        std::cout << std::dec << std::endl; \
         s.seek(0); \
         std::allocator<void> a; \
         StorageTupleType st(unmarshal_into_tuple_helper<StorageTupleType>::unmarshal(a,s)); \
@@ -776,7 +780,11 @@ TEST(FnTypeMarshaller, p5T_pT)
     using F = void(*)(double*);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
     mpirpc::parameter_buffer s;
-    mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
+    mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5,true,true,alignof(double)));
+    std::cout << std::hex;
+    for (std::size_t i = 0; i < s.position(); ++i)
+        std::cout << (unsigned int) s.data()[i] << " ";
+    std::cout << std::dec << std::endl;
     s.seek(0);
     std::allocator<void> a;
     StorageTupleType st(tuple_unmarshaller<double*>::unmarshal(a,s));
@@ -1116,6 +1124,10 @@ TEST(ArgumentUnpacking, test0)
 
     std::cout << alignof(B) << std::endl;
     mpirpc::internal::fn_type_marshaller<decltype(&foo)>::marshal(p, 2.3, 4, 1.2f, true, ai, ad, af, mpirpc::pointer_wrapper<double>(&pd),mpirpc::pointer_wrapper<B>(&b));
+    std::cout << std::hex;
+    for (std::size_t i = 0; i < p.position(); ++i)
+        std::cout << (unsigned int) p.data()[i] << " ";
+    std::cout << std::dec << std::endl;
     p.seek(0);
     std::allocator<char> a;
     mpirpc::parameter_buffer pout;
@@ -1132,6 +1144,12 @@ TEST(ArgumentUnpacking, overaligned)
     p2.push<bool>(true);
     //p2 << ((i128t) 5);
     p2.push<i128t,128>(4);
+    i128t i128test = 5;
+    p2.push<mpirpc::pointer_wrapper<int>>(mpirpc::pointer_wrapper<int>(&i128test,1,false,false,128));
+    std::cout << std::hex;
+    for (std::size_t i = 0; i < p2.position(); ++i)
+        std::cout << (unsigned int) p2.data()[i] << " ";
+    std::cout << std::dec << std::endl;
     p2.seek(0);
     std::cout << abi::__cxa_demangle(typeid(typename mpirpc::internal::function_parts<decltype(&foo4)>::default_alignments).name(),0,0,0) << std::endl;
     mpirpc::internal::apply(&foo4,a,p2,pout);
@@ -1177,7 +1195,11 @@ TEST(PolymorphicLookup,test)
     b.seek(0);
     std::allocator<char> a;
     std::size_t size = mpirpc::get<std::size_t>(b,a);
+    std::size_t alignment = mpirpc::get<std::size_t>(b,a);
+    bool pass_ownership = mpirpc::get<bool>(b,a);
+    bool pass_back = mpirpc::get<bool>(b,a);
     uintptr_t id = mpirpc::get<uintptr_t>(b,a);
+    b.realign(alignment);
     B* test = static_cast<B*>(mpirpc::polymorphic_map<mpirpc::parameter_buffer>.at(mpirpc::safe_type_index_map.at(id))->build(a,b,size));
     ASSERT_EQ(7,test->a);
     ASSERT_EQ(9,test->b);
