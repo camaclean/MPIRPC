@@ -23,14 +23,24 @@
 #include "../../manager.hpp"
 #include "../../internal/function_attributes.hpp"
 #include "../../internal/pass_back.hpp"
+#include "../../internal/utility.hpp"
+#include "../../parameter_buffer.hpp"
 
 template<class MessageInterface, template<typename> typename Allocator>
 class mpirpc::manager<MessageInterface, Allocator>::function_base
 {
 public:
+    virtual ~function_base() {}
+};
+
+template<class MessageInterface, template<typename> typename Allocator>
+template<typename Buffer>
+class mpirpc::manager<MessageInterface, Allocator>::function_base_buffer : public function_base
+{
+public:
     using generic_fp_type = void(*)();
 
-    function_base() : m_id(make_id()), m_pointer(0) {}
+    function_base_buffer() : m_id(make_id()), m_pointer(0) {}
 
     /**
         * @brief execute Execute the function
@@ -40,12 +50,12 @@ public:
         * @param get_return Only send the function return value back to the sending rank when requested, as the return value may not be needed.
         * @param object When the function is a member function, use object as the <i>this</i> pointer.
         */
-    virtual void execute(::mpirpc::parameter_stream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) = 0;
+    virtual void execute(Buffer& params, Allocator<char>& a, int sender_rank, manager *manager, bool get_return = false, void* object = 0) = 0;
 
     FnHandle id() const { return m_id; }
     generic_fp_type pointer() const { return m_pointer; }
 
-    virtual ~function_base() {};
+    virtual ~function_base_buffer() {}
 
 private:
     static FnHandle make_id() {
@@ -60,63 +70,34 @@ protected:
 };
 
 template<typename MessageInterface, template<typename> typename Allocator>
-FnHandle mpirpc::manager<MessageInterface, Allocator>::function_base::id_counter_ = 0;
+template<typename Buffer>
+FnHandle mpirpc::manager<MessageInterface, Allocator>::function_base_buffer<Buffer>::id_counter_ = 0;
 
 template<class MessageInterface, template<typename> typename Allocator>
-template<typename R, typename... Args>
-class mpirpc::manager<MessageInterface, Allocator>::function<R(*)(Args...)> : public function_base
+template<typename Buffer, typename R, typename... Args>
+class mpirpc::manager<MessageInterface, Allocator>::function<Buffer, R(*)(Args...)> : public function_base_buffer<Buffer>
 {
-    using mpirpc::manager<MessageInterface, Allocator>::function_base::m_pointer;
+    using mpirpc::manager<MessageInterface, Allocator>::function_base_buffer<Buffer>::m_pointer;
 public:
     using function_type = internal::unwrapped_function_type<R(*)(Args...)>;
 
-    function(function_type f) : function_base(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
+    function(function_type f) : function_base_buffer<Buffer>(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
 
-    virtual void execute(parameter_stream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
+    virtual void execute(Buffer& params, Allocator<char>& a, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
     {
         /*
-            * func(convertData<Args>(data)...) does not work here
-            * due to convertData<T>(const char *data) being evaluated
-            * in an undefined order,. The side effects matter. A workaround
-            * is to use uniform initilization of a struct that binds the
-            * parameters. Parameter packs are expanded as comma separated,
-            * but the commas cannot be used as comma operators.
-            */
+         * func(convertData<Args>(data)...) does not work here
+         * due to convertData<T>(const char *data) being evaluated
+         * in an undefined order,. The side effects matter. A workaround
+         * is to use uniform initilization of a struct that binds the
+         * parameters. Parameter packs are expanded as comma separated,
+         * but the commas cannot be used as comma operators.
+         */
         assert(manager);
-        //typename internal::wrapped_function_parts<function_type>::wrapped_args_tuple_type args{unmarshaller_remote<internal::remove_all_cost_type<Args>>(params)...;
-        internal::ordered_call<R(*)(Args...)> call{func, unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
+        Buffer outbuffer(a);
+        internal::apply(func,a,params,outbuffer,get_return);
         if (get_return)
-        {
-            R ret(call());
-            manager->function_return(sender_rank, std::move(ret), call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
-        }
-        else
-        {
-            call();
-        }
-    }
-
-protected:
-    function_type func;
-};
-
-template<class MessageInterface, template<typename> typename Allocator>
-template<typename... Args>
-class mpirpc::manager<MessageInterface, Allocator>::function<void(*)(Args...)> : public function_base
-{
-    using mpirpc::manager<MessageInterface, Allocator>::function_base::m_pointer;
-public:
-    using function_type = internal::unwrapped_function_type<void(*)(Args...)>;//void(*)(Args...);
-
-    function(function_type f) : function_base(), func(f) { m_pointer = reinterpret_cast<void(*)()>(f); }
-
-    virtual void execute(::mpirpc::parameter_stream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
-    {
-        internal::ordered_call<void(*)(Args...)> call{func, unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
-        call();
-
-        if (get_return)
-            manager->function_return(sender_rank, call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, std::move(outbuffer));
     }
 
 protected:
@@ -124,97 +105,43 @@ protected:
 };
 
 template<typename MessageInterface, template<typename> typename Allocator>
-template<typename Class, typename R, typename... Args>
-class mpirpc::manager<MessageInterface, Allocator>::function<R(Class::*)(Args...)> : public function_base
+template<typename Buffer, typename Class, typename R, typename... Args>
+class mpirpc::manager<MessageInterface, Allocator>::function<Buffer, R(Class::*)(Args...)> : public function_base_buffer<Buffer>
 {
 public:
     using function_type = internal::unwrapped_function_type<R(Class::*)(Args...)>;
 
-    function(function_type f) : function_base(), func(f) {  }
+    function(function_type f) : function_base_buffer<Buffer>(), func(f) {  }
 
-    virtual void execute(::mpirpc::parameter_stream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
+    virtual void execute(Buffer& params, Allocator<char>& a, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
     {
         assert(object);
         assert(manager);
-        internal::ordered_call<R(Class::*)(Args...)> call{func, static_cast<Class*>(object), unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
+        Buffer outbuffer(a);
+        internal::apply(func,static_cast<Class*>(object),a,params,outbuffer,get_return);
         if (get_return)
-        {
-            R ret(call());
-            manager->function_return(sender_rank, std::move(ret), call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
-        }
-        else
-        {
-            call();
-        }
+            manager->function_return(sender_rank, std::move(outbuffer));
     }
 
     function_type func;
 };
 
 template<typename MessageInterface, template<typename> typename Allocator>
-template<typename Class, typename... Args>
-class mpirpc::manager<MessageInterface, Allocator>::function<void(Class::*)(Args...)> : public function_base
+template<typename Buffer, typename R, typename... Args>
+class mpirpc::manager<MessageInterface, Allocator>::function<Buffer,std::function<R(Args...)> > : public function_base_buffer<Buffer>
 {
 public:
-    using function_type = internal::unwrapped_function_type<void(Class::*)(Args...)>;
+    using function_type = internal::unwrapped_function_type<std::function<R(Args...)> >; // std::function<R(Args...)>;
 
-    function(function_type f) : function_base(), func(f) { }
+    function(function_type& f) : function_base_buffer<Buffer>(), func(f) {}
 
-    virtual void execute(::mpirpc::parameter_stream& params, int sender_rank, manager *manager, bool get_return = false, void* object = 0) override
-    {
-        assert(object);
-        internal::ordered_call<void(Class::*)(Args...)> call{func, static_cast<Class*>(object), unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
-        call();
-        if (get_return)
-            manager->function_return(sender_rank, call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
-    }
-
-    function_type func;
-};
-
-template<typename MessageInterface, template<typename> typename Allocator>
-template<typename R, typename... Args>
-class mpirpc::manager<MessageInterface, Allocator>::function<std::function<R(Args...)>> : public function_base
-{
-public:
-    using function_type = internal::unwrapped_function_type<std::function<R(Args...)>>; // std::function<R(Args...)>;
-
-    function(function_type& f) : function_base(), func(f) {}
-
-    virtual void execute(::mpirpc::parameter_stream &params, int sender_rank, manager *manager, bool get_return, void *object = 0) override
+    virtual void execute(Buffer &params, Allocator<char>& a, int sender_rank, manager *manager, bool get_return = false, void *object = 0) override
     {
         assert(manager);
-        internal::ordered_call<std::function<R(Args...)>> call{func, unmarshal<internal::remove_all_const_type<Args>,Allocator<Args>>(params)...};
-
+        Buffer outbuffer(a);
+        internal::apply(func,a,params,outbuffer,get_return);
         if (get_return)
-        {
-            R ret(call());
-            manager->function_return(sender_rank, std::move(ret), call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
-        }
-        else
-        {
-            call();
-        }
-    }
-
-    function_type func;
-};
-
-template<typename MessageInterface, template<typename> typename Allocator>
-template<typename... Args>
-class mpirpc::manager<MessageInterface, Allocator>::function<std::function<void(Args...)>> : public function_base
-{
-public:
-    using function_type = internal::unwrapped_function_type<std::function<void(Args...)>>;
-
-    function(function_type& f) : function_base(), func(f) {}
-
-    virtual void execute(::mpirpc::parameter_stream &params, int sender_rank, manager *manager, bool get_return, void *object = 0) override
-    {
-        internal::ordered_call<std::function<void(Args...)>> call{func, unmarshal<internal::remove_all_const_type<Args>, Allocator<Args>>(params)...};
-        call();
-        if (get_return)
-            manager->function_return(sender_rank, call.args_tuple, internal::bool_template_list<internal::is_pass_back<Args>::value...>{}, std::make_index_sequence<sizeof...(Args)>());
+            manager->function_return(sender_rank, std::move(outbuffer));
     }
 
     function_type func;

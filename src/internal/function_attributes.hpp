@@ -63,7 +63,7 @@ struct function_parts;
  * A helper type to query the return type of a function
  */
 template<typename F>
-using function_return_type = typename function_parts<F>::return_type;
+using function_return_type = typename function_parts<std::remove_reference_t<F>>::return_type;
 
 /**
  * \internal

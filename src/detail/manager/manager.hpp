@@ -36,8 +36,8 @@ mpirpc::manager<MessageInterface, Allocator>::manager(MPI_Comm comm, const Alloc
     offsets[1] = offsetof(object_info, id);
     MPI_Type_create_struct(nitems, blocklengths, offsets, types, &m_mpi_object_info);
     MPI_Type_commit(&m_mpi_object_info);
-    void *buffer = malloc(BUFFER_SIZE);
-    MPI_Buffer_attach(buffer, BUFFER_SIZE);
+    //void *buffer = malloc(BUFFER_SIZE);
+    //MPI_Buffer_attach(buffer, BUFFER_SIZE);
     MPI_Barrier(m_comm);
 }
 

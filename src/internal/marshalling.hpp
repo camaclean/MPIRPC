@@ -28,6 +28,7 @@
 #include "../marshaller.hpp"
 
 #include <functional>
+#include <cxxabi.h>
 
 namespace mpirpc
 {

@@ -206,27 +206,29 @@ decltype(auto) apply(F&& f, Class *c, Tuple&& t)
  *
  */
 template<typename F,typename Allocator, typename InBuffer, typename OutBuffer, std::size_t... Alignments,
-         std::enable_if_t<std::is_function<std::remove_pointer_t<F>>::value && !std::is_member_function_pointer<F>::value>* = nullptr>
+         std::enable_if_t<std::is_function<std::remove_pointer_t<std::remove_reference_t<F>>>::value && !std::is_member_function_pointer<std::remove_reference_t<F>>::value>* = nullptr>
 void apply(F&& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false, std::integer_sequence<std::size_t,Alignments...> = std::integer_sequence<std::size_t>{})
 {
-    using fargs = typename mpirpc::internal::function_parts<F>::arg_types;
-    using ts = typename mpirpc::internal::wrapped_function_parts<F>::storage_types;
-    using pass_backs = typename mpirpc::internal::wrapped_function_parts<F>::pass_backs;
-    using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<F>::default_alignments,std::integer_sequence<std::size_t,Alignments...>>;
-    constexpr std::size_t num_args = mpirpc::internal::function_parts<F>::num_args;
+    using Func = std::remove_reference_t<F>;
+    using fargs = typename mpirpc::internal::function_parts<Func>::arg_types;
+    using ts = typename mpirpc::internal::wrapped_function_parts<Func>::storage_types;
+    using pass_backs = typename mpirpc::internal::wrapped_function_parts<Func>::pass_backs;
+    using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<Func>::default_alignments,std::integer_sequence<std::size_t,Alignments...>>;
+    constexpr std::size_t num_args = mpirpc::internal::function_parts<Func>::num_args;
     detail::apply_impl(std::forward<F>(f),std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
 }
 
 template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer,
-         std::enable_if_t<std::is_member_function_pointer<F>::value>* = nullptr>
+         std::enable_if_t<std::is_member_function_pointer<std::remove_reference_t<F>>::value>* = nullptr>
 void apply(F&& f, Class *c, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false)
 {
-    using fargs = typename mpirpc::internal::function_parts<F>::arg_types;
-    using ts = typename mpirpc::internal::wrapped_function_parts<F>::storage_types;
-    using pass_backs = typename mpirpc::internal::wrapped_function_parts<F>::pass_backs;
-    using default_alignments = typename mpirpc::internal::function_parts<F>::default_alignments;
-    constexpr std::size_t num_args = mpirpc::internal::function_parts<F>::num_args;
-    detail::apply_impl(std::forward<F>(f),c,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
+    using Func = std::remove_reference_t<F>;
+    using FArgs = typename mpirpc::internal::function_parts<Func>::arg_types;
+    using Ts = typename mpirpc::internal::wrapped_function_parts<Func>::storage_types;
+    using PassBacks = typename mpirpc::internal::wrapped_function_parts<Func>::pass_backs;
+    using DefaultAlignments = typename mpirpc::internal::function_parts<Func>::default_alignments;
+    constexpr std::size_t num_args = mpirpc::internal::function_parts<Func>::num_args;
+    detail::apply_impl(std::forward<F>(f),c,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, FArgs{}, Ts{}, PassBacks{}, std::make_index_sequence<num_args>{}, DefaultAlignments{});
 }
 
 template<typename T1, typename T2>

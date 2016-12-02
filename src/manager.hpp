@@ -46,15 +46,14 @@
 
 #include <mpi.h>
 
+#include "exceptions.hpp"
+#include "buffer.hpp"
 #include "objectwrapper.hpp"
 #include "common.hpp"
 #include "parameterstream.hpp"
-#include "marshalling.hpp"
-#include "unmarshalling.hpp"
+#include "marshaller.hpp"
+#include "unmarshaller.hpp"
 #include "mpitype.hpp"
-#include "exceptions.hpp"
-#include "marshalling.hpp"
-#include "unmarshalling.hpp"
 
 #include "internal/marshalling.hpp"
 #include "internal/orderedcall.hpp"
@@ -116,48 +115,33 @@ class manager
      */
     class function_base;
 
+    template<typename Buffer>
+    class function_base_buffer;
+
     /**
      * The general mpirpc::function<F> class, which is specialized to deduce additional typenames where required while only
      * requiring a single typename be passed when constructing a Function.
      */
-    template<typename F>
+    template<typename Buffer, typename F>
     class function;
 
     /**
      * Specialization of mpirpc::function<F> for functions with non-void return types.
      */
-    template<typename R, typename... Args>
-    class function<R(*)(Args...)>;
-
-    /**
-     * Specialization of mpirpc::function<F> for functions with void return types.
-     */
-    template<typename... Args>
-    class function<void(*)(Args...)>;
+    template<typename Buffer, typename R, typename... Args>
+    class function<Buffer, R(*)(Args...)>;
 
     /**
      * Specialization of mpirpc::function<F> for member functions witn non-void return types.
      */
-    template<typename Class, typename R, typename... Args>
-    class function<R(Class::*)(Args...)>;
-
-    /**
-     * Specialization of mpirpc::function<F> for member functions with void return types.
-     */
-    template<typename Class, typename... Args>
-    class function<void(Class::*)(Args...)>;
+    template<typename Buffer, typename Class, typename R, typename... Args>
+    class function<Buffer, R(Class::*)(Args...)>;
 
     /**
      * Specialization of mpirpc::function<F> for std::function objects with non-void return types.
      */
-    template<typename R, typename... Args>
-    class function<std::function<R(Args...)>>;
-
-    /**
-     * Specialization of mpirpc::function<F> for std::function objects with void return types.
-     */
-    template<typename... Args>
-    class function<std::function<void(Args...)>>;
+    template<typename Buffer, typename R, typename... Args>
+    class function<Buffer, std::function<R(Args...)>>;
 
 public:
     using UserMessageHandler = void(*)(MPI_Status&&);
@@ -196,13 +180,13 @@ public:
      * @param f A function pointer to the function to register
      * @return The handle associated with function #f
      */
-    template<typename F, internal::unwrapped_function_type<F> f>
+    template<typename F, internal::unwrapped_function_type<F> f, typename Buffer = parameter_buffer<Allocator<char>>>
     FnHandle register_function();
 
     /**
      * This run-time version is incompatible with fast (hash table) function ID lookups
      */
-    template<typename F>
+    template<typename F, typename Buffer = parameter_buffer<Allocator<char>>>
     FnHandle register_function(F f);
 
     /**
@@ -516,14 +500,6 @@ public:
      */
     size_t queue_size() const;
 
-    template<typename T, std::size_t N>
-    void free_array(T(&&arr)[N])
-    {
-        using NewAllocatorType = typename std::allocator_traits<Allocator>::template rebind_alloc<std::remove_const_t<T>>;
-        NewAllocatorType na(m_alloc);
-        std::allocator_traits<NewAllocatorType>::deallocate(na,&arr,N);
-    }
-
     /**
      * Destroy this manager
      */
@@ -536,31 +512,10 @@ protected:
      * @param rank The rank which invoked the function
      * @param r The invoked functions return value
      */
-    template<typename R, typename... Args,bool...PBs,std::size_t... Is>
-    void function_return(int rank, R&& r, std::tuple<Args...> args, internal::bool_template_list<PBs...>, std::index_sequence<Is...>)
+    template<typename Buffer>
+    void function_return(int rank, Buffer&& returnbuffer)
     {
-        std::cout << "sending back: " << typeid(decltype(args)).name() << " " << typeid(internal::bool_template_list<PBs...>).name() << std::endl;
-        std::vector<char>* buffer = new std::vector<char>();
-        parameter_stream stream(buffer);
-        stream << std::forward<R>(r);
-        using swallow = int[];
-        (void)swallow{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
-        MPI_Send((void*) stream.dataVector()->data(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
-        delete buffer;
-    }
-
-    template<typename... Args,bool...PBs,std::size_t... Is>
-    void function_return(int rank, std::tuple<Args...> args, internal::bool_template_list<PBs...>, std::index_sequence<Is...>)
-    {
-        std::cout << "sending back: " << typeid(decltype(args)).name() << " " << typeid(internal::bool_template_list<PBs...>).name() << std::endl;
-        if (!internal::any_true<PBs...>::value)
-            return;
-        std::vector<char>* buffer = new std::vector<char>();
-        parameter_stream stream(buffer);
-        using swallow = int[];
-        (void)swallow{((PBs) ? (marshal(stream,std::get<Is>(args)), 1) : 0)...};
-        MPI_Send((void*) stream.dataVector()->data(), stream.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
-        delete buffer;
+        MPI_Send((void*) returnbuffer.data(), returnbuffer.size(), MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm);
     }
 
     /**
@@ -696,7 +651,7 @@ protected:
     unsigned long long m_count;
     bool m_shutdown;
     MPI_Datatype m_mpi_object_info;
-    Allocator<void> m_alloc;
+    Allocator<char> m_alloc;
 };
 
 template<class MessageInterface, template<typename> typename Allocator>
@@ -890,16 +845,13 @@ void manager<MessageInterface, Allocator>::receivedInvocationCommand(MPI_Status&
     int len;
     MPI_Get_count(&status, MPI_CHAR, &len);
     if (len != MPI_UNDEFINED) {
-        std::vector<char>* buffer = new std::vector<char>(len);
-        parameter_stream stream(buffer);
+        parameter_buffer<Allocator<char>> stream{std::vector<char,Allocator<char>>(len,m_alloc)};
         MPI_Status recv_status;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recv_status);
-        FnHandle function_handle;
-        bool get_return;
-        stream >> function_handle >> get_return;
-        function_base *f = m_registered_functions[function_handle];
-        f->execute(stream, recv_status.MPI_SOURCE, this, get_return);
-        delete buffer;
+        FnHandle function_handle = mpirpc::get<FnHandle>(stream,m_alloc);
+        bool get_return = mpirpc::get<bool>(stream,m_alloc);
+        function_base_buffer<parameter_buffer<Allocator<char>>> *f = dynamic_cast<function_base_buffer<parameter_buffer<Allocator<char>>>*>(m_registered_functions[function_handle]);
+        f->execute(stream, m_alloc, recv_status.MPI_SOURCE, this, get_return);
     }
 }
 
@@ -909,18 +861,17 @@ void manager<MessageInterface, Allocator>::receivedMemberInvocationCommand(MPI_S
     int len;
     MPI_Get_count(&status, MPI_CHAR, &len);
     if (len != MPI_UNDEFINED) {
-        std::vector<char>* buffer = new std::vector<char>(len);
-        parameter_stream stream(buffer);
+        parameter_buffer<Allocator<char>> stream{std::vector<char,Allocator<char>>(len,m_alloc)};
         MPI_Status recv_status;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recv_status);
-        FnHandle function_handle;
-        ObjectId object_id;
-        TypeId type_id;
-        bool get_return;
-        stream >> type_id >> object_id >> function_handle >> get_return;
-        function_base *f = m_registered_functions[function_handle];
-        f->execute(stream, recv_status.MPI_SOURCE, this, get_return, get_object_wrapper(m_rank, type_id, object_id)->object());
-        delete buffer;
+
+        TypeId type_id = mpirpc::get<TypeId>(stream,m_alloc);
+        ObjectId object_id = mpirpc::get<ObjectId>(stream,m_alloc);
+        FnHandle function_handle = mpirpc::get<FnHandle>(stream,m_alloc);
+        bool get_return = mpirpc::get<bool>(stream,m_alloc);
+
+        function_base_buffer<parameter_buffer<Allocator<char>>> *f = dynamic_cast<function_base_buffer<parameter_buffer<Allocator<char>>>*>(m_registered_functions[function_handle]);
+        f->execute(stream, m_alloc, recv_status.MPI_SOURCE, this, get_return, get_object_wrapper(m_rank, type_id, object_id)->object());
     }
 }
 

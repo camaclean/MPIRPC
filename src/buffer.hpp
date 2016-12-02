@@ -17,8 +17,8 @@
  *
  */
 
-#ifndef MPIRPC__EXCEPTIONS_HPP
-#define MPIRPC__EXCEPTIONS_HPP
+#ifndef MPIRPC__BUFFER_HPP
+#define MPIRPC__BUFFER_HPP
 
 namespace mpirpc
 {
@@ -59,4 +59,4 @@ void get_pointer_from_buffer(Buffer& b, T*& t)
 
 }
 
-#endif /* MPIRPC__EXCEPTIONS_HPP */
+#endif /* MPIRPC__BUFFER_HPP */

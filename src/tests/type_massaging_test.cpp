@@ -1,3 +1,22 @@
+/*
+ * MPIRPC: MPI based invocation of functions on other ranks
+ * Copyright (C) 2014-2016 Colin MacLean <cmaclean@illinois.edu>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 #include <gtest/gtest.h>
 #include <tuple>
 #include <iostream>
@@ -741,7 +760,7 @@ struct unmarshal_into_tuple_helper<std::tuple<Ts...>>
         using F = FunctionType; \
         using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type; \
         auto argument_tuple = std::make_tuple(Arguments); \
-        mpirpc::parameter_buffer s; \
+        mpirpc::parameter_buffer<> s; \
         mpirpc::internal::fn_type_marshaller<F>::marshal(s, Arguments); \
         std::cout << std::hex; \
         for (std::size_t i = 0; i < s.position(); ++i) \
@@ -779,7 +798,7 @@ TEST(FnTypeMarshaller, p5T_pT)
     double* p1 = new double[5]{5.0,6.0,7.0,8.0,9.0};
     using F = void(*)(double*);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_buffer s;
+    mpirpc::parameter_buffer<> s;
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5,true,true,alignof(double)));
     std::cout << std::hex;
     for (std::size_t i = 0; i < s.position(); ++i)
@@ -799,7 +818,7 @@ TEST(FnTypeMarshaller, p5T_lpT)
     double* p1 = new double[5]{5.0,6.0,7.0,8.0,9.0};
     using F = void(*)(double*&);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_buffer s;
+    mpirpc::parameter_buffer<> s;
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
     s.seek(0);
     std::allocator<void> a;
@@ -815,7 +834,7 @@ TEST(FnTypeMarshaller, p5T_rpT)
     double* p1 = new double[5]{5.0,6.0,7.0,8.0,9.0};
     using F = void(*)(double*&&);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_buffer s;
+    mpirpc::parameter_buffer<> s;
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, mpirpc::pointer_wrapper<double>(p1,5));
     s.seek(0);
     std::allocator<void> a;
@@ -830,7 +849,7 @@ TEST(FnTypeMarshaller, la5T_pT)
 {
     using F = void(*)(double*);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_buffer s;
+    mpirpc::parameter_buffer<> s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
     s.seek(0);
@@ -845,7 +864,7 @@ TEST(FnTypeMarshaller, la5T_lpT)
 {
     using F = void(*)(double*&);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_buffer s;
+    mpirpc::parameter_buffer<> s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
     s.seek(0);
@@ -860,7 +879,7 @@ TEST(FnTypeMarshaller, la5T_la5T)
 {
     using F = void(*)(double(&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_buffer s;
+    mpirpc::parameter_buffer<> s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
     s.seek(0);
@@ -874,7 +893,7 @@ TEST(FnTypeMarshaller, ra5T_la5T)
 {
     using F = void(*)(double(&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_buffer s;
+    mpirpc::parameter_buffer<> s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, std::move(p1));
     s.seek(0);
@@ -888,7 +907,7 @@ TEST(FnTypeMarshaller, ra5T_ra5T)
 {
     using F = void(*)(double(&&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_buffer s;
+    mpirpc::parameter_buffer<> s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, std::move(p1));
     s.seek(0);
@@ -902,7 +921,7 @@ TEST(FnTypeMarshaller, la5T_la5cT)
 {
     using F = void(*)(const double(&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_buffer s;
+    mpirpc::parameter_buffer<> s;
     double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
     s.seek(0);
@@ -916,7 +935,7 @@ TEST(FnTypeMarshaller, la5cT_la5cT)
 {
     using F = void(*)(const double(&)[5]);
     using StorageTupleType = typename ::mpirpc::internal::wrapped_function_parts<F>::storage_tuple_type;
-    mpirpc::parameter_buffer s;
+    mpirpc::parameter_buffer<> s;
     const double p1[5]{5.0,6.0,7.0,8.0,9.0};
     mpirpc::internal::fn_type_marshaller<F>::marshal(s, p1);
     s.seek(0);
@@ -1115,7 +1134,7 @@ void foo4(bool b, i128t i128, i128t* t2)
 TEST(ArgumentUnpacking, test0)
 {
     mpirpc::register_polymorphism<B>();
-    mpirpc::parameter_buffer p;
+    mpirpc::parameter_buffer<> p;
     int ai[4]{2,4,6,8};
     double ad[3]{4.6,8.2,9.1};
     float af[5]{0.2f,2.4f,1.4f,8.7f,3.14f};
@@ -1130,17 +1149,17 @@ TEST(ArgumentUnpacking, test0)
     std::cout << std::dec << std::endl;
     p.seek(0);
     std::allocator<char> a;
-    mpirpc::parameter_buffer pout;
+    mpirpc::parameter_buffer<> pout;
     mpirpc::internal::apply(&foo,a,p,pout);
-    mpirpc::parameter_buffer pout2;
+    mpirpc::parameter_buffer<> pout2;
     mpirpc::internal::apply(&foo3,a,p,pout2);
 }
 
 TEST(ArgumentUnpacking, overaligned)
 {
     std::allocator<char> a;
-    mpirpc::parameter_buffer p2;
-    mpirpc::parameter_buffer pout;
+    mpirpc::parameter_buffer<> p2;
+    mpirpc::parameter_buffer<> pout;
     p2.push<bool>(true);
     //p2 << ((i128t) 5);
     p2.push<i128t,128>(4);
@@ -1164,7 +1183,7 @@ bool operator==(std::piecewise_construct_t, std::piecewise_construct_t) { return
 
 TEST(ParameterBuffer,scalars)
 {
-    mpirpc::parameter_buffer b{};
+    mpirpc::parameter_buffer<> b{};
     bool boolval = true;
     int intval = 4;
     float floatval = 2.17f;
@@ -1189,7 +1208,7 @@ TEST(PolymorphicLookup,test)
 {
     constexpr const std::type_info &i = typeid(A);
     mpirpc::register_polymorphism<B>();
-    mpirpc::parameter_buffer b{};
+    mpirpc::parameter_buffer<> b{};
     mpirpc::pointer_wrapper<B> bval(new B(7,9));
     b.push<mpirpc::pointer_wrapper<B>>(bval);
     b.seek(0);
@@ -1200,7 +1219,7 @@ TEST(PolymorphicLookup,test)
     bool pass_back = mpirpc::get<bool>(b,a);
     uintptr_t id = mpirpc::get<uintptr_t>(b,a);
     b.realign(alignment);
-    B* test = static_cast<B*>(mpirpc::polymorphic_map<mpirpc::parameter_buffer>.at(mpirpc::safe_type_index_map.at(id))->build(a,b,size));
+    B* test = static_cast<B*>(mpirpc::polymorphic_map<mpirpc::parameter_buffer<>>.at(mpirpc::safe_type_index_map.at(id))->build(a,b,size));
     ASSERT_EQ(7,test->a);
     ASSERT_EQ(9,test->b);
 }

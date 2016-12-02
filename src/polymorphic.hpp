@@ -32,9 +32,10 @@ static std::map<uintptr_t,std::type_index> safe_type_index_map;
 template<typename Buffer>
 static std::map<std::type_index,internal::polymorphic_factory_base<std::allocator<char>,Buffer>*> polymorphic_map;
 
+template<class Allocator>
 class parameter_buffer;
 
-template<typename T, typename Buffer=parameter_buffer>
+template<typename T, typename Buffer=parameter_buffer<std::allocator<char>>>
 void register_polymorphism()
 {
     safe_type_index_map.insert({mpirpc::type_identifier<T>::id(),std::type_index{typeid(T)}});

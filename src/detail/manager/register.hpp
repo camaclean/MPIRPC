@@ -22,6 +22,7 @@
 
 #include "../../manager.hpp"
 #include "../../internal/function_attributes.hpp"
+#include "../../exceptions.hpp"
 
 /**
  * Manager definitions for functions relating to object, type, and function registration
@@ -40,20 +41,20 @@ FnHandle mpirpc::manager<MessageInterface, Allocator>::register_lambda(Lambda&& 
 }
 
 template<typename MessageInterface, template<typename> typename Allocator>
-template<typename F, internal::unwrapped_function_type<F> f>
+template<typename F, internal::unwrapped_function_type<F> f, typename Buffer>
 FnHandle mpirpc::manager<MessageInterface, Allocator>::register_function()
 {
-    function_base *b = new function<internal::wrapped_function_type<F>>(f);
+    function_base_buffer<Buffer> *b = new function<Buffer,internal::wrapped_function_type<F>>(f);
     m_registered_functions[b->id()] = b;
     m_registered_function_typeids[std::type_index(typeid(internal::function_identifier<internal::wrapped_function_type<F>,f>))] = b->id();
     return b->id();
 }
 
 template<typename MessageInterface, template<typename> typename Allocator>
-template<typename F>
+template<typename F, typename Buffer>
 FnHandle mpirpc::manager<MessageInterface, Allocator>::register_function(F f)
 {
-    function_base *b = new function<internal::wrapped_function_type<F>>(f);
+    function_base_buffer<Buffer> *b = new function<Buffer,internal::wrapped_function_type<F>>(f);
     m_registered_functions[b->id()] = b;
     //m_registered_function_typeids[std::type_index(typeid(function_identifier<typename storage_function_parts<F>::function_type,f>))] = b->id();
     return b->id();
@@ -166,7 +167,7 @@ object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::get_object_of
         if (i->type() == typeId && i->rank() == rank)
             return i;
     }
-    throw unregistered_object_exception();
+    throw mpirpc::unregistered_object_exception();
 }
 
 template<typename MessageInterface, template<typename> typename Allocator>

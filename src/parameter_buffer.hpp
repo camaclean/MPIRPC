@@ -29,42 +29,39 @@
 namespace mpirpc
 {
 
+template<typename Allocator = std::allocator<char>>
 class parameter_buffer
 {
 public:
-    parameter_buffer(std::vector<char> *buf) noexcept
+    parameter_buffer(std::vector<char>&& buf) noexcept
         : m_buffer{buf}, m_position{}
     {}
 
-    template<typename Allocator>
-    parameter_buffer(Allocator&& a)
-        : m_buffer{new std::vector<char>{std::forward<Allocator>(a)}}, m_position{}
+    parameter_buffer(const Allocator& a = Allocator())
+        : m_buffer{a}, m_position{}
     {}
 
-    parameter_buffer()
-        : m_buffer{new std::vector<char>()}, m_position{}
-    {}
-
-    char* data() noexcept { return m_buffer->data(); }
-    const char* data() const noexcept { return m_buffer->data(); }
-    char* data_here() noexcept { return &m_buffer->data()[m_position]; }
-    const char* data_here() const noexcept { return &m_buffer->data()[m_position]; }
+    char* data() noexcept { return m_buffer.data(); }
+    const char* data() const noexcept { return m_buffer.data(); }
+    char* data_here() noexcept { return &m_buffer.data()[m_position]; }
+    const char* data_here() const noexcept { return &m_buffer.data()[m_position]; }
     std::size_t position() const noexcept { return m_position; }
+    std::size_t size() const noexcept { return m_buffer.size(); }
 
     void seek(std::size_t pos) noexcept { m_position = pos; }
 
     template<typename T>
-    T* reinterpret_and_advance(std::size_t size) noexcept { T* ret = reinterpret_cast<T*>(&m_buffer->data()[m_position]); m_position+=size; return ret; }
+    T* reinterpret_and_advance(std::size_t size) noexcept { T* ret = reinterpret_cast<T*>(&m_buffer.data()[m_position]); m_position+=size; return ret; }
 
     template<std::size_t Alignment>
     void append(const char * start, const char * end)
     {
         std::size_t padding = mpirpc::internal::calculate_alignment_padding(m_position,Alignment);
         std::size_t delta = padding + (end-start);
-        std::size_t new_size = m_buffer->size() + delta;
-        m_buffer->reserve(new_size);
-        m_buffer->resize(m_buffer->size() + padding);
-        m_buffer->insert(m_buffer->end(),start,end);
+        std::size_t new_size = m_buffer.size() + delta;
+        m_buffer.reserve(new_size);
+        m_buffer.resize(m_buffer.size() + padding);
+        m_buffer.insert(m_buffer.end(),start,end);
         m_position += delta;
     }
 
@@ -72,9 +69,9 @@ public:
     {
         std::size_t padding = mpirpc::internal::calculate_alignment_padding(m_position,alignment);
         std::size_t delta = padding;
-        std::size_t new_size = m_buffer->size() + delta;
-        m_buffer->reserve(new_size);
-        m_buffer->resize(m_buffer->size() + padding);
+        std::size_t new_size = m_buffer.size() + delta;
+        m_buffer.reserve(new_size);
+        m_buffer.resize(m_buffer.size() + padding);
         m_position += delta;
     }
 
@@ -91,12 +88,12 @@ public:
         m_position += (m_position % Alignment) ? (Alignment - (m_position % Alignment)) : 0;
     }
 
-    template<typename T, typename Allocator, std::size_t Alignment = alignof(T)>
-    decltype(auto) pop(Allocator&& a)
+    template<typename T, typename Alloc, std::size_t Alignment = alignof(T)>
+    decltype(auto) pop(Alloc&& a)
     {
         realign<Alignment>();
         using U = mpirpc::internal::storage_type<T>;
-        return mpirpc::unmarshaller<U,parameter_buffer,Alignment>::unmarshal(std::forward<Allocator>(a),*this);
+        return mpirpc::unmarshaller<U,parameter_buffer<Allocator>,Alignment>::unmarshal(std::forward<Alloc>(a),*this);
     }
 
     template<typename T, std::size_t Alignment = alignof(T), typename U,
@@ -106,19 +103,30 @@ public:
         mpirpc::marshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,Alignment>::marshal(*this,std::forward<U>(t));
     }
 
+
+
 protected:
     std::size_t m_position;
-    std::vector<char> *m_buffer;
+    std::vector<char,Allocator> m_buffer;
 };
 
-template<>
-struct aligned_binary_buffer_identifier<parameter_buffer> : std::true_type {};
+template<typename Allocator>
+struct aligned_binary_buffer_identifier<parameter_buffer<Allocator>> : std::true_type {};
+
+template<typename T, typename U>
+constexpr bool is_same_template = false;
+
+template<template <typename...> class T, typename... As, typename... Bs>
+constexpr bool is_same_template<T<As...>,T<Bs...>> = true;
+
+template<typename T>
+constexpr bool is_parameter_buffer = is_same_template<T,parameter_buffer<std::allocator<char>>>;
 
 template<typename T, typename Buffer, std::size_t Alignment>
-struct marshaller<T,Buffer,Alignment,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,Buffer>::value && std::is_same<Buffer,parameter_buffer>::value>>
+struct marshaller<T,Buffer,Alignment,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,Buffer>::value && is_parameter_buffer<Buffer>>>
 {
     template<typename U,std::enable_if_t<std::is_same<std::decay_t<T>,std::decay_t<U>>::value>* = nullptr>
-    static void marshal(parameter_buffer& b, U&& val)
+    static void marshal(Buffer& b, U&& val)
     {
         const char* p = reinterpret_cast<const char*>(&val);
         b.template append<Alignment>(p, p+sizeof(T));
@@ -126,10 +134,10 @@ struct marshaller<T,Buffer,Alignment,std::enable_if_t<!buildtype_helper<std::rem
 };
 
 template<typename T, typename Buffer, std::size_t Alignment>
-struct unmarshaller<T,Buffer,Alignment,std::enable_if_t<!mpirpc::buildtype_helper<std::remove_reference_t<T>,Buffer>::value && std::is_same<Buffer,parameter_buffer>::value>>
+struct unmarshaller<T,Buffer,Alignment,std::enable_if_t<!mpirpc::buildtype_helper<std::remove_reference_t<T>,Buffer>::value && is_parameter_buffer<Buffer>>>
 {
     template<typename Allocator>
-    static T unmarshal(Allocator&&, parameter_buffer& b)
+    static T unmarshal(Allocator&&, Buffer& b)
     {
         return *b.template reinterpret_and_advance<std::remove_reference_t<T>>(sizeof(std::remove_reference_t<T>));
     }
