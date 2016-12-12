@@ -526,8 +526,8 @@ protected:
      * @param args The parameter pack of the function's arguments
      *
      */
-    template<typename... Args>
-    void send_function_invocation(int rank, FnHandle function_handle, bool get_return, Args&&... args);
+    template<typename F, typename... Args>
+    void send_function_invocation(int rank, F, FnHandle function_handle, bool get_return, Args&&... args);
 
     template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
     void send_function_invocation(int rank, bool get_return, Args&&... args);
@@ -564,10 +564,10 @@ protected:
         if (!shutdown)
             MPI_Get_count(&status, MPI_CHAR, &len);
         if (!shutdown && len != MPI_UNDEFINED) {
-            std::vector<char>* buffer = new std::vector<char>(len);
-            parameter_stream stream(buffer);
+            std::vector<char,Allocator<char>>* buffer = new std::vector<char,Allocator<char>>(len,m_alloc);
+            parameter_buffer<Allocator<char>> stream(buffer);
             MPI_Recv((void*) buffer->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
-            //ret = unmarshal<R,Allocator<R>>(stream);
+            ret = get<R>(stream,m_alloc);
             using swallow = int[];
             (void)swallow{((internal::is_pass_back<FArgs>::value) ? ( internal::pass_back_unmarshaller<FArgs,Args>::unmarshal(stream,args) /*args = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
             delete buffer;
@@ -686,6 +686,7 @@ void manager<MessageInterface, Allocator>::notify_new_object(TypeId type, Object
             MPI_Request req;
             MPI_Issend(info.get(), 1, m_mpi_object_info, i, MPIRPC_TAG_NEW, m_comm, &req);
             m_mpi_object_messages[req] = info;
+            std::cout << "notified new object from rank " << m_rank << " to rank " << i << std::endl;
         }
     }
 }
@@ -768,6 +769,8 @@ bool manager<MessageInterface, Allocator>::check_messages() {
     while (flag) {
         MPI_Status status;
         MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, m_comm, &flag, &status);
+        if (m_rank == 1)
+        std::cout << "flag: " << status.MPI_TAG << std::endl;
         if (flag) {
             switch (status.MPI_TAG) {
                 case MPIRPC_TAG_SHUTDOWN:
@@ -776,6 +779,7 @@ bool manager<MessageInterface, Allocator>::check_messages() {
                     check_sends();
                     return false;
                 case MPIRPC_TAG_NEW:
+                    std::cout << "got object\n";
                     register_remote_object();
                     break;
                 case MPIRPC_TAG_INVOKE:
@@ -798,6 +802,7 @@ bool manager<MessageInterface, Allocator>::check_messages() {
 template<typename MessageInterface, template<typename> typename Allocator>
 void manager<MessageInterface, Allocator>::sync() {
     while (queue_size() > 0) { check_messages(); } //block until this rank's queue is processed
+    std::cout << "queue processed on rank " << m_rank << std::endl;
     MPI_Request req;
     int flag;
     MPI_Ibarrier(m_comm, &req);
@@ -845,13 +850,18 @@ void manager<MessageInterface, Allocator>::receivedInvocationCommand(MPI_Status&
     int len;
     MPI_Get_count(&status, MPI_CHAR, &len);
     if (len != MPI_UNDEFINED) {
-        parameter_buffer<Allocator<char>> stream{std::vector<char,Allocator<char>>(len,m_alloc)};
+        std::vector<char,Allocator<char>>* buffer = new std::vector<char,Allocator<char>>(len,m_alloc);
+        parameter_buffer<Allocator<char>> stream{buffer};
         MPI_Status recv_status;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recv_status);
         FnHandle function_handle = mpirpc::get<FnHandle>(stream,m_alloc);
         bool get_return = mpirpc::get<bool>(stream,m_alloc);
+        std::cout << "function handle: " << function_handle << " " << m_registered_functions.size() << std::endl;
+        for (auto& i : m_registered_functions)
+            std::cout << "have: " << i.first << std::endl;
         function_base_buffer<parameter_buffer<Allocator<char>>> *f = dynamic_cast<function_base_buffer<parameter_buffer<Allocator<char>>>*>(m_registered_functions[function_handle]);
         f->execute(stream, m_alloc, recv_status.MPI_SOURCE, this, get_return);
+        delete buffer;
     }
 }
 
@@ -861,7 +871,8 @@ void manager<MessageInterface, Allocator>::receivedMemberInvocationCommand(MPI_S
     int len;
     MPI_Get_count(&status, MPI_CHAR, &len);
     if (len != MPI_UNDEFINED) {
-        parameter_buffer<Allocator<char>> stream{std::vector<char,Allocator<char>>(len,m_alloc)};
+        std::vector<char,Allocator<char>>* buffer = new std::vector<char,Allocator<char>>(len,m_alloc);
+        parameter_buffer<Allocator<char>> stream{buffer};
         MPI_Status recv_status;
         MPI_Recv(stream.data(), len, MPI_CHAR, status.MPI_SOURCE, status.MPI_TAG, m_comm, &recv_status);
 
@@ -872,6 +883,7 @@ void manager<MessageInterface, Allocator>::receivedMemberInvocationCommand(MPI_S
 
         function_base_buffer<parameter_buffer<Allocator<char>>> *f = dynamic_cast<function_base_buffer<parameter_buffer<Allocator<char>>>*>(m_registered_functions[function_handle]);
         f->execute(stream, m_alloc, recv_status.MPI_SOURCE, this, get_return, get_object_wrapper(m_rank, type_id, object_id)->object());
+        delete buffer;
     }
 }
 

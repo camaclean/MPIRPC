@@ -46,6 +46,7 @@ FnHandle mpirpc::manager<MessageInterface, Allocator>::register_function()
 {
     function_base_buffer<Buffer> *b = new function<Buffer,internal::wrapped_function_type<F>>(f);
     m_registered_functions[b->id()] = b;
+    std::cout << "registered: " << b->id() << std::endl;
     m_registered_function_typeids[std::type_index(typeid(internal::function_identifier<internal::wrapped_function_type<F>,f>))] = b->id();
     return b->id();
 }

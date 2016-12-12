@@ -21,6 +21,7 @@
 #define MPIRPC__MARSHALLER_HPP
 
 #include "types.hpp"
+#include <string>
 
 namespace mpirpc
 {
@@ -38,6 +39,15 @@ struct marshaller<T,Buffer,Alignment,std::enable_if_t<std::is_pointer<T>::value>
     }
 };
 */
+
+template<typename Buffer, std::size_t Alignment>
+struct marshaller<std::string,Buffer,Alignment>
+{
+    static void marshal(Buffer& b, const std::string& s)
+    {
+        b.template push<char*>(s.c_str());
+    }
+};
 
 }
 

@@ -290,64 +290,61 @@ template<typename R, typename... FArgs, typename... Args>
 struct marshaller_function_signature<R(*)(FArgs...), Args...>
 {
     using return_type = R;
-    using non_void_return_type = std::enable_if_t<!std::is_same<R,void>::value,R>;
-    using void_return_type = std::enable_if_t<std::is_same<R,void>::value,R>;
+    using non_void_return_type = R;
     using parameter_types = type_pack<autowrapped_type<FArgs>...>;
     using applier = std::function<void(choose_reference_type<FArgs,Args>...)>;
     using pass_backs = bool_template_list<is_pass_back<autowrapped_type<FArgs>>::value...>;
 };
 
-/*template<typename... FArgs, typename... Args>
+template<typename... FArgs, typename... Args>
 struct marshaller_function_signature<void(*)(FArgs...), Args...>
 {
     using return_type = void;
     using void_return_type = void;
-    using parameter_types = argument_types<autowrapped_type<FArgs,Allocator>...>;
+    using parameter_types = type_pack<autowrapped_type<FArgs>...>;
     using applier = std::function<void(choose_reference_type<FArgs,Args>...)>;
-    using pass_backs = bool_template_list<is_pass_back<FArgs>::value...>;
-};*/
+    using pass_backs = bool_template_list<is_pass_back<autowrapped_type<FArgs>>::value...>;
+};
 
 template<typename R, class C, typename... FArgs, typename... Args>
 struct marshaller_function_signature<R(C::*)(FArgs...), Args...>
 {
     using return_type = R;
-    using non_void_return_type = std::enable_if_t<!std::is_same<R,void>::value,R>;
-    using void_return_type = std::enable_if_t<std::is_same<R,void>::value,R>;
+    using non_void_return_type = R;
     using parameter_types = type_pack<autowrapped_type<FArgs>...>;
     using applier = std::function<void(choose_reference_type<FArgs,Args>...)>;
     using pass_backs = bool_template_list<is_pass_back<autowrapped_type<FArgs>>::value...>;
 };
 
-/*template<class C, typename... FArgs, typename... Args>
+template<class C, typename... FArgs, typename... Args>
 struct marshaller_function_signature<void(C::*)(FArgs...), Args...>
 {
     using return_type = void;
     using void_return_type = void;
-    using parameter_types = argument_types<autowrapped_type<FArgs>...>;
+    using parameter_types = type_pack<autowrapped_type<FArgs>...>;
     using applier = std::function<void(choose_reference_type<FArgs,Args>...)>;
-    using pass_backs = bool_template_list<is_pass_back<FArgs>::value...>;
-};*/
+    using pass_backs = bool_template_list<is_pass_back<autowrapped_type<FArgs>>::value...>;
+};
 
 template<typename R, typename... FArgs, typename... Args>
 struct marshaller_function_signature<std::function<R(FArgs...)>, Args...>
 {
     using return_type = R;
-    using non_void_return_type = std::enable_if_t<!std::is_same<R,void>::value,R>;
-    using void_return_type = std::enable_if_t<std::is_same<R,void>::value,R>;
+    using non_void_return_type = R;
     using parameter_types = type_pack<autowrapped_type<FArgs>...>;
     using applier = std::function<void(typename choose_reference_type<FArgs,Args>::type...)>;
     using pass_backs = bool_template_list<is_pass_back<autowrapped_type<FArgs>>::value...>;
 };
 
-/*template<typename... FArgs, typename... Args>
+template<typename... FArgs, typename... Args>
 struct marshaller_function_signature<std::function<void(FArgs...)>, Args...>
 {
     using return_type = void;
     using void_return_type = void;
-    using parameter_types = argument_types<autowrapped_type<FArgs>...>;
+    using parameter_types = type_pack<autowrapped_type<FArgs>...>;
     using applier = std::function<void(typename choose_reference_type<FArgs,Args>::type...)>;
-    using pass_backs = bool_template_list<is_pass_back<FArgs>::value...>;
-};*/
+    using pass_backs = bool_template_list<is_pass_back<autowrapped_type<FArgs>>::value...>;
+};
 
 /*************************************************************************************/
 /*                          mpirpc::internal::lambda_traits                          */
