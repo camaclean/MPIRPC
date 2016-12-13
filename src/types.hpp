@@ -26,7 +26,7 @@ namespace mpirpc
 template<typename T>
 struct type_identifier
 {
-    constexpr static uintptr_t id()
+    static constexpr uintptr_t id()
     {
         return reinterpret_cast<uintptr_t>(&type_identifier<T>::id);
     }

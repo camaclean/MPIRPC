@@ -73,14 +73,8 @@ template<typename MessageInterface, typename Allocator = std::allocator<char>, t
 class manager;
 
 using FnHandle = unsigned long long;
-using TypeId = unsigned long long;
+using TypeId = uintptr_t;
 using ObjectId = unsigned long long;
-
-template<typename T>
-struct type_identifier
-{
-    static constexpr TypeId id() { return reinterpret_cast<TypeId>(&id); }
-};
 
 }
 

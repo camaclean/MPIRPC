@@ -80,7 +80,7 @@ void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_retur
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
     if (get_return)
-        (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
+        (void)swallow{((PBs) ? (remarshaller<std::remove_reference_t<mpirpc::internal::autowrapped_type<FArgs>>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
 }
 
@@ -99,7 +99,7 @@ void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_retur
     {
         using R = mpirpc::internal::function_return_type<F>;
         remarshaller<R,OutBuffer,alignof(R)>::marshal(os,mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret)));
-        (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
+        (void)swallow{((PBs) ? (remarshaller<std::remove_reference_t<mpirpc::internal::autowrapped_type<FArgs>>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     }
     (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
 }
@@ -115,7 +115,7 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, bool
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
     if (get_return)
-        (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
+        (void)swallow{((PBs) ? (remarshaller<std::remove_reference_t<mpirpc::internal::autowrapped_type<FArgs>>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     (void)swallow{(cleanup<InBuffer>(a,std::get<Is>(t)), 0)...};
 }
 
@@ -133,7 +133,7 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, bool
     {
         using R = mpirpc::internal::function_return_type<F>;
         remarshaller<R,OutBuffer,alignof(R)>::marshal(os,mpirpc::internal::autowrap<mpirpc::internal::function_return_type<F>,decltype(ret)>(std::move(ret)));
-        (void)swallow{((PBs) ? (remarshaller<mpirpc::internal::autowrapped_type<FArgs>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
+        (void)swallow{((PBs) ? (remarshaller<std::remove_reference_t<mpirpc::internal::autowrapped_type<FArgs>>,OutBuffer,Alignments>::marshal(os, mpirpc::internal::autowrap<mpirpc::internal::autowrapped_type<FArgs>,Ts>(*std::get<Is>(t))), 0) : 0)...};
     }
     (void)swallow{(cleanup<InBuffer>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
 }

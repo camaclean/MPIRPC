@@ -62,26 +62,6 @@ FnHandle mpirpc::manager<Allocator,Buffer,MessageInterface>::register_function(F
 }
 
 /*************************************************************************************/
-/*                                Type Registration                                  */
-/*************************************************************************************/
-
-template<typename Allocator, typename Buffer, typename MessageInterface>
-template<typename T>
-TypeId mpirpc::manager<Allocator,Buffer,MessageInterface>::register_type()
-{
-    TypeId id = ++m_next_type_id;
-    m_registered_type_ids[std::type_index(typeid(typename std::decay<T>::type))] = id;
-    return id;
-}
-
-template<typename Allocator, typename Buffer, typename MessageInterface>
-template<typename T>
-TypeId mpirpc::manager<Allocator,Buffer,MessageInterface>::get_type_id() const
-{
-    return m_registered_type_ids.at(std::type_index(typeid(typename std::decay<T>::type)));
-}
-
-/*************************************************************************************/
 /*                               Object Registration                                 */
 /*************************************************************************************/
 
@@ -90,7 +70,7 @@ template<class Class>
 object_wrapper<Class>* mpirpc::manager<Allocator,Buffer,MessageInterface>::register_object(Class *object) {
     object_wrapper<Class> *wrapper = new object_wrapper<Class>(object);
     wrapper->m_rank = m_rank;
-    wrapper->m_type = get_type_id<Class>();
+    wrapper->m_type = type_identifier<Class>::id();
     m_registered_objects.push_back(wrapper);
     notify_new_object(wrapper->type(), wrapper->id());
     return wrapper;
@@ -106,13 +86,13 @@ object_wrapper_base* mpirpc::manager<Allocator,Buffer,MessageInterface>::constru
         Class *object = new Class(std::forward<Args>(args)...);
         wrapper = new object_wrapper<Class>(object);
         wrapper->m_rank = m_rank;
-        wrapper->m_type = get_type_id<Class>();
+        wrapper->m_type = type_identifier<Class>::id();
     }
     else
     {
         wrapper = new object_wrapper_base();
         wrapper->m_rank = rank;
-        wrapper->m_type = get_type_id<Class>();
+        wrapper->m_type = type_identifier<Class>::id();
     }
     m_registered_objects.push_back(wrapper);
     return wrapper;
@@ -143,21 +123,21 @@ template<typename Allocator, typename Buffer, typename MessageInterface>
 template<class Class>
 std::unordered_set<object_wrapper_base*> mpirpc::manager<Allocator,Buffer,MessageInterface>::get_objects_of_type() const
 {
-    return get_objects_of_type(get_type_id<Class>());
+    return get_objects_of_type(type_identifier<Class>::id());
 }
 
 template<typename Allocator, typename Buffer, typename MessageInterface>
 template<class Class>
 object_wrapper_base* mpirpc::manager<Allocator,Buffer,MessageInterface>::get_object_of_type() const
 {
-    return get_object_of_type(get_type_id<Class>());
+    return get_object_of_type(type_identifier<Class>::id());
 }
 
 template<typename Allocator, typename Buffer, typename MessageInterface>
 template<class Class>
 object_wrapper_base* mpirpc::manager<Allocator,Buffer,MessageInterface>::get_object_of_type(int rank) const
 {
-    return get_object_of_type(get_type_id<Class>(), rank);
+    return get_object_of_type(type_identifier<Class>::id(), rank);
 }
 
 template<typename Allocator, typename Buffer, typename MessageInterface>
@@ -175,7 +155,7 @@ template<typename Allocator, typename Buffer, typename MessageInterface>
 template<class Class>
 std::unordered_set<object_wrapper_base*> mpirpc::manager<Allocator,Buffer,MessageInterface>::get_objects_of_type(int rank) const
 {
-    return get_objects_of_type(get_type_id<Class>(), rank);
+    return get_objects_of_type(type_identifier<Class>::id(), rank);
 }
 
 template<typename Allocator, typename Buffer, typename MessageInterface>

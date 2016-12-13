@@ -50,7 +50,7 @@ struct fn_type_marshaller<R(*)(FArgs...)>
     static void marshal_impl(Buffer& ps, std::integer_sequence<std::size_t, Alignments...>, Args&&... args)
     {
         using swallow = int[];
-        (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+        (void)swallow{(::mpirpc::marshaller<std::remove_reference_t<autowrapped_type<FArgs>>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
     }
 
     template<class Buffer, typename... Args>
@@ -70,7 +70,7 @@ struct fn_type_marshaller<R(Class::*)(FArgs...)>
     static void marshal_impl(Buffer& ps, std::integer_sequence<std::size_t, Alignments...>, Args&&... args)
     {
         using swallow = int[];
-        (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+        (void)swallow{(::mpirpc::marshaller<std::remove_reference_t<autowrapped_type<FArgs>>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
     }
 
     template<class Buffer, typename... Args>
@@ -91,7 +91,7 @@ struct fn_type_marshaller<std::function<R(FArgs...)>>
     static void marshal_impl(Buffer& ps, std::integer_sequence<std::size_t, Alignments...>, Args&&... args)
     {
       using swallow = int[];
-      (void)swallow{(::mpirpc::marshaller<autowrapped_type<FArgs>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
+      (void)swallow{(::mpirpc::marshaller<std::remove_reference_t<autowrapped_type<FArgs>>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
     }
 
     template<class Buffer, typename... Args>

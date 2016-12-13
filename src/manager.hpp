@@ -142,24 +142,6 @@ public:
     manager(MPI_Comm comm = MPI_COMM_WORLD, const Allocator &alloc = Allocator());
 
     /**
-     * Register a type with the manager. This assigns a unique ID to the type.
-     *
-     * register_type<T>() must be called in the same order on all processes so that
-     * the assigned IDs are consistent.
-     *
-     * @return The type ID
-     */
-    template<typename T>
-    TypeId register_type();
-
-    /**
-     * @brief Query the type identifier for the class Class
-     * @return The identifier associated with class Class
-     */
-    template<typename T>
-    TypeId get_type_id() const;
-
-    /**
      * @brief Register a lambda with the manager
      * @return The handle for the lambda
      */

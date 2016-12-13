@@ -83,14 +83,14 @@ public:
 
     void realign(std::size_t alignment)
     {
-        std::cout << "realign: " << alignment << std::endl;
+        std::cout << "realign: " << ((m_position % alignment) ? (alignment - (m_position % alignment)) : 0) << std::endl;
         m_position += (m_position % alignment) ? (alignment - (m_position % alignment)) : 0;
     }
 
     template<std::size_t Alignment>
     void realign()
     {
-        std::cout << "realign: " << Alignment << std::endl;
+        std::cout << "realign: " << ((m_position % Alignment) ? (Alignment - (m_position % Alignment)) : 0) << std::endl;
         m_position += (m_position % Alignment) ? (Alignment - (m_position % Alignment)) : 0;
     }
 

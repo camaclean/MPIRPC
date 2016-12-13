@@ -97,14 +97,13 @@ TEST(Manager,execute_member_function)
 {
     mpirpc::mpi_manager m;
     m.register_function<decltype(&Foo::bar),&Foo::bar>();
-    m.register_type<Foo>();
     if (m.rank() == 0)
     {
         Foo *f = new Foo();
         m.register_object(f);
     }
     m.sync();
-    auto fwrap = m.get_object_of_type(m.get_type_id<Foo>(),0);
+    auto fwrap = m.get_object_of_type(mpirpc::type_identifier<Foo>::id(),0);
     m.invoke_function<decltype(&Foo::bar),&Foo::bar>(fwrap);
     m.sync();
 }
@@ -113,7 +112,6 @@ TEST(Manager,execute_member_function_w_return)
 {
     mpirpc::mpi_manager m;
     m.register_function<decltype(&Foo::bar2),&Foo::bar2>();
-    m.register_type<Foo>();
     m.sync();
     if (m.rank() == 0)
     {
@@ -121,7 +119,7 @@ TEST(Manager,execute_member_function_w_return)
         m.register_object(f);
     }
     m.sync();
-    auto fwrap = m.get_object_of_type(m.get_type_id<Foo>(),0);
+    auto fwrap = m.get_object_of_type(mpirpc::type_identifier<Foo>::id(),0);
     auto ret = m.invoke_function_r<decltype(&Foo::bar2),&Foo::bar2>(fwrap);
     ASSERT_EQ(7,ret);
     m.sync();
@@ -147,18 +145,56 @@ TEST(Manager,execute_function_double_from_float_local)
     mpirpc::mpi_manager m;
     m.register_function<decltype(&foo3),&foo3>();
     m.sync();
-    m.invoke_function<decltype(&foo3),&foo3>(0,3.0f);
+    m.invoke_function<decltype(&foo3),&foo3>(m.rank(),3.0f);
+    m.sync();
+}
+
+TEST(Manager,execute_function_double)
+{
+    mpirpc::mpi_manager m;
+    double d = 1.0f;
+    auto lambda = [](double& s){
+        ASSERT_EQ(1.0,s);
+        s = 2.0;
+    };
+    mpirpc::FnHandle handle = m.register_lambda(lambda);
+    m.sync();
+    m.invoke_lambda_r(0,lambda,handle,d);
+    ASSERT_EQ(2.0f,d);
     m.sync();
 }
 
 TEST(Manager,execute_function_std_string)
 {
     mpirpc::mpi_manager m;
-    auto lambda = [](std::string s){ std::cout << s << std::endl; };
+    std::string blah("blahblah");
+    auto lambda = [](std::string& s){
+        ASSERT_EQ("blahblah",s);
+        s = "foobar";
+    };
     mpirpc::FnHandle handle = m.register_lambda(lambda);
     m.sync();
-    std::string blah("blahblah");
     m.invoke_lambda_r(0,lambda,handle,blah);
+    ASSERT_EQ("foobar",blah);
+    m.sync();
+}
+
+TEST(Manager,execute_function_float_std_string)
+{
+    mpirpc::mpi_manager m;
+    std::string blah("blahblah");
+    float f = 3.0f;
+    auto lambda = [](float a, std::string& b){
+        ASSERT_EQ(3.0f,a);
+        ASSERT_EQ("blahblah",b);
+        a = 4.0f;
+        b = "foobar";
+    };
+    mpirpc::FnHandle handle = m.register_lambda(lambda);
+    m.sync();
+    m.invoke_lambda_r(0,lambda,handle,f,blah);
+    ASSERT_EQ(3.0f,f);
+    ASSERT_EQ("foobar",blah);
     m.sync();
 }
 
