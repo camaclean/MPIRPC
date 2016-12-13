@@ -20,6 +20,7 @@
 #ifndef MPIRPC__PARAMETER_BUFFER_HPP
 #define MPIRPC__PARAMETER_BUFFER_HPP
 
+#include "common.hpp"
 #include "types.hpp"
 #include "marshaller.hpp"
 #include "unmarshaller.hpp"
@@ -31,7 +32,7 @@
 namespace mpirpc
 {
 
-template<typename Allocator = std::allocator<char>>
+template<typename Allocator>
 class parameter_buffer
 {
 public:

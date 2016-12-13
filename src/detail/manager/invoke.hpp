@@ -32,9 +32,9 @@
 /*                    Type Casting Returning Non-Member Invokers                     */
 /*************************************************************************************/
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename F, typename ::mpirpc::internal::unwrapped_function_type<F> f, typename... Args>
-auto mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(int rank, Args&&... args)
+auto mpirpc::manager<Allocator,Buffer,MessageInterface>::invoke_function_r(int rank, Args&&... args)
     -> internal::function_return_type<F>
 {
     if (rank == m_rank)
@@ -49,9 +49,9 @@ auto mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(int rank, A
     }
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename R, typename... FArgs, typename... Args>
-auto mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(int rank, R(*f)(FArgs...), FnHandle functionHandle, Args&&... args)
+auto mpirpc::manager<Allocator,Buffer,MessageInterface>::invoke_function_r(int rank, R(*f)(FArgs...), FnHandle functionHandle, Args&&... args)
     -> typename std::enable_if<!std::is_same<R, void>::value, R>::type
 {
     using pass_backs = internal::type_pack<internal::autowrapped_type<FArgs>...>;//internal::bool_template_list<internal::is_pass_back<FArgs>::value...>;
@@ -80,29 +80,29 @@ auto mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(int rank, R
 /*                   Type Casting Non-Returning Non-Member Invokers                  */
 /*************************************************************************************/
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
-void mpirpc::manager<MessageInterface, Allocator>::invoke_function(int rank, Args&&... args)
+void mpirpc::manager<Allocator,Buffer,MessageInterface>::invoke_function(int rank, Args&&... args)
 {
     if (rank == m_rank)
     {
         f(std::forward<Args>(args)...);
     } else {
-        send_function_invocation<internal::wrapped_function_type<F>,f>(rank, false, internal::autowrap<Args,Args>(args)...);
+        send_function_invocation<internal::wrapped_function_type<F>,f>(rank, false, std::forward<Args>(args)...);
     }
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename R, typename... FArgs, typename...Args>
-void mpirpc::manager<MessageInterface, Allocator>::invoke_function(int rank, R(*f)(FArgs...), FnHandle functionHandle, Args&&... args)
+void mpirpc::manager<Allocator,Buffer,MessageInterface>::invoke_function(int rank, R(*f)(FArgs...), FnHandle functionHandle, Args&&... args)
 {
     if (rank == m_rank) {
-        f(internal::forward_parameter<FArgs,Args>(args)...);
+        f(std::forward<Args>(args)...);
     } else {
         if (functionHandle == 0) {
             for (const auto &i : m_registered_functions) {
                 if (i.second->pointer() == reinterpret_cast<void(*)()> (f)) {
-                    send_function_invocation(rank, i.first, false, internal::forward_parameter<FArgs>(args)...);
+                    send_function_invocation(rank, i.first, false, internal::autowrap<FArgs,Args>(args)...);
                     return;
                 }
             }
@@ -110,7 +110,7 @@ void mpirpc::manager<MessageInterface, Allocator>::invoke_function(int rank, R(*
         }
         else
         {
-            send_function_invocation(rank, functionHandle, false, internal::forward_parameter<FArgs>(args)...);
+            send_function_invocation(rank, functionHandle, false, internal::autowrap<FArgs,Args>(args)...);
         }
     }
 }
@@ -119,17 +119,17 @@ void mpirpc::manager<MessageInterface, Allocator>::invoke_function(int rank, R(*
 /*                     Non-Typesafe Returning Non-Member Invoker                     */
 /*************************************************************************************/
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename R, typename... Args>
-R mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(int rank, FnHandle functionHandle, Args&&... args)
+R mpirpc::manager<Allocator,Buffer,MessageInterface>::invoke_function_r(int rank, FnHandle functionHandle, Args&&... args)
 {
     send_function_invocation(rank, functionHandle, true, internal::autowrap<Args>(args)...);
     return process_return<R>(rank, internal::type_pack<typename internal::pass_back_false<Args>::type...>{}, std::forward<Args>(args)...);
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename R, typename... Args>
-R mpirpc::manager<MessageInterface, Allocator>::invoke_function_pr(int rank, FnHandle functionHandle, Args&&... args)
+R mpirpc::manager<Allocator,Buffer,MessageInterface>::invoke_function_pr(int rank, FnHandle functionHandle, Args&&... args)
 {
     send_function_invocation(rank, functionHandle, true, internal::autowrap<Args>(args)...);
     return process_return<R>(rank, internal::type_pack<internal::autowrapped_type<Args>...>{}, std::forward<Args>(args)...);
@@ -139,11 +139,11 @@ R mpirpc::manager<MessageInterface, Allocator>::invoke_function_pr(int rank, FnH
 /*                   Non-Typesafe Non-Returning Non-Member Invoker                   */
 /*************************************************************************************/
 
-template<typename MessageInterface, template<typename> typename Allocator>
-template<typename... Args>
-void mpirpc::manager<MessageInterface, Allocator>::invoke_function(int rank, FnHandle functionHandle, Args&&... args)
+template<typename Allocator, typename Buffer, typename MessageInterface>
+template<typename... FArgs, typename... Args>
+void mpirpc::manager<Allocator,Buffer,MessageInterface>::invoke_function(int rank, void(*)(FArgs...), FnHandle functionHandle, Args&&... args)
 {
-    send_function_invocation(rank, functionHandle, false, internal::autowrap<Args>(args)...);
+    send_function_invocation(rank, functionHandle, false, internal::autowrap<FArgs,Args>(args)...);
 }
 
 /*************************************************************************************/
@@ -163,9 +163,9 @@ struct forward_parameter_type_helper
 };
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename Lambda, typename... Args>
-auto mpirpc::manager<MessageInterface, Allocator>::invoke_lambda_r(int rank, Lambda&& l, FnHandle function_handle, Args&&... args)
+auto mpirpc::manager<Allocator,Buffer,MessageInterface>::invoke_lambda_r(int rank, Lambda&& l, FnHandle function_handle, Args&&... args)
     -> internal::lambda_return_type<Lambda>
 {
     if (rank == m_rank)
@@ -182,9 +182,9 @@ auto mpirpc::manager<MessageInterface, Allocator>::invoke_lambda_r(int rank, Lam
     }
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
-auto mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(object_wrapper_base *a, Args&&... args)
+auto mpirpc::manager<Allocator,Buffer,MessageInterface>::invoke_function_r(object_wrapper_base *a, Args&&... args)
     -> internal::function_return_type<F>
 {
     if (a->rank() == m_rank)
@@ -202,9 +202,9 @@ auto mpirpc::manager<MessageInterface, Allocator>::invoke_function_r(object_wrap
 /*                    Type Casting Non-Returning Member Invokers                     */
 /*************************************************************************************/
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
-void mpirpc::manager<MessageInterface, Allocator>::invoke_function(object_wrapper_base *a, Args&&... args)
+void mpirpc::manager<Allocator,Buffer,MessageInterface>::invoke_function(object_wrapper_base *a, Args&&... args)
 {
     if (a->rank() == m_rank)
     {
@@ -233,22 +233,24 @@ void mpirpc::manager<MessageInterface, Allocator>::send_function_invocation(int 
     send_raw_message(rank, stream.dataVector(), MPIRPC_TAG_INVOKE);
 }*/
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename F, typename... Args>
-void mpirpc::manager<MessageInterface, Allocator>::send_function_invocation(int rank, F, mpirpc::FnHandle function_handle, bool get_return, Args&&... args)
+void mpirpc::manager<Allocator,Buffer,MessageInterface>::send_function_invocation(int rank, F, mpirpc::FnHandle function_handle, bool get_return, Args&&... args)
 {
-    parameter_buffer<Allocator<char>> stream;
+    std::vector<char,Allocator>* data = new std::vector<char,Allocator>(m_alloc);
+    Buffer stream(data);
     stream.template push<FnHandle>(function_handle);
     stream.template push<bool>(get_return);
     internal::fn_type_marshaller<F>::marshal(stream, std::forward<Args>(args)...);
     send_raw_message(rank, stream.data_vector(), MPIRPC_TAG_INVOKE);
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
-void mpirpc::manager<MessageInterface, Allocator>::send_function_invocation(int rank, bool get_return, Args&&... args)
+void mpirpc::manager<Allocator,Buffer,MessageInterface>::send_function_invocation(int rank, bool get_return, Args&&... args)
 {
-    parameter_buffer<Allocator<char>> stream;
+    std::vector<char,Allocator>* data = new std::vector<char,Allocator>(m_alloc);
+    Buffer stream(data);
     FnHandle function_handle = this->get_fn_handle<F,f>();
     stream.template push<FnHandle>(function_handle);
     stream.template push<bool>(get_return);
@@ -256,21 +258,23 @@ void mpirpc::manager<MessageInterface, Allocator>::send_function_invocation(int 
     send_raw_message(rank, stream.data_vector(), MPIRPC_TAG_INVOKE);
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename F, internal::unwrapped_function_type<F> f, typename... Args>
-void mpirpc::manager<MessageInterface, Allocator>::send_member_function_invocation(object_wrapper_base* a, bool get_return, Args&&... args)
+void mpirpc::manager<Allocator,Buffer,MessageInterface>::send_member_function_invocation(object_wrapper_base* a, bool get_return, Args&&... args)
 {
-    std::vector<char>* buffer = new std::vector<char>();
-    parameter_stream stream(buffer);
-    stream << a->type() << a->id();
-    stream << this->get_fn_handle<F,f>()<< get_return;
+    std::vector<char,Allocator>* data = new std::vector<char,Allocator>(m_alloc);
+    Buffer stream(data);
+    stream.template push<TypeId>(a->type());
+    stream.template push<ObjectId>(a->id());
+    stream.template push<FnHandle>(this->get_fn_handle<F,f>());
+    stream.template push<bool>(get_return);
     internal::fn_type_marshaller<F>::marshal(stream, std::forward<Args>(args)...);
-    send_raw_message(a->rank(), stream.dataVector(), MPIRPC_TAG_INVOKE_MEMBER);
+    send_raw_message(a->rank(), stream.data_vector(), MPIRPC_TAG_INVOKE_MEMBER);
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename R, typename...FArgs, typename...Args>
-void ::mpirpc::manager<MessageInterface, Allocator>::send_lambda_invocation(int rank, mpirpc::FnHandle function_handle, bool get_return, R(*f)(FArgs...), Args&&... args)
+void ::mpirpc::manager<Allocator,Buffer,MessageInterface>::send_lambda_invocation(int rank, mpirpc::FnHandle function_handle, bool get_return, R(*f)(FArgs...), Args&&... args)
 {
     send_function_invocation(rank, f, function_handle, get_return, internal::autowrap<FArgs,Args>(args)...);
 }

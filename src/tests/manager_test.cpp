@@ -122,7 +122,8 @@ TEST(Manager,execute_member_function_w_return)
     }
     m.sync();
     auto fwrap = m.get_object_of_type(m.get_type_id<Foo>(),0);
-    m.invoke_function_r<decltype(&Foo::bar2),&Foo::bar2>(fwrap);
+    auto ret = m.invoke_function_r<decltype(&Foo::bar2),&Foo::bar2>(fwrap);
+    ASSERT_EQ(7,ret);
     m.sync();
 }
 

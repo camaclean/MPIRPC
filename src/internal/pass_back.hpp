@@ -86,13 +86,13 @@ struct any_true<>
     constexpr static bool value = false;
 };
 
-template<typename FArg, typename Arg>
+template<typename Buffer, typename FArg>
 struct pass_back_unmarshaller
 {
-    template<typename Stream>
-    inline static void unmarshal(Stream &s, Arg& arg)
+    template<typename Allocator, typename Arg>
+    inline static void unmarshal(Buffer &s, Allocator&& a, Arg& arg)
     {
-        s >> arg;
+        arg = get<FArg>(s,a);
     }
 };
 

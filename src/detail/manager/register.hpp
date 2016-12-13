@@ -33,29 +33,29 @@
 /*                              Function Registration                                */
 /*************************************************************************************/
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename Lambda>
-FnHandle mpirpc::manager<MessageInterface, Allocator>::register_lambda(Lambda&& l)
+FnHandle mpirpc::manager<Allocator,Buffer,MessageInterface>::register_lambda(Lambda&& l)
 {
     return register_function(static_cast<internal::lambda_stdfunction_type<Lambda>>(l));
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
-template<typename F, internal::unwrapped_function_type<F> f, typename Buffer>
-FnHandle mpirpc::manager<MessageInterface, Allocator>::register_function()
+template<typename Allocator, typename Buffer, typename MessageInterface>
+template<typename F, internal::unwrapped_function_type<F> f>
+FnHandle mpirpc::manager<Allocator,Buffer,MessageInterface>::register_function()
 {
-    function_base_buffer<Buffer> *b = new function<Buffer,internal::wrapped_function_type<F>>(f);
+    function_base *b = new function<internal::wrapped_function_type<F>>(f);
     m_registered_functions[b->id()] = b;
     std::cout << "registered: " << b->id() << std::endl;
     m_registered_function_typeids[std::type_index(typeid(internal::function_identifier<internal::wrapped_function_type<F>,f>))] = b->id();
     return b->id();
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
-template<typename F, typename Buffer>
-FnHandle mpirpc::manager<MessageInterface, Allocator>::register_function(F f)
+template<typename Allocator, typename Buffer, typename MessageInterface>
+template<typename F>
+FnHandle mpirpc::manager<Allocator,Buffer,MessageInterface>::register_function(F f)
 {
-    function_base_buffer<Buffer> *b = new function<Buffer,internal::wrapped_function_type<F>>(f);
+    function_base *b = new function<internal::wrapped_function_type<F>>(f);
     m_registered_functions[b->id()] = b;
     //m_registered_function_typeids[std::type_index(typeid(function_identifier<typename storage_function_parts<F>::function_type,f>))] = b->id();
     return b->id();
@@ -65,18 +65,18 @@ FnHandle mpirpc::manager<MessageInterface, Allocator>::register_function(F f)
 /*                                Type Registration                                  */
 /*************************************************************************************/
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename T>
-TypeId mpirpc::manager<MessageInterface, Allocator>::register_type()
+TypeId mpirpc::manager<Allocator,Buffer,MessageInterface>::register_type()
 {
     TypeId id = ++m_next_type_id;
     m_registered_type_ids[std::type_index(typeid(typename std::decay<T>::type))] = id;
     return id;
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<typename T>
-TypeId mpirpc::manager<MessageInterface, Allocator>::get_type_id() const
+TypeId mpirpc::manager<Allocator,Buffer,MessageInterface>::get_type_id() const
 {
     return m_registered_type_ids.at(std::type_index(typeid(typename std::decay<T>::type)));
 }
@@ -85,9 +85,9 @@ TypeId mpirpc::manager<MessageInterface, Allocator>::get_type_id() const
 /*                               Object Registration                                 */
 /*************************************************************************************/
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<class Class>
-object_wrapper<Class>* mpirpc::manager<MessageInterface, Allocator>::register_object(Class *object) {
+object_wrapper<Class>* mpirpc::manager<Allocator,Buffer,MessageInterface>::register_object(Class *object) {
     object_wrapper<Class> *wrapper = new object_wrapper<Class>(object);
     wrapper->m_rank = m_rank;
     wrapper->m_type = get_type_id<Class>();
@@ -96,9 +96,9 @@ object_wrapper<Class>* mpirpc::manager<MessageInterface, Allocator>::register_ob
     return wrapper;
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<class Class, typename... Args>
-object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::construct_global_object(int rank, Args&&... args)
+object_wrapper_base* mpirpc::manager<Allocator,Buffer,MessageInterface>::construct_global_object(int rank, Args&&... args)
 {
     object_wrapper_base *wrapper;
     if (rank == m_rank)
@@ -118,8 +118,8 @@ object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::construct_glo
     return wrapper;
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
-void mpirpc::manager<MessageInterface, Allocator>::register_remote_object(int rank, TypeId type, ObjectId id)
+template<typename Allocator, typename Buffer, typename MessageInterface>
+void mpirpc::manager<Allocator,Buffer,MessageInterface>::register_remote_object(int rank, TypeId type, ObjectId id)
 {
     object_wrapper<void> *a = new object_wrapper<void>();
     a->m_id = id;
@@ -128,8 +128,8 @@ void mpirpc::manager<MessageInterface, Allocator>::register_remote_object(int ra
     m_registered_objects.push_back(a);
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
-object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::get_object_of_type(mpirpc::TypeId typeId) const
+template<typename Allocator, typename Buffer, typename MessageInterface>
+object_wrapper_base* mpirpc::manager<Allocator,Buffer,MessageInterface>::get_object_of_type(mpirpc::TypeId typeId) const
 {
     for (object_wrapper_base* i : m_registered_objects)
     {
@@ -139,29 +139,29 @@ object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::get_object_of
     throw std::out_of_range("Object not found");
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<class Class>
-std::unordered_set<object_wrapper_base*> mpirpc::manager<MessageInterface, Allocator>::get_objects_of_type() const
+std::unordered_set<object_wrapper_base*> mpirpc::manager<Allocator,Buffer,MessageInterface>::get_objects_of_type() const
 {
     return get_objects_of_type(get_type_id<Class>());
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<class Class>
-object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::get_object_of_type() const
+object_wrapper_base* mpirpc::manager<Allocator,Buffer,MessageInterface>::get_object_of_type() const
 {
     return get_object_of_type(get_type_id<Class>());
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<class Class>
-object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::get_object_of_type(int rank) const
+object_wrapper_base* mpirpc::manager<Allocator,Buffer,MessageInterface>::get_object_of_type(int rank) const
 {
     return get_object_of_type(get_type_id<Class>(), rank);
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
-object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::get_object_of_type(TypeId typeId, int rank) const
+template<typename Allocator, typename Buffer, typename MessageInterface>
+object_wrapper_base* mpirpc::manager<Allocator,Buffer,MessageInterface>::get_object_of_type(TypeId typeId, int rank) const
 {
     for (object_wrapper_base* i : m_registered_objects)
     {
@@ -171,15 +171,15 @@ object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::get_object_of
     throw mpirpc::unregistered_object_exception();
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
+template<typename Allocator, typename Buffer, typename MessageInterface>
 template<class Class>
-std::unordered_set<object_wrapper_base*> mpirpc::manager<MessageInterface, Allocator>::get_objects_of_type(int rank) const
+std::unordered_set<object_wrapper_base*> mpirpc::manager<Allocator,Buffer,MessageInterface>::get_objects_of_type(int rank) const
 {
     return get_objects_of_type(get_type_id<Class>(), rank);
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
-std::unordered_set<object_wrapper_base*> mpirpc::manager<MessageInterface, Allocator>::get_objects_of_type(TypeId typeId) const
+template<typename Allocator, typename Buffer, typename MessageInterface>
+std::unordered_set<object_wrapper_base*> mpirpc::manager<Allocator,Buffer,MessageInterface>::get_objects_of_type(TypeId typeId) const
 {
     std::unordered_set<object_wrapper_base*> ret;
     for (object_wrapper_base* i : m_registered_objects)
@@ -190,8 +190,8 @@ std::unordered_set<object_wrapper_base*> mpirpc::manager<MessageInterface, Alloc
     return ret;
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
-std::unordered_set<object_wrapper_base*> mpirpc::manager<MessageInterface, Allocator>::get_objects_of_type(TypeId typeId, int rank) const
+template<typename Allocator, typename Buffer, typename MessageInterface>
+std::unordered_set<object_wrapper_base*> mpirpc::manager<Allocator,Buffer,MessageInterface>::get_objects_of_type(TypeId typeId, int rank) const
 {
     std::unordered_set<object_wrapper_base*> ret;
     for (object_wrapper_base* i : m_registered_objects)
@@ -202,8 +202,8 @@ std::unordered_set<object_wrapper_base*> mpirpc::manager<MessageInterface, Alloc
     return ret;
 }
 
-template<typename MessageInterface, template<typename> typename Allocator>
-object_wrapper_base* mpirpc::manager<MessageInterface, Allocator>::get_object_wrapper(int rank, TypeId tid, ObjectId oid) const {
+template<typename Allocator, typename Buffer, typename MessageInterface>
+object_wrapper_base* mpirpc::manager<Allocator,Buffer,MessageInterface>::get_object_wrapper(int rank, TypeId tid, ObjectId oid) const {
     for (object_wrapper_base* i : m_registered_objects)
         if (i->type() == tid && i->id() == oid && i->rank() == rank)
             return i;
