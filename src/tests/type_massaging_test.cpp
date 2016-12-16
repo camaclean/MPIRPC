@@ -725,7 +725,7 @@ template<typename Allocator, typename Buffer, typename... Ts, std::size_t... Is>
 std::tuple<mpirpc::internal::storage_type<Ts>...> unmarshal_into_tuple_impl(Allocator &a, Buffer &s, std::index_sequence<Is...>)
 {
    using R = std::tuple<mpirpc::internal::storage_type<Ts>...>;
-   R ret{make_from_tuple<mpirpc::internal::storage_type<Ts>>(mpirpc::unmarshaller<mpirpc::internal::storage_type<Ts>,Buffer,alignof(Ts)>::unmarshal(a,s))...};
+   R ret{make_from_tuple<mpirpc::internal::storage_type<Ts>>(mpirpc::unmarshaller<mpirpc::internal::storage_type<Ts>,Buffer,std::integral_constant<std::size_t,alignof(Ts)>>::unmarshal(a,s))...};
    return ret;
 }
 
@@ -1058,7 +1058,7 @@ public:
 
 namespace mpirpc {
 
-template<typename Buffer, std::size_t Alignment>
+template<typename Buffer, typename Alignment>
 struct marshaller<B,Buffer,Alignment>
 {
     static void marshal(Buffer& b, const B& val)
@@ -1068,7 +1068,7 @@ struct marshaller<B,Buffer,Alignment>
     }
 };
 
-template<typename Buffer, std::size_t Alignment>
+template<typename Buffer, typename Alignment>
 struct unmarshaller<B,Buffer,Alignment>
 {
     template<typename Allocator>
@@ -1162,7 +1162,7 @@ TEST(ArgumentUnpacking, overaligned)
     mpirpc::parameter_buffer<> pout;
     p2.push<bool>(true);
     //p2 << ((i128t) 5);
-    p2.push<i128t,128>(4);
+    p2.push<i128t,std::integral_constant<std::size_t,128>>(4);
     i128t i128test = 5;
     p2.push<mpirpc::pointer_wrapper<int>>(mpirpc::pointer_wrapper<int>(&i128test,1,false,false,128));
     std::cout << std::hex;

@@ -20,6 +20,8 @@
 #ifndef MPIRPC__INTERNAL__PIECEWISE_ALLOCATOR_TRAITS_HPP
 #define MPIRPC__INTERNAL__PIECEWISE_ALLOCATOR_TRAITS_HPP
 
+#include "type_properties.hpp"
+
 namespace mpirpc
 {
 
@@ -45,7 +47,8 @@ struct piecewise_allocator_traits
 
     template<typename T,
              typename U,
-             std::enable_if_t<std::is_constructible<T,U>::value>* = nullptr>
+             std::enable_if_t<std::is_constructible<T,U>::value>* = nullptr,
+             std::enable_if_t<!is_piecewise_construct_tuple<T>::value>* = nullptr>
     static void construct(Allocator& a, T *p, U &&val)
     {
         std::allocator_traits<Allocator>::construct(a,p,std::forward<U>(val));

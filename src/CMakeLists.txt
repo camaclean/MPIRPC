@@ -59,6 +59,7 @@ set(SRC_LIST buffer.hpp common.hpp exceptions.hpp
              internal/piecewise_allocator_traits.hpp
              internal/polymorphic.hpp
              internal/type_massaging.hpp
+             internal/type_properties.hpp
              internal/unmarshalling.hpp
              internal/utility.hpp
              internal/detail/alignment.hpp

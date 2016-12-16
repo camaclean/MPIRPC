@@ -22,6 +22,7 @@
 
 #include "piecewise_allocator_traits.hpp"
 #include "../buffer.hpp"
+#include "type_properties.hpp"
 
 namespace mpirpc
 {
@@ -30,7 +31,7 @@ namespace internal
 {
 
 template<typename T>
-struct direct_initializer
+struct direct_initializer_impl
 {
     template<typename Allocator, typename Buffer>
     static void construct(Allocator& a, T* t, Buffer&& s)
@@ -61,6 +62,29 @@ struct direct_initializer
         t->~T();
     }
 };
+
+template<typename T, typename Alignment>
+struct direct_initializer : public direct_initializer_impl<T>
+{};
+
+/*
+template<typename...Ts, typename Alignment, typename... RefTypeAlignments>
+struct direct_initializer<std::tuple<Ts...>,std::tuple<Alignment,RefTypeAlignments...>>
+{
+    template<typename Allocator, typename Buffer, std::size_t Is>
+    static void construct_impl(Allocator& a, std::tuple<Ts...>*& t, Buffer&& s, std::index_sequence<Is...>)
+    {
+        using RT = tuple_reference_types<Ts...>;
+        RT* ref_storage = reinterpret_cast<RT*>(t);
+        direct_initializer_impl<RT>::construct(a,ref_storage,s);
+    }
+
+    template<typename Allocator, typename Buffer>
+    static void construct(Allocator& a, std::tuple<Ts...>*& t, Buffer&& s)
+    {
+        construct_impl(a,t,std::forward<Buffer>(b),std::index_sequence_for<Ts...>);
+    }
+};*/
 
 }
 

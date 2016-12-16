@@ -164,6 +164,21 @@ TEST(Manager,execute_function_double)
     m.sync();
 }
 
+TEST(Manager,execute_function_tuple)
+{
+    mpirpc::mpi_manager m;
+    double d = 1.0f;
+    auto lambda = [](std::tuple<bool,double> s){
+        ASSERT_EQ(1.0,std::get<1>(s));
+        std::get<1>(s) = 2.0;
+    };
+    mpirpc::FnHandle handle = m.register_lambda(lambda);
+    m.sync();
+    m.invoke_lambda_r(0,lambda,handle,std::tuple<bool,double>(true,d));
+    ASSERT_EQ(1.0f,d);
+    m.sync();
+}
+
 TEST(Manager,execute_function_std_string)
 {
     mpirpc::mpi_manager m;
@@ -198,7 +213,35 @@ TEST(Manager,execute_function_float_std_string)
     m.sync();
 }
 
+//Type Casting Returning Non-Member Invoker: non-void return type
+std::tuple<float,long> tcrn_r(bool b, double d)
+{
+    if (b)
+        return std::make_tuple(3.14f,(long) (d*1000));
+    else
+        return std::make_tuple(2.718f,(long) (d*10));
+}
+
+TEST(ManagerInvokers,tcrn_r)
+{
+    mpirpc::mpi_manager m;
+    m.register_function<decltype(&tcrn_r),&tcrn_r>();
+    m.sync();
+    auto ret = m.invoke_function_r<decltype(&tcrn_r),&tcrn_r>(0,true,4.28);
+    ASSERT_EQ(3.14f,std::get<0>(ret));
+    ASSERT_EQ(4280L,std::get<1>(ret));
+    m.sync();
+    std::array<int,5> a = {1,2,3,4,5};
+    std::tuple<std::array<int,5>> t(a);
+    std::tuple<int[5]>* t2 = reinterpret_cast<std::tuple<int[5]>*>(&t);
+    int t3 = std::get<0>(*t2)[0];
+    ASSERT_EQ(1,t3);
+}
+
+void test(int d[5]) {}
+
 int main(int argc, char **argv) {
+
     std::cout << std::boolalpha;
     ::testing::InitGoogleTest(&argc, argv);
     MPI_Init(&argc, &argv);

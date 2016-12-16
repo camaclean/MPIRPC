@@ -20,6 +20,9 @@
 #ifndef MPIRPC__UNMARSHALLER_HPP
 #define MPIRPC__UNMARSHALLER_HPP
 
+#include <utility>
+#include "internal/type_properties.hpp"
+
 namespace mpirpc
 {
 
@@ -34,8 +37,36 @@ namespace mpirpc
  * Remote unmarshalling, on the other hand, often requires allocating memory.
  */
 
-template<typename T, typename Buffer, std::size_t Alignment, typename = void>
+template<typename T, typename Buffer, typename Alignment, typename = void>
 struct unmarshaller;
+
+template<typename R, typename...Ts, std::size_t...Is>
+R construct_impl(const std::tuple<std::piecewise_construct_t,Ts...>& t, std::index_sequence<Is...>)
+{
+    return R(std::get<Is+1>(t)...);
+}
+
+template<typename R, typename...Ts>
+R construct(const std::tuple<std::piecewise_construct_t,Ts...>& t)
+{
+    return construct_impl<R>(t,std::index_sequence_for<Ts...>{});
+}
+
+template<typename R, typename T, std::enable_if_t<!internal::is_piecewise_construct_tuple<std::remove_reference_t<T>>::value>* = nullptr>
+R construct(T&& t)
+{
+    return R(std::forward<T>(t));
+}
+
+template<typename Buffer, typename Alignment, typename... Ts>
+struct unmarshaller<std::tuple<Ts...>,Buffer,Alignment>
+{
+    template<typename Allocator>
+    static std::tuple<std::remove_reference_t<Ts>...> unmarshal(Allocator&& a, Buffer& b)
+    {
+        //return std::tuple<std::remove_reference_t<Ts>...>{ construct<std::remove_reference_t<Ts>>(unmarshaller<Ts,Buffer,alignof(Ts)>::unmarshal(std::forward<Allocator>(a),b))... };
+    }
+};
 
 }
 

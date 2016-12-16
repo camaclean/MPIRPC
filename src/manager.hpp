@@ -543,7 +543,7 @@ protected:
             MPI_Recv((void*) data->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
             ret = get<R>(stream,m_alloc);
             using swallow = int[];
-            (void)swallow{((internal::is_pass_back<FArgs>::value) ? ( internal::pass_back_unmarshaller<FArgs,Args>::unmarshal(stream,args) /*args = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
+            (void)swallow{((internal::is_pass_back<FArgs>::value) ? ( internal::pass_back_unmarshaller<Buffer,FArgs>::unmarshal(stream,m_alloc,args) /*args = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
             delete data;
         }
         return ret;

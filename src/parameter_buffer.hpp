@@ -94,7 +94,19 @@ public:
         m_position += (m_position % Alignment) ? (Alignment - (m_position % Alignment)) : 0;
     }
 
-    template<typename T, typename Alloc, std::size_t Alignment = alignof(T)>
+    template<typename Alignment, std::enable_if_t<!is_tuple<Alignment>::value>* = nullptr>
+    void realign()
+    {
+        realign<Alignment::value>();
+    }
+
+    template<typename Alignment, std::enable_if_t<is_tuple<Alignment>::value>* = nullptr>
+    void realign()
+    {
+        realign<std::tuple_element_t<0,Alignment>::value>();
+    }
+
+    template<typename T, typename Alloc, typename Alignment = type_default_alignment<T,alignof(T)>>
     decltype(auto) pop(Alloc&& a)
     {
         realign<Alignment>();
@@ -102,7 +114,7 @@ public:
         return mpirpc::unmarshaller<U,parameter_buffer<Allocator>,Alignment>::unmarshal(std::forward<Alloc>(a),*this);
     }
 
-    template<typename T, std::size_t Alignment = alignof(T), typename U>
+    template<typename T, typename Alignment = type_default_alignment<T,alignof(T)>, typename U>
     void push(U&& t)
     {
         mpirpc::marshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,Alignment>::marshal(*this,std::forward<U>(t));
@@ -127,18 +139,18 @@ constexpr bool is_same_template<T<As...>,T<Bs...>> = true;
 template<typename T>
 constexpr bool is_parameter_buffer = is_same_template<T,parameter_buffer<std::allocator<char>>>;
 
-template<typename T, typename Buffer, std::size_t Alignment>
+template<typename T, typename Buffer, typename Alignment>
 struct marshaller<T,Buffer,Alignment,std::enable_if_t<!buildtype_helper<std::remove_reference_t<T>,Buffer>::value && is_parameter_buffer<Buffer>>>
 {
     template<typename U,std::enable_if_t<std::is_same<std::decay_t<T>,std::decay_t<U>>::value>* = nullptr>
     static void marshal(Buffer& b, U&& val)
     {
         const char* p = reinterpret_cast<const char*>(&val);
-        b.template append<Alignment>(p, p+sizeof(T));
+        b.template append<Alignment::value>(p, p+sizeof(T));
     }
 };
 
-template<typename T, typename Buffer, std::size_t Alignment>
+template<typename T, typename Buffer, typename Alignment>
 struct unmarshaller<T,Buffer,Alignment,std::enable_if_t<!mpirpc::buildtype_helper<std::remove_reference_t<T>,Buffer>::value && is_parameter_buffer<Buffer>>>
 {
     template<typename Allocator>
@@ -148,7 +160,7 @@ struct unmarshaller<T,Buffer,Alignment,std::enable_if_t<!mpirpc::buildtype_helpe
     }
 };
 
-template<typename Buffer, std::size_t Alignment>
+template<typename Buffer, typename Alignment>
 struct marshaller<char*,Buffer,Alignment,std::enable_if_t<is_parameter_buffer<Buffer>>>
 {
     static void marshal(Buffer& b, const char* c)
@@ -159,7 +171,7 @@ struct marshaller<char*,Buffer,Alignment,std::enable_if_t<is_parameter_buffer<Bu
     }
 };
 
-template<typename Buffer, std::size_t Alignment>
+template<typename Buffer, typename Alignment>
 struct unmarshaller<std::string,Buffer,Alignment,std::enable_if_t<is_parameter_buffer<Buffer>>>
 {
     template<typename Allocator>

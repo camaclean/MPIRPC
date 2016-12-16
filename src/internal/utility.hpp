@@ -205,56 +205,44 @@ decltype(auto) apply(F&& f, Class *c, Tuple&& t)
  * specialization of marshaller or unmarshaller, as it is not a constructible type.
  *
  */
-template<typename F,typename Allocator, typename InBuffer, typename OutBuffer, std::size_t... Alignments,
+template<typename F,typename Allocator, typename InBuffer, typename OutBuffer, typename... Alignments,
          std::enable_if_t<std::is_function<std::remove_pointer_t<std::remove_reference_t<F>>>::value && !std::is_member_function_pointer<std::remove_reference_t<F>>::value>* = nullptr>
-void apply(F&& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false, std::integer_sequence<std::size_t,Alignments...> = std::integer_sequence<std::size_t>{})
+void apply(F&& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false, std::tuple<Alignments...> = std::tuple<Alignments...>{})
 {
     using Func = std::remove_reference_t<F>;
     using fargs = typename mpirpc::internal::function_parts<Func>::arg_types;
     using ts = typename mpirpc::internal::wrapped_function_parts<Func>::storage_types;
     using pass_backs = typename mpirpc::internal::wrapped_function_parts<Func>::pass_backs;
-    using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<Func>::default_alignments,std::integer_sequence<std::size_t,Alignments...>>;
+    using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<Func>::default_alignments,std::tuple<Alignments...>>;
     constexpr std::size_t num_args = mpirpc::internal::function_parts<Func>::num_args;
     detail::apply_impl(std::forward<F>(f),std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
 }
 
-template<typename F,typename Allocator, typename InBuffer, typename OutBuffer, std::size_t... Alignments,
+template<typename F,typename Allocator, typename InBuffer, typename OutBuffer, typename... Alignments,
          std::enable_if_t<std::is_function<std::remove_pointer_t<std::remove_reference_t<F>>>::value && !std::is_member_function_pointer<std::remove_reference_t<F>>::value>* = nullptr>
-void apply(std::function<F>& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false, std::integer_sequence<std::size_t,Alignments...> = std::integer_sequence<std::size_t>{})
+void apply(std::function<F>& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false, std::tuple<Alignments...> = std::tuple<Alignments...>{})
 {
     using Func = std::remove_reference_t<F>;
     using fargs = typename mpirpc::internal::function_parts<std::add_pointer_t<Func>>::arg_types;
     using ts = typename mpirpc::internal::wrapped_function_parts<std::add_pointer_t<Func>>::storage_types;
     using pass_backs = typename mpirpc::internal::wrapped_function_parts<std::add_pointer_t<Func>>::pass_backs;
-    using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<std::add_pointer_t<Func>>::default_alignments,std::integer_sequence<std::size_t,Alignments...>>;
+    using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<std::add_pointer_t<Func>>::default_alignments,std::tuple<Alignments...>>;
     constexpr std::size_t num_args = mpirpc::internal::function_parts<std::add_pointer_t<Func>>::num_args;
     detail::apply_impl(f,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
 }
 
-template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer,
+template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer, typename... Alignments,
          std::enable_if_t<std::is_member_function_pointer<std::remove_reference_t<F>>::value>* = nullptr>
-void apply(F&& f, Class *c, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false)
+void apply(F&& f, Class *c, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false, std::tuple<Alignments...> = std::tuple<Alignments...>{})
 {
     using Func = std::remove_reference_t<F>;
     using FArgs = typename mpirpc::internal::function_parts<Func>::arg_types;
     using Ts = typename mpirpc::internal::wrapped_function_parts<Func>::storage_types;
     using PassBacks = typename mpirpc::internal::wrapped_function_parts<Func>::pass_backs;
-    using DefaultAlignments = typename mpirpc::internal::function_parts<Func>::default_alignments;
+    using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<Func>::default_alignments,std::tuple<Alignments...>>;
     constexpr std::size_t num_args = mpirpc::internal::function_parts<Func>::num_args;
-    detail::apply_impl(std::forward<F>(f),c,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, FArgs{}, Ts{}, PassBacks{}, std::make_index_sequence<num_args>{}, DefaultAlignments{});
+    detail::apply_impl(std::forward<F>(f),c,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, FArgs{}, Ts{}, PassBacks{}, std::make_index_sequence<num_args>{}, default_alignments{});
 }
-
-template<typename T1, typename T2>
-struct tuple_cat_type_helper;
-
-template<typename...T1s, typename...T2s>
-struct tuple_cat_type_helper<std::tuple<T1s...>,std::tuple<T2s...>>
-{
-    using type = std::tuple<T1s...,T2s...>;
-};
-
-template<typename T1, typename T2>
-using tuple_cat_type = typename tuple_cat_type_helper<T1,T2>::type;
 
 template<std::size_t Pos, typename Int, Int Max, Int... Is>
 constexpr Int get_clamped(std::integer_sequence<Int,Is...>)

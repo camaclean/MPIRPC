@@ -28,6 +28,7 @@
 #include <utility>
 #include "../buffer.hpp"
 #include "../pointerwrapper.hpp"
+#include "type_properties.hpp"
 
 
 namespace mpirpc
@@ -192,9 +193,6 @@ using lambda_return_type = typename lambda_traits<F>::return_type;
 /*                          mpirpc::internal::function_parts                         */
 /*************************************************************************************/
 
-template<typename...Args>
-struct type_pack {};
-
 template<typename R, class Class, typename... Args>
 struct function_parts<R(Class::*)(Args...)>
 {
@@ -203,7 +201,7 @@ struct function_parts<R(Class::*)(Args...)>
     using args_tuple_type = std::tuple<Args...>;
     using arg_types = type_pack<Args...>;
     using function_type = R(Class::*)(Args...);
-    using default_alignments = std::integer_sequence<std::size_t,alignof(Args)...>;//type_alignment<autowrapped_type<Args>>...>;
+    using default_alignments = std::tuple<type_default_alignment<autowrapped_type<Args>,alignof(autowrapped_type<Args>)>...>;
     constexpr static std::size_t num_args = sizeof...(Args);
 };
 
@@ -214,7 +212,7 @@ struct function_parts<R(*)(Args...)>
     using args_tuple_type = std::tuple<Args...>;
     using arg_types = type_pack<Args...>;
     using function_type = R(*)(Args...);
-    using default_alignments = std::integer_sequence<std::size_t,type_alignment<autowrapped_type<Args>,alignof(Args)>...>;
+    using default_alignments = std::tuple<type_default_alignment<autowrapped_type<Args>,alignof(autowrapped_type<Args>)>...>;
     constexpr static std::size_t num_args = sizeof...(Args);
 };
 
@@ -225,7 +223,7 @@ struct function_parts<std::function<R(Args...)>>
     using args_tuple_type = std::tuple<Args...>;
     using arg_types = type_pack<Args...>;
     using function_type = std::function<R(Args...)>;
-    using default_alignments = std::integer_sequence<std::size_t,alignof(Args)...>;
+    using default_alignments = std::tuple<type_default_alignment<autowrapped_type<Args>,alignof(autowrapped_type<Args>)>...>;
     constexpr static std::size_t num_args = sizeof...(Args);
 };
 

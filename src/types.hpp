@@ -20,6 +20,8 @@
 #ifndef MPIRPC__TYPES_HPP
 #define MPIRPC__TYPES_HPP
 
+#include <tuple>
+
 namespace mpirpc
 {
 
@@ -52,6 +54,27 @@ struct buildtype_helper<T[N],Buffer>
 
 template<typename T, typename Buffer>
 constexpr bool is_buildtype = buildtype_helper<T,Buffer>::value;
+
+template<typename T, std::size_t Alignment>
+struct type_default_alignment_helper
+{
+    using type = std::integral_constant<std::size_t,Alignment>;
+};
+
+template<typename... Ts, std::size_t Alignment>
+struct type_default_alignment_helper<std::tuple<Ts...>,Alignment>
+{
+    using type = std::tuple<std::integral_constant<std::size_t,Alignment>, typename type_default_alignment_helper<Ts,alignof(Ts)>::type...>;
+};
+
+template<typename T, std::size_t Alignment>
+using type_default_alignment = typename type_default_alignment_helper<T,Alignment>::type;
+
+template<typename T>
+struct is_tuple : std::false_type {};
+
+template<typename... Ts>
+struct is_tuple<std::tuple<Ts...>> : std::true_type {};
 
 }
 

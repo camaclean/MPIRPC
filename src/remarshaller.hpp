@@ -25,7 +25,7 @@
 namespace mpirpc
 {
 
-template<typename T, typename Buffer, std::size_t Alignment, typename = void>
+template<typename T, typename Buffer, typename Alignment, typename = void>
 struct remarshaller
 {
     static void marshal(Buffer& s, std::remove_reference_t<T>&& val)

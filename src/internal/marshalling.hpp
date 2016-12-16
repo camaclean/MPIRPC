@@ -46,8 +46,8 @@ struct fn_type_marshaller;
 template<typename R, typename... FArgs>
 struct fn_type_marshaller<R(*)(FArgs...)>
 {
-    template<class Buffer, typename... Args, std::size_t... Alignments>
-    static void marshal_impl(Buffer& ps, std::integer_sequence<std::size_t, Alignments...>, Args&&... args)
+    template<class Buffer, typename... Args, typename... Alignments>
+    static void marshal_impl(Buffer& ps, std::tuple<Alignments...>, Args&&... args)
     {
         using swallow = int[];
         (void)swallow{(::mpirpc::marshaller<std::remove_reference_t<autowrapped_type<FArgs>>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
@@ -66,8 +66,8 @@ struct fn_type_marshaller<R(*)(FArgs...)>
 template<typename R, typename Class, typename... FArgs>
 struct fn_type_marshaller<R(Class::*)(FArgs...)>
 {
-    template<class Buffer, typename... Args, std::size_t... Alignments>
-    static void marshal_impl(Buffer& ps, std::integer_sequence<std::size_t, Alignments...>, Args&&... args)
+    template<class Buffer, typename... Args, typename... Alignments>
+    static void marshal_impl(Buffer& ps, std::tuple<Alignments...>, Args&&... args)
     {
         using swallow = int[];
         (void)swallow{(::mpirpc::marshaller<std::remove_reference_t<autowrapped_type<FArgs>>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};
@@ -87,8 +87,8 @@ struct fn_type_marshaller<R(Class::*)(FArgs...)>
 template<typename R, typename... FArgs>
 struct fn_type_marshaller<std::function<R(FArgs...)>>
 {
-    template<class Buffer, typename... Args, std::size_t... Alignments>
-    static void marshal_impl(Buffer& ps, std::integer_sequence<std::size_t, Alignments...>, Args&&... args)
+    template<class Buffer, typename... Args, typename... Alignments>
+    static void marshal_impl(Buffer& ps, std::tuple<Alignments...>, Args&&... args)
     {
       using swallow = int[];
       (void)swallow{(::mpirpc::marshaller<std::remove_reference_t<autowrapped_type<FArgs>>,Buffer,Alignments>::marshal(ps, autowrap<FArgs,Args>(args)),0)...};

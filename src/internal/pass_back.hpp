@@ -96,18 +96,6 @@ struct pass_back_unmarshaller
     }
 };
 
-template<typename T, typename T2, std::size_t N2>
-struct pass_back_unmarshaller<::mpirpc::pointer_wrapper<T>,T2(&)[N2]>
-{
-    template<typename Stream>
-    inline static void unmarshal(Stream &s, T2(&arg)[N2])
-    {
-        std::size_t size;
-        s >> size;
-        s >> arg;
-    }
-};
-
 template<typename T, typename U>
 struct can_realloc
 {

@@ -20,6 +20,8 @@
 #ifndef MPIRPC__BUFFER_HPP
 #define MPIRPC__BUFFER_HPP
 
+#include <type_traits>
+
 namespace mpirpc
 {
 
@@ -40,9 +42,6 @@ struct type_alignment_helper<mpirpc::pointer_wrapper<T>>
         return alignof(T);
     }
 };*/
-
-template<typename T, std::size_t Alignment>
-constexpr std::size_t type_alignment = Alignment;
 
 template<typename T, typename Buffer, typename Allocator>
 inline decltype(auto) get(Buffer& b, Allocator&& a)

@@ -120,10 +120,10 @@ protected:
     bool m_pass_ownership;
 };
 
-template<typename T, std::size_t Alignment>
-constexpr std::size_t type_alignment<pointer_wrapper<T>,Alignment> = type_alignment<T,alignof(T)>;
+/*template<typename T, std::size_t Alignment>
+constexpr std::size_t type_default_alignment<pointer_wrapper<T>,Alignment> = type_default_alignment<T,alignof(T)>;*/
 
-template<typename T, typename Buffer, std::size_t Alignment>
+template<typename T, typename Buffer, typename Alignment>
 struct marshaller<mpirpc::pointer_wrapper<T>, Buffer, Alignment>
 {
     template<typename U = T, std::enable_if_t<!std::is_polymorphic<U>::value>* = nullptr>
@@ -162,7 +162,7 @@ struct marshaller<mpirpc::pointer_wrapper<T>, Buffer, Alignment>
     }
 };
 
-template<typename T, typename Buffer, std::size_t Alignment>
+template<typename T, typename Buffer, typename Alignment>
 struct unmarshaller<mpirpc::pointer_wrapper<T>,Buffer,Alignment>
 {
     template<typename Allocator>
@@ -194,7 +194,7 @@ struct unmarshaller<mpirpc::pointer_wrapper<T>,Buffer,Alignment>
                 AllocatorType na(a);
                 ptr = std::allocator_traits<AllocatorType>::allocate(na,size);
                 for (std::size_t i = 0; i < size; ++i)
-                    internal::direct_initializer<T>::construct(na,&ptr[i],b);
+                    internal::direct_initializer<T,Alignment>::construct(na,&ptr[i],b);
             }
         }
         else

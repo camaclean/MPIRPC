@@ -22,11 +22,12 @@
 
 #include "types.hpp"
 #include <string>
+#include <utility>
 
 namespace mpirpc
 {
 
-template<typename T, typename Buffer, std::size_t Alignment, typename = void>
+template<typename T, typename Buffer, typename Alignment, typename = void>
 struct marshaller;
 
 /*
@@ -40,12 +41,28 @@ struct marshaller<T,Buffer,Alignment,std::enable_if_t<std::is_pointer<T>::value>
 };
 */
 
-template<typename Buffer, std::size_t Alignment>
+template<typename Buffer, typename Alignment>
 struct marshaller<std::string,Buffer,Alignment>
 {
     static void marshal(Buffer& b, const std::string& s)
     {
         b.template push<char*>(s.c_str());
+    }
+};
+
+template<typename Buffer, typename Alignment, typename... Ts>
+struct marshaller<std::tuple<Ts...>,Buffer,Alignment>
+{
+    template<std::size_t... Is>
+    static void marshal_impl(Buffer &b, const std::tuple<Ts...>& t, std::index_sequence<Is...>)
+    {
+        using swallow = int[];
+        //(void)swallow{ (marshaller<std::remove_reference_t<Ts>,Buffer,alignof(Ts)>::marshal(b, std::get<Is>(t)), 0)... };
+    }
+
+    static void marshal(Buffer& b, const std::tuple<Ts...>& t)
+    {
+        marshal_impl(b,t,std::index_sequence_for<Ts...>{});
     }
 };
 
