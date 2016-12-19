@@ -67,12 +67,12 @@ template<typename T, typename Alignment>
 struct direct_initializer : public direct_initializer_impl<T>
 {};
 
-/*
+
 template<typename...Ts, typename Alignment, typename... RefTypeAlignments>
 struct direct_initializer<std::tuple<Ts...>,std::tuple<Alignment,RefTypeAlignments...>>
 {
-    template<typename Allocator, typename Buffer, std::size_t Is>
-    static void construct_impl(Allocator& a, std::tuple<Ts...>*& t, Buffer&& s, std::index_sequence<Is...>)
+    template<typename Allocator, typename Buffer, typename... RTs, typename... NTs, std::size_t... Is>
+    static void construct_impl(Allocator& a, std::tuple<Ts...>*& t, Buffer&& s, internal::type_pack<RTs...>, internal::type_pack<NTs...>, std::index_sequence<Is...>)
     {
         using RT = tuple_reference_types<Ts...>;
         RT* ref_storage = reinterpret_cast<RT*>(t);
@@ -82,9 +82,11 @@ struct direct_initializer<std::tuple<Ts...>,std::tuple<Alignment,RefTypeAlignmen
     template<typename Allocator, typename Buffer>
     static void construct(Allocator& a, std::tuple<Ts...>*& t, Buffer&& s)
     {
+        using RefTypes = internal::tuple_reference_types<Ts...>;
+        using NonrefTypes = internal::tuple_nonreference_types<Ts...>;
         construct_impl(a,t,std::forward<Buffer>(b),std::index_sequence_for<Ts...>);
     }
-};*/
+};
 
 }
 

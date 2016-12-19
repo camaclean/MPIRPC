@@ -45,8 +45,8 @@ struct alignment_padding_helper
     static constexpr bool predicate = (mpirpc::is_buildtype<type,Buffer> && !SkipBuildTypes) || (!mpirpc::is_buildtype<type,Buffer> && !SkipNonBuildTypes);
     static constexpr std::size_t prev_end_address_offset = alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,Pos-1,Ts...>::end_address_offset;
     static constexpr std::size_t delta = (predicate) ? mpirpc::internal::calculate_alignment_padding(prev_end_address_offset,unpacked_size_v<type>) : 0;
-    static constexpr std::size_t start_address_offset = (predicate) ? prev_end_address_offset + delta : 0;
-    static constexpr std::size_t end_address_offset = (predicate) ? start_address_offset + unpacked_size_v<type> : 0;
+    static constexpr std::size_t start_address_offset = (predicate) ? prev_end_address_offset + delta : prev_end_address_offset;
+    static constexpr std::size_t end_address_offset = (predicate) ? start_address_offset + unpacked_size_v<type> : prev_end_address_offset;
     static constexpr std::size_t total_padding = alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,Pos-1,Ts...>::total_padding + delta;
     static constexpr std::size_t total_size = alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,Pos-1,Ts...>::total_size + delta + unpacked_size_v<type>;
 };

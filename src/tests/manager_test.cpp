@@ -232,6 +232,7 @@ TEST(ManagerInvokers,tcrn_r)
     ASSERT_EQ(4280L,std::get<1>(ret));
     m.sync();
     std::array<int,5> a = {1,2,3,4,5};
+    std::tuple<double,int[5]> b(4,{0});
     std::tuple<std::array<int,5>> t(a);
     std::tuple<int[5]>* t2 = reinterpret_cast<std::tuple<int[5]>*>(&t);
     int t3 = std::get<0>(*t2)[0];

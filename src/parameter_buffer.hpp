@@ -120,8 +120,6 @@ public:
         mpirpc::marshaller<std::remove_cv_t<std::remove_reference_t<T>>,parameter_buffer,Alignment>::marshal(*this,std::forward<U>(t));
     }
 
-
-
 protected:
     std::size_t m_position;
     std::vector<char,Allocator>* m_buffer;

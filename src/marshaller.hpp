@@ -21,6 +21,7 @@
 #define MPIRPC__MARSHALLER_HPP
 
 #include "types.hpp"
+#include "internal/type_properties.hpp"
 #include <string>
 #include <utility>
 
@@ -50,19 +51,30 @@ struct marshaller<std::string,Buffer,Alignment>
     }
 };
 
+template<typename Buffer, typename Alignment>
+struct marshaller<decltype(std::ignore),Buffer,Alignment>
+{
+    template<typename T>
+    static void marshal(Buffe& b, T&& t) {}
+};
+
 template<typename Buffer, typename Alignment, typename... Ts>
 struct marshaller<std::tuple<Ts...>,Buffer,Alignment>
 {
-    template<std::size_t... Is>
-    static void marshal_impl(Buffer &b, const std::tuple<Ts...>& t, std::index_sequence<Is...>)
+    template<typename... RTs, typename... NTs, std::size_t... Is>
+    static void marshal_impl(Buffer &b, const std::tuple<Ts...>& t, internal::type_pack<RTs...>, internal::type_pack<NTs...>, std::index_sequence<Is...>)
     {
         using swallow = int[];
+        (void)swallow{ (marshaller<RTs,Buffer,alignof(RTs)>::marshal(b,std::get<Is>(t)), 0)... };
+        (void)swallow{ (marshaller<NTs,Buffer,alignof(NTs)>::marshal(b,std::get<Is>(t)), 0)... };
         //(void)swallow{ (marshaller<std::remove_reference_t<Ts>,Buffer,alignof(Ts)>::marshal(b, std::get<Is>(t)), 0)... };
     }
 
     static void marshal(Buffer& b, const std::tuple<Ts...>& t)
     {
-        marshal_impl(b,t,std::index_sequence_for<Ts...>{});
+        using RefTypes = internal::tuple_reference_types<Ts...>;
+        using NonrefTypes = internal::tuple_nonreference_types<Ts...>;
+        marshal_impl(b,t,RefTypes{},NonrefTypes{},std::index_sequence_for<Ts...>{});
     }
 };
 
