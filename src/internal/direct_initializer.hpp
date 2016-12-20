@@ -68,7 +68,7 @@ struct direct_initializer : public direct_initializer_impl<T>
 {};
 
 
-template<typename...Ts, typename Alignment, typename... RefTypeAlignments>
+/*template<typename...Ts, typename Alignment, typename... RefTypeAlignments>
 struct direct_initializer<std::tuple<Ts...>,std::tuple<Alignment,RefTypeAlignments...>>
 {
     template<typename Allocator, typename Buffer, typename... RTs, typename... NTs, std::size_t... Is>
@@ -80,13 +80,13 @@ struct direct_initializer<std::tuple<Ts...>,std::tuple<Alignment,RefTypeAlignmen
     }
 
     template<typename Allocator, typename Buffer>
-    static void construct(Allocator& a, std::tuple<Ts...>*& t, Buffer&& s)
+    static void construct(Allocator& a, std::tuple<Ts...>*& t, Buffer&& b)
     {
         using RefTypes = internal::tuple_reference_types<Ts...>;
         using NonrefTypes = internal::tuple_nonreference_types<Ts...>;
         construct_impl(a,t,std::forward<Buffer>(b),std::index_sequence_for<Ts...>);
     }
-};
+};*/
 
 }
 

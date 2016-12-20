@@ -73,9 +73,9 @@ template<typename F, typename Allocator, typename InBuffer, typename OutBuffer, 
          std::enable_if_t<std::is_same<mpirpc::internal::function_return_type<std::remove_reference_t<F>>,void>::value>* = nullptr>
 void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_return, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::tuple<Alignments...>)
 {
-    constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,Ts...>;
+    constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,std::tuple<Ts...>,std::tuple<Alignments...>>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
-    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,std::tuple<Ts...>,std::tuple<Alignments...>>)) : nullptr)...};
     using swallow = int[];
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
@@ -88,10 +88,10 @@ template<typename F, typename Allocator, typename InBuffer, typename OutBuffer, 
          std::enable_if_t<!std::is_same<mpirpc::internal::function_return_type<std::remove_reference_t<F>>,void>::value>* = nullptr>
 void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_return, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::tuple<Alignments...>)
 {
-    constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,Ts...>;
+    constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,std::tuple<Ts...>,std::tuple<Alignments...>>;
     using PointerTuple = std::tuple<std::add_pointer_t<Ts>...>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
-    PointerTuple t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
+    PointerTuple t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,std::tuple<Ts...>,std::tuple<Alignments...>>)) : nullptr)...};
     using swallow = int[];
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     auto&& ret = std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
@@ -108,9 +108,9 @@ template<typename F, class Class, typename Allocator, typename InBuffer, typenam
          std::enable_if_t<std::is_same<mpirpc::internal::function_return_type<std::remove_reference_t<F>>,void>::value>* = nullptr>
 void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_return, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::tuple<Alignments...>)
 {
-    constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,Ts...>;
+    constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,std::tuple<Ts...>,std::tuple<Alignments...>>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
-    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,std::tuple<Ts...>,std::tuple<Alignments...>>)) : nullptr)...};
     using swallow = int[];
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
@@ -123,9 +123,9 @@ template<typename F, class Class, typename Allocator, typename InBuffer, typenam
          std::enable_if_t<!std::is_same<mpirpc::internal::function_return_type<std::remove_reference_t<F>>,void>::value>* = nullptr>
 void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_return, mpirpc::internal::type_pack<FArgs...>, mpirpc::internal::type_pack<Ts...>, mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::tuple<Alignments...>)
 {
-    constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,Ts...>;
+    constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,std::tuple<Ts...>,std::tuple<Alignments...>>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
-    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,Ts...>)) : nullptr)...};
+    std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,std::tuple<Ts...>,std::tuple<Alignments>>)) : nullptr)...};
     using swallow = int[];
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     auto&& ret = ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);

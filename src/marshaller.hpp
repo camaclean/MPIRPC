@@ -55,7 +55,7 @@ template<typename Buffer, typename Alignment>
 struct marshaller<decltype(std::ignore),Buffer,Alignment>
 {
     template<typename T>
-    static void marshal(Buffe& b, T&& t) {}
+    static void marshal(Buffer& b, T&& t) {}
 };
 
 template<typename Buffer, typename Alignment, typename... Ts>
@@ -65,8 +65,8 @@ struct marshaller<std::tuple<Ts...>,Buffer,Alignment>
     static void marshal_impl(Buffer &b, const std::tuple<Ts...>& t, internal::type_pack<RTs...>, internal::type_pack<NTs...>, std::index_sequence<Is...>)
     {
         using swallow = int[];
-        (void)swallow{ (marshaller<RTs,Buffer,alignof(RTs)>::marshal(b,std::get<Is>(t)), 0)... };
-        (void)swallow{ (marshaller<NTs,Buffer,alignof(NTs)>::marshal(b,std::get<Is>(t)), 0)... };
+        //(void)swallow{ (marshaller<RTs,Buffer,alignof(RTs)>::marshal(b,std::get<Is>(t)), 0)... };
+        //(void)swallow{ (marshaller<NTs,Buffer,alignof(NTs)>::marshal(b,std::get<Is>(t)), 0)... };
         //(void)swallow{ (marshaller<std::remove_reference_t<Ts>,Buffer,alignof(Ts)>::marshal(b, std::get<Is>(t)), 0)... };
     }
 

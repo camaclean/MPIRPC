@@ -33,17 +33,17 @@ constexpr static std::size_t calculate_alignment_padding(std::size_t addr, std::
     return (addr % alignment) ? alignment - addr % alignment : 0;
 }
 
-template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename... Ts>
-constexpr std::size_t alignment_padding = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, (sizeof...(Ts) > 0) ? (sizeof...(Ts)-1) : 0,Ts...>::total_padding;
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename Types, typename Alignments>
+constexpr std::size_t alignment_padding = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, (std::tuple_size<Types>::value > 0) ? (std::tuple_size<Types>::value-1) : 0, Types, Alignments>::total_padding;
 
-template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename... Ts>
-constexpr std::size_t aligned_buffer_size = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, (sizeof...(Ts) > 0) ? (sizeof...(Ts)-1) : 0,Ts...>::total_size;
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename Types, typename Alignments>
+constexpr std::size_t aligned_buffer_size = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, (std::tuple_size<Types>::value > 0) ? (std::tuple_size<Types>::value-1) : 0, Types, Alignments>::total_size;
 
-template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, std::size_t index, typename...Ts>
-constexpr std::size_t aligned_buffer_address_offset = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, index, Ts...>::start_address_offset;
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, std::size_t Index, typename Types, typename Alignments>
+constexpr std::size_t aligned_buffer_address_offset = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, Index, Types, Alignments>::start_address_offset;
 
-template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, std::size_t index, typename...Ts>
-constexpr std::size_t aligned_buffer_delta = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, index, Ts...>::delta;
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, std::size_t Index, typename Types, typename Alignments>
+constexpr std::size_t aligned_buffer_delta = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, Index, Types, Alignments>::delta;
 
 template<typename T1, typename T2>
 using custom_alignments = typename detail::choose_custom_alignment<T1,T2>::type;

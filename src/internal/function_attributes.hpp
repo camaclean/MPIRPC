@@ -212,7 +212,7 @@ struct function_parts<R(*)(Args...)>
     using args_tuple_type = std::tuple<Args...>;
     using arg_types = type_pack<Args...>;
     using function_type = R(*)(Args...);
-    using default_alignments = std::tuple<type_default_alignment<autowrapped_type<Args>,alignof(autowrapped_type<Args>)>...>;
+    using default_alignments = std::tuple<type_default_alignment<autowrapped_type<Args>,alignof(Args)>...>;//alignof(autowrapped_type<Args>)>...>;
     constexpr static std::size_t num_args = sizeof...(Args);
 };
 
