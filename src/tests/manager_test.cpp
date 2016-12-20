@@ -295,17 +295,26 @@ struct aligned_unpack_buffer<Buffer, SkipBuildTypes, SkipNonBuildTypes, std::tup
     //using main_storage
 };
 
+template<std::size_t Size, typename Types, typename Alignments>
+struct __attribute__((packed)) aligned_type_storage_impl;
+
+template<std::size_t Size>
+struct aligned_type_storage_impl<Size, std::tuple<>,std::tuple<>> {} __attribute__((packed));
+
+template<std::size_t Size, typename T, typename... Ts, typename Alignment, typename... Alignments>
+struct aligned_type_storage_impl<Size,std::tuple<T,Ts...>,std::tuple<Alignment,Alignments...>> : aligned_type_storage_impl<Size,std::tuple<Ts...>,std::tuple<Alignments...>>
+{
+    typename std::aligned_storage<sizeof(T),alignment_reader<Alignment>::value>::type elem;
+} __attribute__((packed));
+
 template<typename Types, typename Alignments>
 struct __attribute__((packed)) aligned_type_storage;
 
-template<>
-struct aligned_type_storage<std::tuple<>,std::tuple<>> {} __attribute__((packed));
-
-template<typename T, typename... Ts, typename Alignment, typename... Alignments>
-struct aligned_type_storage<std::tuple<T,Ts...>,std::tuple<Alignment,Alignments...>> : aligned_type_storage<std::tuple<Ts...>,std::tuple<Alignments...>>
+template<typename Types, typename Alignments>
+struct __attribute__((packed)) aligned_type_storage : public aligned_type_storage_impl<std::tuple_size<Types>::value, Types, Alignments>
 {
-    typename std::aligned_storage<sizeof(T),alignment_reader<Alignment>::value>::type t;
-} __attribute__((packed));
+    static constexpr std::size_t size = std::tuple_size<Types>::value;
+};
 
 void blah(double& d) {}
 
