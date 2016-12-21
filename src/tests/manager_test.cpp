@@ -295,26 +295,147 @@ struct aligned_unpack_buffer<Buffer, SkipBuildTypes, SkipNonBuildTypes, std::tup
     //using main_storage
 };
 
-template<std::size_t Size, typename Types, typename Alignments>
-struct __attribute__((packed)) aligned_type_storage_impl;
-
-template<std::size_t Size>
-struct aligned_type_storage_impl<Size, std::tuple<>,std::tuple<>> {} __attribute__((packed));
-
-template<std::size_t Size, typename T, typename... Ts, typename Alignment, typename... Alignments>
-struct aligned_type_storage_impl<Size,std::tuple<T,Ts...>,std::tuple<Alignment,Alignments...>> : aligned_type_storage_impl<Size,std::tuple<Ts...>,std::tuple<Alignments...>>
-{
-    typename std::aligned_storage<sizeof(T),alignment_reader<Alignment>::value>::type elem;
-} __attribute__((packed));
-
 template<typename Types, typename Alignments>
-struct __attribute__((packed)) aligned_type_storage;
+class __attribute__((packed)) aligned_type_storage;
 
-template<typename Types, typename Alignments>
-struct __attribute__((packed)) aligned_type_storage : public aligned_type_storage_impl<std::tuple_size<Types>::value, Types, Alignments>
+template<std::size_t Index, typename T, typename Alignment>
+class __attribute__((packed)) aligned_type_storage_element
 {
-    static constexpr std::size_t size = std::tuple_size<Types>::value;
+public:
+    using type = T;
+    using pointer = T*;
+    using reference = T&;
+    using const_reference = const T&;
+    static constexpr std::size_t index = Index;
+    using alignment_type = Alignment;
+    static constexpr std::size_t alignment = alignment_reader<Alignment>::value;
+    using data_type = typename std::aligned_storage<sizeof(T),alignment>::type;
+private:
+    data_type elem;
+public:
+    template<typename...Args>
+    void construct(Args&&... args) { new (static_cast<T*>(static_cast<void*>(&elem))) T(std::forward<Args>(args)...); }
+    void destruct() { static_cast<T*>(static_cast<void*>(&elem))->~T(); }
+
+    pointer address() { return static_cast<pointer>(static_cast<void*>(&elem)); }
+    const pointer address() const { return static_cast<pointer>(static_cast<void*>(&elem)); }
+
+    reference get() { return *static_cast<pointer>(static_cast<void*>(&elem)); }
+    const_reference get() const { return *static_cast<const pointer>(static_cast<const void*>(&elem)); }
 };
+
+/*template<typename Types, typename Alignments>
+struct reference_storage_helper;
+
+template<typename... Types, typename... Alignments>
+struct reference_storage_helper<std::tuple<Types...>,std::tuple<Alignments...>>
+{
+
+};*/
+
+template<std::size_t Size, typename T, typename... Ts>
+struct reference_types_filter
+{
+    using type = std::conditional_t<std::is_reference<T>::value,
+                                    mpirpc::internal::tuple_cat_type<std::tuple<std::remove_reference_t<T>>,typename reference_types_filter<Size, Ts...>::type>,
+                                    typename reference_types_filter<Size, Ts...>::type>;
+    using map = std::conditional_t<std::is_reference<T>::value,
+                                   mpirpc::internal::tuple_cat_type<std::tuple<std::integral_constant<std::size_t, Size-sizeof...(Ts)-1>>,typename reference_types_filter<Size, Ts...>::map>,
+                                   mpirpc::internal::tuple_cat_type<std::tuple<std::integral_constant<std::size_t,-1>>,typename reference_types_filter<Size, Ts...>::map>>;
+};
+
+template<typename T>
+struct reference_types_extractor;
+
+template<typename... Ts>
+struct reference_types_extractor<std::tuple<Ts...>>
+{
+    using type = typename reference_types_filter<sizeof...(Ts),Ts...>::type;
+    using map = typename reference_types_filter<sizeof...(Ts),Ts...>::map;
+};
+
+template<typename T>
+using reference_types = typename reference_types_extractor<T>::type;
+
+template<typename T>
+using reference_types_map = typename reference_types_extractor<T>::map;
+
+template<std::size_t Index, typename T, typename Alignment, typename... Alignments>
+class __attribute__((packed)) aligned_type_storage_element<Index,T,std::tuple<Alignment,Alignments...>>
+{
+public:
+    using type = T;
+    using pointer = T*;
+    using reference = T&;
+    using const_reference = const T&;
+    static constexpr std::size_t index = Index;
+    using alignment_type = Alignment;
+    static constexpr std::size_t alignment = alignment_reader<Alignment>::value;
+    using reference_types_tuple = reference_types<type>;
+    using reference_storage_type = aligned_type_storage<reference_types_tuple,std::tuple<Alignments...>>;
+    using data_type = std::pair<typename std::aligned_storage<sizeof(T),alignment>::type,reference_storage_type>;
+private:
+    data_type elem;
+
+    template<typename... Args, typename... CArgs, std::size_t... Is>
+    void construct_impl(std::tuple<std::piecewise_construct_t, CArgs...>& args, std::index_sequence<Is...>)
+    {
+
+    }
+
+public:
+
+    template<typename... Args, typename... CArgs>
+    void construct(std::tuple<std::piecewise_construct_t, CArgs...>& args)
+    {
+    }
+    void destruct() { static_cast<T*>(static_cast<void*>(&elem))->~T(); }
+
+    pointer address() { return static_cast<pointer>(static_cast<void*>(&elem)); }
+    const pointer address() const { return static_cast<pointer>(static_cast<void*>(&elem)); }
+
+    reference get() { return *static_cast<pointer>(static_cast<void*>(&elem)); }
+    const_reference get() const { return *static_cast<const pointer>(static_cast<const void*>(&elem)); }
+};
+
+template<typename Sizes, typename Types, typename Alignments>
+class __attribute__((packed)) aligned_type_storage_impl;
+
+template<std::size_t... Sizes, typename... Types, typename... Alignments>
+class __attribute__((packed)) aligned_type_storage_impl<std::index_sequence<Sizes...>,std::tuple<Types...>,std::tuple<Alignments...>> : aligned_type_storage_element<Sizes,Types,Alignments>...
+{
+public:
+    template<std::size_t Index>
+    using type_at_index = std::tuple_element_t<Index,std::tuple<Types...>>;
+
+    template<std::size_t Index>
+    using alignment_at_index = std::tuple_element_t<Index,std::tuple<Alignments...>>;
+
+    template<std::size_t Index>
+    using element_type = aligned_type_storage_element<Index,type_at_index<Index>,alignment_at_index<Index>>;
+
+    template<std::size_t Index, typename... Args>
+    void construct(Args&&... args) { element_type<Index>::construct(std::forward<Args>(args)...); }
+
+    template<std::size_t Index>
+    void destruct() { element_type<Index>::destruct(); }
+
+    template<std::size_t Index>
+    decltype(auto) get() { return element_type<Index>::get(); }
+
+    template<std::size_t Index>
+    decltype(auto) get() const { return element_type<Index>::get(); }
+
+    template<std::size_t Index>
+    decltype(auto) address() { return element_type<Index>::address(); }
+
+    template<std::size_t Index>
+    decltype(auto) address() const { return element_type<Index>::address(); }
+};
+
+template<typename... Types, typename... Alignments>
+class __attribute__((packed)) aligned_type_storage<std::tuple<Types...>, std::tuple<Alignments...>> : public aligned_type_storage_impl<std::make_index_sequence<sizeof...(Types)>, std::tuple<Types...>, std::tuple<Alignments...>>
+{};
 
 void blah(double& d) {}
 
@@ -322,14 +443,20 @@ TEST(Test,test)
 {
     std::tuple<bool,typename std::aligned_storage<sizeof(int),128>::type> t;
     std::cout << sizeof(t) << " " << sizeof(double) << " " << sizeof(double&) << " " << sizeof(std::tuple<float>) << " " << sizeof(std::tuple<float&&>) << std::endl;
-    using Alignments = std::tuple<std::integral_constant<std::size_t,1>,std::integral_constant<std::size_t,1>,std::integral_constant<std::size_t,64>>;
-    using Types = std::tuple<char,char,char>;
+    using Alignments = std::tuple<std::integral_constant<std::size_t,1>,std::integral_constant<std::size_t,1>,std::integral_constant<std::size_t,64>,std::integral_constant<std::size_t,32>>;
+    using Types = std::tuple<char,char,char,std::string>;
     using Buffer = mpirpc::parameter_buffer<>;
-    std::cout << sizeof(unpack_buffer_storage<Buffer,std::tuple<char,char,char>,Alignments>) << std::endl;
-    std::cout << sizeof(unpack_buffer_storage<Buffer,std::tuple<char,char,char>,Alignments>) << std::endl;
+    std::cout << sizeof(unpack_buffer_storage<Buffer,Types,Alignments>) << std::endl;
+    std::cout << sizeof(unpack_buffer_storage<Buffer,Types,Alignments>) << std::endl;
     aligned_type_storage<Types,Alignments> n;
-    std::cout << sizeof(n) << std::endl;
-    unpack_buffer_storage<Buffer,std::tuple<char,char,char>,Alignments> a;
+    aligned_type_storage<std::tuple<>,std::tuple<>> n2;
+    n.construct<0>('a');
+    n.construct<1>('b');
+    n.construct<2>('c');
+    n.construct<3>("test test");
+    std::cout << "aligned_type_storage: " << sizeof(n) << " n2: " << sizeof(n2) << std::endl;
+    std::cout << n.get<0>() << " " << n.get<1>() << " " << n.get<2>() << " " << n.get<3>() << std::endl;
+    unpack_buffer_storage<Buffer,Types,Alignments> a;
     struct test {
         typename std::aligned_storage<1,1>::type a;
         typename std::aligned_storage<1,1>::type b;
