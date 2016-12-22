@@ -24,12 +24,14 @@
   #ifdef BUILDING_DLL
     #ifdef __GNUC__
       #define MPIRPC_EXPORT __attribute__ ((dllexport))
+      #define PACKED __attribute__((packed))
     #else
       #define MPIRPC_EXPORT __declspec(dllexport) // Note: actually gcc seems to also supports this syntax.
     #endif
   #else
     #ifdef __GNUC__
       #define MPIRPC_EXPORT __attribute__ ((dllimport))
+      #define PACKED __attribute__((packed))
     #else
       #define MPIRPC_EXPORT __declspec(dllimport) // Note: actually gcc seems to also supports this syntax.
     #endif
@@ -39,6 +41,7 @@
   #if __GNUC__ >= 4
     #define MPIRPC_EXPORT __attribute__ ((visibility ("default")))
     #define MPIRPC_LOCAL  __attribute__ ((visibility ("hidden")))
+    #define PACKED __attribute__((packed))
   #else
     #define MPIRPC_EXPORT
     #define MPIRPC_LOCAL

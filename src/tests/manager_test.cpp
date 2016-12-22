@@ -45,8 +45,12 @@ TEST(Manager,register_function_w_return)
 
 struct Foo
 {
+    Foo() {}
+    Foo(int&,float&&) {}
     void bar()  { std::cout << "ran " << __PRETTY_FUNCTION__ << std::endl; }
     int  bar2() { std::cout << "ran " << __PRETTY_FUNCTION__ << std::endl; return 7; }
+    void bar3(int&,float&&) {}
+    void bar3() {}
 };
 
 TEST(Manager,register_member_function)
@@ -337,11 +341,11 @@ template<std::size_t Size, typename T, typename... Ts>
 struct reference_types_filter
 {
     using type = std::conditional_t<std::is_reference<T>::value,
-                                    mpirpc::internal::tuple_cat_type<std::tuple<std::remove_reference_t<T>>,typename reference_types_filter<Size, Ts...>::type>,
+                                    mpirpc::internal::tuple_cat_type<std::tuple<T>,typename reference_types_filter<Size, Ts...>::type>,
                                     typename reference_types_filter<Size, Ts...>::type>;
     using map = std::conditional_t<std::is_reference<T>::value,
                                    mpirpc::internal::tuple_cat_type<std::tuple<std::integral_constant<std::size_t, Size-sizeof...(Ts)-1>>,typename reference_types_filter<Size, Ts...>::map>,
-                                   mpirpc::internal::tuple_cat_type<std::tuple<std::integral_constant<std::size_t,-1>>,typename reference_types_filter<Size, Ts...>::map>>;
+                                   mpirpc::internal::tuple_cat_type<std::tuple<decltype(std::ignore)>,typename reference_types_filter<Size, Ts...>::map>>;
 };
 
 template<typename T>
@@ -360,8 +364,17 @@ using reference_types = typename reference_types_extractor<T>::type;
 template<typename T>
 using reference_types_map = typename reference_types_extractor<T>::map;
 
+/**
+ * A constructors: A(double), A(int), A(long)
+ * B constructors: B(int, long)
+ * Type to build: std::tuple(A, A&, A&&, B&)
+ * Original construction tuple: double, int, long, std::tuple<std::piecewise_construct_t,int,long>
+ * Reference storage: A, A, B
+ * Construction tuple: A, A&, A&&, B&
+ * Construction tuple forwarded to constructor: A&&, A&, A&&, B&
+ */
 template<std::size_t Index, typename T, typename Alignment, typename... Alignments>
-class __attribute__((packed)) aligned_type_storage_element<Index,T,std::tuple<Alignment,Alignments...>>
+class aligned_type_storage_element<Index,T,std::tuple<Alignment,Alignments...>>
 {
 public:
     using type = T;
@@ -372,15 +385,24 @@ public:
     using alignment_type = Alignment;
     static constexpr std::size_t alignment = alignment_reader<Alignment>::value;
     using reference_types_tuple = reference_types<type>;
+    using reference_map = reference_types_map<type>;
     using reference_storage_type = aligned_type_storage<reference_types_tuple,std::tuple<Alignments...>>;
     using data_type = std::pair<typename std::aligned_storage<sizeof(T),alignment>::type,reference_storage_type>;
 private:
     data_type elem;
 
     template<typename... Args, typename... CArgs, std::size_t... Is>
-    void construct_impl(std::tuple<std::piecewise_construct_t, CArgs...>& args, std::index_sequence<Is...>)
+    void construct_reference_types(std::tuple<std::piecewise_construct_t,CArgs...>& args, std::index_sequence<Is...>)
     {
 
+    }
+
+    template<typename... Args, typename... CArgs, std::size_t... Is>
+    void construct_impl(std::tuple<std::piecewise_construct_t, CArgs...>& args, std::index_sequence<Is...>)
+    {
+        //using reference_types = typename reference_types_filter<sizeof...(Args),Args...>::type;
+        //using reference_map = typename reference_types_filter<sizeof...(Args),Args...>::map;
+        new (static_cast<T*>(static_cast<void*>(&elem))) T(std::get<Is>(args)...);
     }
 
 public:
@@ -396,7 +418,7 @@ public:
 
     reference get() { return *static_cast<pointer>(static_cast<void*>(&elem)); }
     const_reference get() const { return *static_cast<const pointer>(static_cast<const void*>(&elem)); }
-};
+} PACKED;
 
 template<typename Sizes, typename Types, typename Alignments>
 class __attribute__((packed)) aligned_type_storage_impl;
@@ -439,6 +461,13 @@ class __attribute__((packed)) aligned_type_storage<std::tuple<Types...>, std::tu
 
 void blah(double& d) {}
 
+
+//template<typename ... Args>
+//using print_type = decltype(std::declval<Foo>().print(std::declval<Args>() ...)) (Foo::*)(Args ...);
+
+template<typename... Args>
+using ConstructorType = decltype(std::declval<Foo>().bar3(std::declval<Args>()...)) (Foo::*)(Args...);
+
 TEST(Test,test)
 {
     std::tuple<bool,typename std::aligned_storage<sizeof(int),128>::type> t;
@@ -472,6 +501,8 @@ TEST(Test,test)
 
     std::cout << sizeof(test) << " " << sizeof(test2) << std::endl;
     std::cout << (uintptr_t) &std::get<0>(a) << " " << (uintptr_t) &std::get<1>(a) << " " << (uintptr_t) &std::get<1>(a) % 64 <<  " " << sizeof(std::aligned_storage<1,64>) << std::endl;
+
+    std::cout << abi::__cxa_demangle(typeid(ConstructorType<int,float>).name(),0,0,0) << std::endl;
     double d = 3.14;
     double&& d2 = std::move(d);
     blah(d2);
