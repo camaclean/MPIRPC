@@ -37,8 +37,22 @@ namespace mpirpc
  * Remote unmarshalling, on the other hand, often requires allocating memory.
  */
 
+/**
+ * unmarshaller should define a unmarshaller<T,Buffer,Alignment,void>::unmarshal<Allocator,Buffer>(Allocator,Buffer)
+ * function which returns one of two types: T or type_constructor<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<TemporaryArguments...>,std::tuple<StoredArguments...>>
+ *
+ * For example, to construct the type: std::tuple<int,int&,int&&,std::tuple<double,double&,double&&>>, the return type should be:
+ * type_constructor<std::tuple<int,int&,int&&,std::tuple<double,double&,double&&>>,
+ *                             std::tuple<int,int,int,type_constructor<std::tuple<double,double&,double&&>,
+ *                                                                     std::tuple<double,double,double>,
+ *                                                                     std::tuple<std::false_type,std::true_type,std::true_type>>,
+ *                             std::tuple<std::false_type,std::true_type,std::true_type,std::false_type>>
+ */
 template<typename T, typename Buffer, typename Alignment, typename = void>
 struct unmarshaller;
+
+template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple>
+struct type_constructor;
 
 template<typename R, typename...Ts, std::size_t...Is>
 R construct_impl(const std::tuple<std::piecewise_construct_t,Ts...>& t, std::index_sequence<Is...>)
