@@ -33,6 +33,7 @@
 #include "../internal/type_massaging.hpp"
 #include "../internal/unmarshalling.hpp"
 #include "../internal/utility.hpp"
+#include "../internal/apply_buffer.hpp"
 
 #define SINGLE_ARG(...) __VA_ARGS__
 #define TEST_REFERENCE_TYPE(Name1,Name2,Argument,FArgument,GoodArgument,Realloc) \

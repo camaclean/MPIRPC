@@ -48,6 +48,44 @@ constexpr std::size_t aligned_buffer_delta = detail::alignment_padding_helper<Bu
 template<typename T1, typename T2>
 using custom_alignments = typename detail::choose_custom_alignment<T1,T2>::type;
 
+template<typename Alignment>
+struct alignment_reader;
+
+template<std::size_t Alignment>
+struct alignment_reader<std::integral_constant<std::size_t,Alignment>>
+{
+    static constexpr std::size_t value = Alignment;
+    using type = std::conditional_t<value,std::true_type,std::false_type>;
+};
+
+template<typename Alignment, typename... Alignments>
+struct alignment_reader<std::tuple<Alignment,Alignments...>>
+{
+    static constexpr std::size_t value = alignment_reader<Alignment>::value;
+    using type = std::conditional_t<value,std::true_type,std::false_type>;
+};
+
+template<typename Alignment>
+using alignment_reader_type = typename alignment_reader<Alignment>::type;
+
+template<typename Alignment>
+struct internal_alignments_tuple_type_helper;
+
+template<std::size_t Alignment>
+struct internal_alignments_tuple_type_helper<std::integral_constant<std::size_t,Alignment>>
+{
+    using type = std::tuple<>;
+};
+
+template<typename Alignment, typename... Alignments>
+struct internal_alignments_tuple_type_helper<std::tuple<Alignment,Alignments...>>
+{
+    using type = std::tuple<Alignments...>;
+};
+
+template<typename Alignments>
+using internal_alignments_tuple_type = typename internal_alignments_tuple_type_helper<Alignments>::type;
+
 }
 
 }

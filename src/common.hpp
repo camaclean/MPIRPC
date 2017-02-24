@@ -75,6 +75,23 @@ class parameter_buffer;
 template<typename MessageInterface, typename Allocator = std::allocator<char>, typename Buffer = parameter_buffer<Allocator>>
 class manager;
 
+/**
+ * unmarshaller should define a unmarshaller<T,Buffer,Alignment,void>::unmarshal<Allocator,Buffer>(Allocator,Buffer)
+ * function which returns one of two types: T or construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<Arguments...>,std::tuple<StoredArguments...>>
+ *
+ * For example, to construct the type: std::tuple<int,int&,int&&,std::tuple<double,double&,double&&>>, the return type should be:
+ * construction_info<std::tuple<int,int&,int&&,std::tuple<double,double&,double&&>>,
+ *                             std::tuple<int,int,int,construction_info<std::tuple<double,double&,double&&>,
+ *                                                                     std::tuple<double,double,double>,
+ *                                                                     std::tuple<std::false_type,std::true_type,std::true_type>>,
+ *                             std::tuple<std::false_type,std::true_type,std::true_type,std::false_type>>
+ */
+template<typename T, typename Buffer, typename Alignment, typename = void>
+struct unmarshaller;
+
+template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple>
+class construction_info;
+
 using FnHandle = unsigned long long;
 using TypeId = uintptr_t;
 using ObjectId = unsigned long long;

@@ -22,6 +22,9 @@
 
 #include <tuple>
 #include "../../types.hpp"
+#include "../alignment.hpp"
+#include "../direct_initializer.hpp"
+#include "../remarshaller.hpp"
 #include "../type_properties.hpp"
 
 namespace mpirpc

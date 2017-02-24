@@ -46,10 +46,10 @@
 
 #include <mpi.h>
 
+#include "common.hpp"
 #include "exceptions.hpp"
 #include "buffer.hpp"
 #include "objectwrapper.hpp"
-#include "common.hpp"
 #include "parameterstream.hpp"
 #include "marshaller.hpp"
 #include "unmarshaller.hpp"
@@ -58,6 +58,10 @@
 #include "internal/marshalling.hpp"
 #include "internal/orderedcall.hpp"
 #include "internal/function_attributes.hpp"
+#include "internal/pass_back.hpp"
+#include "internal/utility.hpp"
+#include "internal/apply_buffer.hpp"
+#include "parameter_buffer.hpp"
 
 #define ERR_ASSERT     1
 #define ERR_MAX_ACTORS 2

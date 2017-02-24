@@ -53,197 +53,6 @@ decltype(auto) apply(F&& f, Class *c, Tuple&& t)
     return detail::apply_impl(std::forward<F>(f), c, std::forward<Tuple>(t), Indices{});
 }
 
-/**
- * @details
- * Mechanism:
- *
- * Applying a datagram as arguments with any type to a function is a non-trivial task. The naive approach would be to unpack
- * the stream into a tuple, then apply those tuple arguments to a function. However, this approach has some notable limitations
- * and inefficiencies. First of all, it is not possible to construct a std::tuple with a mix of any type. Take, for instance, a
- * std::tuple containing an array and an mpirpc::pointer_wrapper. An array type is not MoveConstructible or CopyConstructible.
- * The array could be initialized and then the values from the stream applied to it, but mpirpc::pointer_wrapper is not
- * DefaultConstructible. An array type also can't be returned by an unmarshalling function and references to an array can't be
- * used, ei,ther, unless it was initialized outside of the unmarshaller. Otherwise, the result would be a dangling reference. An
- * array type could be created from a std::initializer_list instead, but this would not solve the general case of types with
- * deleted default, copy, and move constructors. For these types, direct initialization is needed. Unfortunately, std::tuple
- * lacks direct initialization capabilities.
- *
- * A previous implementation attempt used two tuples, one created with default constructors and modified using the stream after
- * initialization and a second tuple for move-constructible types suitable for non-DefaultConstructible types. However, this
- * involved some complicated template metaprogramming to determine the parameter index, which tuple to use, and the index in the
- * tuple for each parameter index. It also still had the limitation that a type must be either DefaultConstructible or be
- * MoveConstructible. Types requiring direct initialization would still be unsupported.
- *
- * This implementation gets around this problem by creating a tuple of pointers to each parameter type. How this tuple is
- * initialized depends on the type. If is_buildtype\<T> is true for that type, then the std::tuple element will be initialized
- * to a pointer within a stack buffer which is properly aligned for an element of that type. If is_buildtype\<T> is false, then
- * the pointer points to the location of the data in the stream buffer. By default, is_buildtype\<T> is true if T is a scalar
- * type or an array of scalar types. Otherwise, it is false. Users may specialize is_buildtype\<T> to a boolean true value for
- * custom types that can be correctly accessed by a reinterpret_cast\<T*> on the buffer location (objects with standard layout
- * and no pointer/reference type member variables).
- *
- * Next, types for which is_buildtype\<T> is true call direct_initializer\<T>::placementnew_construct(Allocator,T*,Stream).
- * This constructs a T using placement new, which is suitable for constructing types in the stack buffer. Types which have pointers
- * of their own should use direct_initializer\<T>::construct(Allocator,T*,Buffer), which uses the (possibly custom) Allocator for
- * construction. If T is polymorphic, register_polymorphism\<T>() must be called before invocation of apply(). The arguments for
- * construction of T are provided by unmarshaller\<T,Buffer,Alignment>::unmarshal(Allocator,Buffer).
- *
- * Next, the function is run by unpacking each element of the tuple as each parameter. If the function has a non-void return
- * type, it is autowrapped and added to the output parameter buffer using remarshaller\< T, Buffer, Alignment >::marshal(Buffer,T).
- *
- * Then, passback types from the parameter tuple are appended to the parameter buffer using
- * remarshaller\<T,Buffer,Alignment>::marshal(Buffer,T).
- *
- * Finally, for each element of the parameter tuple for which the value of is_buildtype\< T > is true the tuple element is passed
- * to a cleanup function to run the destructor on the constructed types.
- *
- * @code{.unparsed}
- * Call graph:
- *                                                    apply()
- *                                                      |
- *                                                      v
- *                                                 apply_impl()
- *                                                      |
- *                                                      v
- *                                              get_from_buffer<Alignment>()
- *                                                      |
- *                                                      v
- *                                            is_buildtype<T,Buffer>?
- *                                            No /              \ Yes
- *                          get_pointer_from_buffer()          direct_initializer<T>::placementnew_construct()
- *                                              |                |
- *                                              v                v
- *                  Buffer::reinterpret_and_advance<T>()     unmarshaller<T,Buffer,Alignment,typename=void>::unmarshal()
- *                                              |                |
- *                                              |                v
- *                                              |             get<T>(Buffer,Allocator)
- *                                              |                |
- *                                              |                v
- *                                              |        piecewise_allocator_traits<Allocator>::construct()
- *                                               \_____________/
- *                                                      |
- *                                                      v
- *                                                    call f()
- *                                                      |
- *                                                      v
- *                                               (result == void)?
- *                                             No /            \ Yes
- *             remarshaller<T,Buffer,Alignment>::marshal()     |
- *                                                |            |
- *                                                v            |
- *               marshaller<T,Buffer,Alignment>::marshal()     |
- *                                                \____________/
- *                                                      |
- *                                                      v
- *                                                  cleanup()
- * @endcode
- *
- * The implementation of remarshaller\<T,Buffer,Alignment>::marshal() simply calls marshaller\<T,Buffer,Alignment>::marshal().
- * However, this struct can be specialized if different behavior is required when passing back (such as noting and skipping
- * unmodified parameters).
- *
- * is_buildtype\<T,Buffer> is used to determine if the type stored in the Buffer can be read simply by a reinterpret_cast\<T> at
- * the current location of the buffer. Therefore, is_buildtype\<T> should always be true for Buffer implementations that use
- * non-binary data or packed data structures.
- *
- * unmarshaller\<T,Buffer,Alignment> specializations: call parameterbuffer_unmarshaller\<T,Alignment> for non-pointer scalar types
- *                                                   unmarshaller\<pointer_wrapper\<T>,Buffer,Alignment,void>
- *                                                   user-defined unmarshallers
- *
- *
- *        unmarshaller\<pointer_wrapper\<T>,Buffer,Alignment,typename=void>
- *                                      |
- *                                      v
- *                            std::is_polymorphic\<T>?
- *                          No /                   \ Yes
- *   direct_initializer\<T>::construct              polymorphic_factory\<T>->build()
- *                      U = T |                     | U = from id -> polymorphic_factory map
- *                            v                     v
- *                  unmarshaller\<U,Buffer,Alignment>::unmarshal
- *
- * To add support for custom types, unmarshaller\<T,Buffer,Alignment> should be specialized. To avoid template ambiguity, only the first
- * template parameter should be specialized. If the unmarshaller is specific to a Buffer type or alignment, SFINAE should be used for the
- * last template parameter. unmarshaller\<T,Buffer,Alignment> should return either a single type to be passed as a single argument to the
- * constructor or a tuple of types which will be unpacked as constructor arguments.
- *
- * Example:
- *
- * \code{.cpp}
- * class A {
- * public:
- *     A(int v) : a(v) {}
- *     virtual void test() = 0;
- *     virtual ~A() {}
- *     int a;
- * };
- *
- * class B : public A {
- * public:
- *     B(int v, int v2) : A(v), b(v2) {}
- *     virtual void test() {}
- *     virtual ~B() {}
- *     int b;
- * };
- *
- * template<typename Buffer, std::size_t Alignment>
- * struct marshaller<B,Buffer,Alignment> {
- *     static void marshal(Buffer& b, const B& val) { b.put(val.a); b.put(val.b); }
- * };
- *
- * template<typename Buffer, std::size_t Alignment>
- * struct unmarshaller<B,Buffer,Alignment> {
- *     template<typename Allocator>
- *     static decltype(auto) unmarshal(Allocator& alloc, Buffer& buff) {
- *         int a = get<int>(buff,alloc), b = get<int>(buff,alloc);
- *         return std::make_tuple(std::piecewise_construct,std::move(a),std::move(b));
- *     }
- * };
- * \endcode
- *
- * Since B is a polymorphic type, register_polymorphism<B>() should be called before invocation of
- * apply(), ideally at the beginning of the program. A does not need to be registered or have a
- * specialization of marshaller or unmarshaller, as it is not a constructible type.
- *
- */
-template<typename F,typename Allocator, typename InBuffer, typename OutBuffer, typename... Alignments,
-         std::enable_if_t<std::is_function<std::remove_pointer_t<std::remove_reference_t<F>>>::value && !std::is_member_function_pointer<std::remove_reference_t<F>>::value>* = nullptr>
-void apply(F&& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false, std::tuple<Alignments...> = std::tuple<Alignments...>{})
-{
-    using Func = std::remove_reference_t<F>;
-    using fargs = typename mpirpc::internal::function_parts<Func>::arg_types;
-    using ts = typename mpirpc::internal::wrapped_function_parts<Func>::storage_types;
-    using pass_backs = typename mpirpc::internal::wrapped_function_parts<Func>::pass_backs;
-    using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<Func>::default_alignments,std::tuple<Alignments...>>;
-    constexpr std::size_t num_args = mpirpc::internal::function_parts<Func>::num_args;
-    detail::apply_impl(std::forward<F>(f),std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
-}
-
-template<typename F,typename Allocator, typename InBuffer, typename OutBuffer, typename... Alignments,
-         std::enable_if_t<std::is_function<std::remove_pointer_t<std::remove_reference_t<F>>>::value && !std::is_member_function_pointer<std::remove_reference_t<F>>::value>* = nullptr>
-void apply(std::function<F>& f, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false, std::tuple<Alignments...> = std::tuple<Alignments...>{})
-{
-    using Func = std::remove_reference_t<F>;
-    using fargs = typename mpirpc::internal::function_parts<std::add_pointer_t<Func>>::arg_types;
-    using ts = typename mpirpc::internal::wrapped_function_parts<std::add_pointer_t<Func>>::storage_types;
-    using pass_backs = typename mpirpc::internal::wrapped_function_parts<std::add_pointer_t<Func>>::pass_backs;
-    using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<std::add_pointer_t<Func>>::default_alignments,std::tuple<Alignments...>>;
-    constexpr std::size_t num_args = mpirpc::internal::function_parts<std::add_pointer_t<Func>>::num_args;
-    detail::apply_impl(f,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, fargs{}, ts{}, pass_backs{}, std::make_index_sequence<num_args>{}, default_alignments{});
-}
-
-template<typename F, class Class, typename Allocator, typename InBuffer, typename OutBuffer, typename... Alignments,
-         std::enable_if_t<std::is_member_function_pointer<std::remove_reference_t<F>>::value>* = nullptr>
-void apply(F&& f, Class *c, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool get_return = false, std::tuple<Alignments...> = std::tuple<Alignments...>{})
-{
-    using Func = std::remove_reference_t<F>;
-    using FArgs = typename mpirpc::internal::function_parts<Func>::arg_types;
-    using Ts = typename mpirpc::internal::wrapped_function_parts<Func>::storage_types;
-    using PassBacks = typename mpirpc::internal::wrapped_function_parts<Func>::pass_backs;
-    using default_alignments = custom_alignments<typename mpirpc::internal::function_parts<Func>::default_alignments,std::tuple<Alignments...>>;
-    constexpr std::size_t num_args = mpirpc::internal::function_parts<Func>::num_args;
-    detail::apply_impl(std::forward<F>(f),c,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, FArgs{}, Ts{}, PassBacks{}, std::make_index_sequence<num_args>{}, default_alignments{});
-}
-
 template<std::size_t Pos, typename Int, Int Max, Int... Is>
 constexpr Int get_clamped(std::integer_sequence<Int,Is...>)
 {
@@ -262,6 +71,15 @@ constexpr Int get(std::integer_sequence<Int,Is...>)
     return ::mpirpc::internal::detail::get_integer_sequence_impl<Pos,Int,Is...>::value;
 }
 
+template<std::size_t Pos, typename IndexSequence>
+struct index_sequence_element;
+
+template<std::size_t Pos, std::size_t... Is>
+struct index_sequence_element<Pos,std::index_sequence<Is...>>
+{
+    static constexpr std::size_t value = ::mpirpc::internal::detail::get_integer_sequence_impl<Pos,std::size_t,Is...>::value;
+};
+
 template<typename Is1, typename Is2>
 struct integer_sequence_cat;
 
@@ -273,6 +91,114 @@ struct integer_sequence_cat<std::integer_sequence<Int, I1s...>, std::integer_seq
 
 template <typename Is1, typename Is2>
 using integer_sequence_cat_type = typename integer_sequence_cat<Is1,Is2>::type;
+
+template<typename Int, Int I, typename Is>
+struct integer_sequence_prepend;
+
+template<typename Int, Int I, Int... Is>
+struct integer_sequence_prepend<Int,I,std::integer_sequence<Int,Is...>>
+{
+    using type = std::integer_sequence<Int,I,Is...>;
+};
+
+template<typename Int, Int I, typename Is>
+using integer_sequence_prepend_type = typename integer_sequence_prepend<Int,I,Is>::type;
+
+template<std::size_t I, typename Is>
+using index_sequence_prepend_type = typename integer_sequence_prepend<std::size_t,I,Is>::type;
+
+template<typename Int, typename Is, Int I>
+struct integer_sequence_append;
+
+template<typename Int, Int I, Int... Is>
+struct integer_sequence_append<Int,std::integer_sequence<Int,Is...>,I>
+{
+    using type = std::integer_sequence<Int,Is...,I>;
+};
+
+template<typename Int, typename Is, Int I>
+using integer_sequence_append_type = typename integer_sequence_append<Int,Is,I>::type;
+
+template<typename Is, std::size_t I>
+using index_sequence_append_type = typename integer_sequence_append<std::size_t,Is,I>::type;
+
+template<bool Condition, typename Int, Int I, typename Is>
+struct conditional_integer_sequence_prepend
+{
+    using type = std::conditional_t<Condition,integer_sequence_prepend_type<Int,I,Is>,Is>;
+};
+
+template<bool Condition, typename Int, Int I, typename Is>
+using conditional_integer_sequence_prepend_type = typename conditional_integer_sequence_prepend<Condition,Int,I,Is>::type;
+
+template<bool Condition, std::size_t I, typename Is>
+using conditional_index_sequence_prepend_type = typename conditional_integer_sequence_prepend<Condition,std::size_t,I,Is>::type;
+
+template<bool Condition, typename Int, typename Is, Int I>
+struct conditional_integer_sequence_append
+{
+    using type = std::conditional_t<Condition,integer_sequence_append_type<Int,Is,I>,Is>;
+};
+
+template<bool Condition, typename Int, typename Is, Int I>
+using conditional_integer_sequence_append_type = typename conditional_integer_sequence_append<Condition,Int,Is,I>::type;
+
+template<bool Condition, typename Is, std::size_t I>
+using conditional_index_sequence_append_type = typename conditional_integer_sequence_append<Condition,std::size_t,Is,I>::type;
+
+template<typename T1, typename T2>
+struct tuple_type_cat;
+
+template<typename...T1s, typename...T2s>
+struct tuple_type_cat<std::tuple<T1s...>,std::tuple<T2s...>>
+{
+    using type = std::tuple<T1s...,T2s...>;
+};
+
+template<typename T1, typename T2>
+using tuple_type_cat_type = typename tuple_type_cat<T1,T2>::type;
+
+template<typename T, typename Tuple>
+struct tuple_type_prepend;
+
+template<typename T, typename... Ts>
+struct tuple_type_prepend<T,std::tuple<Ts...>>
+{
+    using type = std::tuple<T,Ts...>;
+};
+
+template<typename T, typename Tuple>
+using tuple_type_prepend_type = typename tuple_type_prepend<T,Tuple>::type;
+
+template<typename Tuple, typename T>
+struct tuple_type_append;
+
+template<typename... Ts, typename T>
+struct tuple_type_append<std::tuple<Ts...>,T>
+{
+    using type = std::tuple<Ts...,T>;
+};
+
+template<typename Tuple, typename T>
+using tuple_type_append_type = typename tuple_type_append<Tuple,T>::type;
+
+template<bool Condition, typename T, typename Tuple>
+struct conditional_tuple_type_prepend
+{
+    using type = std::conditional_t<Condition,tuple_type_prepend_type<T,Tuple>,Tuple>;
+};
+
+template<bool Condition, typename T, typename Tuple>
+using conditional_tuple_type_prepend_type = typename conditional_tuple_type_prepend<Condition,T,Tuple>::type;
+
+template<bool Condition, typename Tuple, typename T>
+struct conditional_tuple_type_append
+{
+    using type = std::conditional_t<Condition,tuple_type_append_type<Tuple,T>,Tuple>;
+};
+
+template<bool Condition, typename Tuple, typename T>
+using conditional_tuple_type_append_type = typename conditional_tuple_type_append<Condition,Tuple,T>::type;
 
 } //internal
 

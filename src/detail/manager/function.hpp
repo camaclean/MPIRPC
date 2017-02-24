@@ -21,10 +21,6 @@
 #define MPIRPC__DETAIL__MANAGER_FUNCTION_HPP
 
 #include "../../manager.hpp"
-#include "../../internal/function_attributes.hpp"
-#include "../../internal/pass_back.hpp"
-#include "../../internal/utility.hpp"
-#include "../../parameter_buffer.hpp"
 
 template<typename Allocator, typename Buffer, typename MessageInterface>
 class mpirpc::manager<Allocator,Buffer,MessageInterface>::function_base

@@ -246,7 +246,7 @@ TEST(ManagerInvokers,tcrn_r)
 /*template<typename Buffer, typename Type, typename Alignment>
 constexpr std::size_t element_size_v = unpacked_elemet_info<Buffer,Type,Alignment>::size;*/
 
-template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename Types, typename Alignments>
+/*template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename Types, typename Alignments>
 struct type_filter;
 
 template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename T, typename... Ts, typename Alignment, typename... Alignments>
@@ -261,30 +261,15 @@ template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes>
 struct type_filter<Buffer,SkipBuildTypes,SkipNonBuildTypes, std::tuple<>, std::tuple<>>
 {
     using type = std::tuple<>;
-};
+};*/
 
-template<typename Alignment>
-struct alignment_reader;
-
-template<std::size_t Alignment>
-struct alignment_reader<std::integral_constant<std::size_t,Alignment>>
-{
-    static constexpr std::size_t value = Alignment;
-};
-
-template<typename Alignment, typename... Alignments>
-struct alignment_reader<std::tuple<Alignment,Alignments...>>
-{
-    static constexpr std::size_t value = alignment_reader<Alignment>::value;
-};
-
-template<typename Tuple>
+/*template<typename Tuple>
 struct unpack_buffer_storage_helper;
 
 template<typename... Ts, typename... Alignments>
 struct unpack_buffer_storage_helper<std::tuple<std::pair<Ts,Alignments>...>>
 {
-    using type = std::tuple<typename std::aligned_storage<sizeof(Ts),alignment_reader<Alignments>::value>::type...>;
+    using type = std::tuple<typename std::aligned_storage<sizeof(Ts),mpirpc::internal::alignment_reader<Alignments>::value>::type...>;
 };
 
 template<typename Buffer, typename Types, typename Alignments>
@@ -297,10 +282,10 @@ template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename.
 struct aligned_unpack_buffer<Buffer, SkipBuildTypes, SkipNonBuildTypes, std::tuple<Ts...>, std::tuple<Alignments...>>
 {
     //using main_storage
-};
+};*/
 
-struct reference_piecewise_construct_type {};
-constexpr reference_piecewise_construct_type reference_piecewise_construct;
+//struct reference_piecewise_construct_type {};
+//constexpr reference_piecewise_construct_type reference_piecewise_construct;
 
 /*template<typename T, typename Buffer, typename Alignment>
 struct reference_storage_wrapper
@@ -310,7 +295,7 @@ struct reference_storage_wrapper
                                     std::conditional_t<std::is_reference<T>::value,>;
 };*/
 
-template<typename Types, typename Alignments>
+/*template<typename Types, typename Alignments>
 class PACKED aligned_type_storage;
 
 template<std::size_t Index, typename T, typename Alignment>
@@ -323,7 +308,7 @@ public:
     using const_reference = const T&;
     static constexpr std::size_t index = Index;
     using alignment_type = Alignment;
-    static constexpr std::size_t alignment = alignment_reader<Alignment>::value;
+    static constexpr std::size_t alignment = mpirpc::internal::alignment_reader<Alignment>::value;
     using data_type = typename std::aligned_storage<sizeof(T),alignment>::type;
 private:
     data_type elem;
@@ -337,7 +322,7 @@ public:
 
     reference get() { return *static_cast<pointer>(static_cast<void*>(&elem)); }
     const_reference get() const { return *static_cast<const pointer>(static_cast<const void*>(&elem)); }
-};
+};*/
 
 /*template<typename Types, typename Alignments>
 struct reference_storage_helper;
@@ -348,7 +333,7 @@ struct reference_storage_helper<std::tuple<Types...>,std::tuple<Alignments...>>
 
 };*/
 
-template<std::size_t Size, typename T, typename... Ts>
+/*template<std::size_t Size, typename T, typename... Ts>
 struct reference_types_filter
 {
     using type = std::conditional_t<std::is_reference<T>::value,
@@ -357,7 +342,7 @@ struct reference_types_filter
     using map = std::conditional_t<std::is_reference<T>::value,
                                    mpirpc::internal::tuple_cat_type<std::tuple<std::integral_constant<std::size_t, Size-sizeof...(Ts)-1>>,typename reference_types_filter<Size, Ts...>::map>,
                                    mpirpc::internal::tuple_cat_type<std::tuple<decltype(std::ignore)>,typename reference_types_filter<Size, Ts...>::map>>;
-};
+};*/
 
 /*template<typename T>
 struct reference_types
@@ -380,7 +365,7 @@ using reference_types_type = typename reference_types_extractor<T>::type;*/
  * T
  * std::tuple<std::piecewise_construct_t,ConstructorArguments...>
  */
-template<typename T>
+/*template<typename T>
 struct reference_types_impl
 {
 };
@@ -389,7 +374,7 @@ template<typename T>
 struct reference_types
 {
 
-};
+};*/
 
 //template<typename T>
 //using reference_types_map = typename reference_types_extractor<T>::map;
@@ -484,7 +469,7 @@ public:
     const_reference get() const { return *static_cast<const pointer>(static_cast<const void*>(&elem)); }
 } PACKED;*/
 
-template<typename Sizes, typename Types, typename Alignments>
+/*template<typename Sizes, typename Types, typename Alignments>
 class __attribute__((packed)) aligned_type_storage_impl;
 
 template<std::size_t... Sizes, typename... Types, typename... Alignments>
@@ -521,7 +506,7 @@ public:
 
 template<typename... Types, typename... Alignments>
 class __attribute__((packed)) aligned_type_storage<std::tuple<Types...>, std::tuple<Alignments...>> : public aligned_type_storage_impl<std::make_index_sequence<sizeof...(Types)>, std::tuple<Types...>, std::tuple<Alignments...>>
-{};
+{};*/
 
 void blah(double d1, double& d2, double&& d3) {}
 
@@ -532,8 +517,44 @@ void blah(double d1, double& d2, double&& d3) {}
 //template<typename... Args>
 //using ConstructorType = decltype(std::declval<Foo>().bar3(std::declval<Args>()...)) (Foo::*)(Args...);
 
-template<typename... Ts>
-class packedtuple : public std::tuple<Ts...> {} PACKED;
+/*template<typename... Ts>
+class packedtuple : public std::tuple<Ts...> {} PACKED;*/
+
+class B
+{
+public:
+    B(int b) : m_b{b} { std::cout << "constructed B" << std::endl; }
+    int m_b;
+    ~B() { std::cout << "Deleted B " << this << std::endl; }
+};
+
+class A
+{
+public:
+    A(const double v1, int v2 ,const float& v3, bool& v4, long v5, const long long& v6, const B& b)
+        : m_v1{v1}, m_v2{v2}, m_v3{v3}, m_v4{v4}, m_v5{v5}, m_v6{v6}, m_b{b}
+    { std::cout << "constructed A " << b.m_b << std::endl; }
+    ~A() { std::cout << "Deleted A" << std::endl; }
+    double add () const
+    {
+        return m_v1 + m_v2 + m_v3 + m_v5 + m_v6 + m_b.m_b;
+    }
+private:
+    const double m_v1;
+    int m_v2;
+    const float m_v3;
+    bool m_v4;
+    long m_v5;
+    const long long m_v6;
+    B m_b;
+};
+
+void test_function(const A& a, int b, double c)
+{
+    std::cout << a.add() << " " << b << " " << c << std::endl;
+}
+
+
 
 TEST(Test,test)
 {
@@ -542,7 +563,7 @@ TEST(Test,test)
     using Alignments = std::tuple<std::integral_constant<std::size_t,1>,std::integral_constant<std::size_t,1>,std::integral_constant<std::size_t,64>,std::integral_constant<std::size_t,8>>;
     using Types = std::tuple<char,char,char,char>;
     using Buffer = mpirpc::parameter_buffer<>;
-    std::cout << sizeof(unpack_buffer_storage<Buffer,Types,Alignments>) << std::endl;
+    /*std::cout << sizeof(unpack_buffer_storage<Buffer,Types,Alignments>) << std::endl;
     std::cout << sizeof(unpack_buffer_storage<Buffer,Types,Alignments>) << std::endl;
     aligned_type_storage<Types,Alignments> n;
     aligned_type_storage<std::tuple<>,std::tuple<>> n2;
@@ -550,9 +571,9 @@ TEST(Test,test)
     n.construct<1>('b');
     n.construct<2>('c');
     n.construct<3>('t');
-    unpack_buffer_storage<Buffer,Types,Alignments> a;
-    std::cout << "aligned_type_storage: " << sizeof(n) << " n2: " << sizeof(n2) << " a: " << sizeof(a) << std::endl;
-    std::cout << (uintptr_t) &n.get<0>() % 1 << " " << (uintptr_t) &n.get<1>() % 1 << " " << (uintptr_t) &n.get<2>() % 64 << " " << (uintptr_t) &n.get<3>() % 8 << std::endl;
+    unpack_buffer_storage<Buffer,Types,Alignments> a;*/
+    //std::cout << "aligned_type_storage: " << sizeof(n) << " n2: " << sizeof(n2) << " a: " << sizeof(a) << std::endl;
+    //std::cout << (uintptr_t) &n.get<0>() % 1 << " " << (uintptr_t) &n.get<1>() % 1 << " " << (uintptr_t) &n.get<2>() % 64 << " " << (uintptr_t) &n.get<3>() % 8 << std::endl;
     std::tuple<double,double,double> tup{1,2,3};
 
     struct test {
@@ -572,14 +593,57 @@ TEST(Test,test)
         test a __attribute__((packed));
     } __attribute__((packed));
 
-    std::tuple<typename std::aligned_storage<1,1>::type, typename std::aligned_storage<1,64>::type, typename std::aligned_storage<1,2>::type> be;
+    std::tuple<typename std::aligned_storage<1,1>::type, typename std::aligned_storage<1,1>, typename std::aligned_storage<1,64>::type, typename std::aligned_storage<1,8>::type> be;
     test ba;
 
-    std::cout << sizeof(test) << " " << sizeof(test2) << " " << sizeof(test3) << " " << sizeof(a) << std::endl;
+    //std::cout << sizeof(test) << " " << sizeof(test2) << " " << sizeof(test3) << " " << sizeof(a) << " " << sizeof(be) << std::endl;
     std::cout << "test: " << (uintptr_t) &ba.a % 1 << " " << (uintptr_t) &ba.b % 1 << " " << (uintptr_t) &ba.c % 64 << " " << (uintptr_t) &ba.d % 8 << std::endl;
-    std::cout << (uintptr_t) &std::get<0>(a) % 1 << " " << (uintptr_t) &std::get<2>(a) % 64 << " " << (uintptr_t) &std::get<3>(a) % 8 << " " << sizeof(std::aligned_storage<1,64>) << " " << sizeof(be) << std::endl;
-
+    std::cout << (uintptr_t) &std::get<0>(be) % 1 << " " << (uintptr_t) &std::get<1>(be) % 1 << " " << (uintptr_t) &std::get<2>(be) % 64 << " " << (uintptr_t) &std::get<3>(be) % 8 << " size: " << sizeof(be) << std::endl;
+    std::cout << std::is_constructible<const double&,double>::value << std::endl;
     //std::cout << abi::__cxa_demangle(typeid(ConstructorType<int,float>).name(),0,0,0) << std::endl;
+    /*using b_type = mpirpc::aligned_type_holder<B,std::integral_constant<std::size_t, alignof(B)>,
+                std::tuple<int>,
+                std::tuple<int>,
+                std::tuple<std::false_type>,
+                std::tuple<std::integral_constant<std::size_t, alignof(int)>>>;*/
+    using b_type = mpirpc::construction_info<B,
+                  std::tuple<int>,
+                  std::tuple<int>,
+                  std::tuple<std::false_type>
+                >;
+    using stored_arguments_test_type = mpirpc::aligned_type_holder<A,std::integral_constant<std::size_t, alignof(A)>,
+            std::tuple<const double, int, float&, bool&, long, const long long&, const B&>,
+            std::tuple<const double, int, float, bool, long, const long long, b_type>,
+            std::tuple<std::false_type,std::false_type,std::true_type,std::true_type,std::false_type,std::true_type, std::true_type>, 
+            std::tuple<
+                std::integral_constant<std::size_t, alignof(double)>,
+                std::integral_constant<std::size_t, alignof(int)>,
+                std::integral_constant<std::size_t, alignof(float)>,
+                std::integral_constant<std::size_t, alignof(bool)>,
+                std::integral_constant<std::size_t, alignof(long)>,
+                std::integral_constant<std::size_t, alignof(long long)>,
+                std::tuple<
+                    std::integral_constant<std::size_t, alignof(B)>,
+                    std::integral_constant<std::size_t, alignof(int)>
+                >
+            >
+        >;
+    std::cout << abi::__cxa_demangle(typeid(typename stored_arguments_test_type::storage_tuple_type).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(typename stored_arguments_test_type::storage_tuple_indexes_type).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(typename stored_arguments_test_type::storage_tuple_reverse_indexes_type).name(),0,0,0) << std::endl;
+    b_type bi(5);
+    std::cout << abi::__cxa_demangle(typeid(stored_arguments_test_type::construction_info_type).name(),0,0,0) << std::endl;
+    stored_arguments_test_type::construction_info_type ci(3.5, 4, 12.9f, true, 1004L, 21414LL, bi);
+    stored_arguments_test_type h(ci);
+    std::cout << h.value().add() << " " << 3.5 + 4 + 12.9f + 1004L + 21414LL + 5 << std::endl;
+    //auto proxy_tuple = h.make_proxy();
+    //std::cout << abi::__cxa_demangle(typeid(proxy_tuple).name(),0,0,0) << std::endl;
+    //std::get<1>(proxy_tuple) = 3;
+    //std::get<2>(proxy_tuple) = 2.17;
+    //std::cout << std::get<1>(proxy_tuple) << " " << std::get<2>(proxy_tuple) << " | " << std::get<1>(ci.args()) << " " << std::get<2>(ci.args()) << std::endl;
+    //stored_arguments_test_type::stored_arguments_tuple_type storedtuple(12.9f,true,12414LL);
+    //auto proxy_tuple = stored_arguments_test_type::make_proxy(ci,storedtuple);
+    
     //double d = 3.14;
     //double&& d2 = std::move(d);
     //blah(d2);
