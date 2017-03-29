@@ -36,25 +36,25 @@ namespace internal
 namespace detail
 {
 
-template<typename Alignment, typename Allocator, typename T, typename Buffer, std::enable_if_t<is_buildtype<T,Buffer>>* = nullptr>
+template<typename Alignment, typename Allocator, typename T, typename Buffer, std::enable_if_t<is_buildtype_v<T,Buffer>>* = nullptr>
 void get_from_buffer(Allocator &a, T*& t, Buffer&& s)
 {
     direct_initializer<T,Alignment>::placementnew_construct(a,t,s);
 }
 
-template<typename Alignment, typename Allocator, typename T, typename Buffer, std::enable_if_t<!is_buildtype<T,Buffer>>* = nullptr>
+template<typename Alignment, typename Allocator, typename T, typename Buffer, std::enable_if_t<!is_buildtype_v<T,Buffer>>* = nullptr>
 void get_from_buffer(Allocator &a, T*& t, Buffer&& s)
 {
     get_pointer_from_buffer<Alignment::value>(s,t);
 }
 
-template<typename Buffer, typename Alignment, typename Allocator, typename T, std::enable_if_t<is_buildtype<T,Buffer>>* = nullptr>
+template<typename Buffer, typename Alignment, typename Allocator, typename T, std::enable_if_t<is_buildtype_v<T,Buffer>>* = nullptr>
 void cleanup(Allocator &a, T* t)
 {
     direct_initializer<T,Alignment>::placementnew_destruct(a,t);
 }
 
-template<typename Buffer, typename Alignment, typename Allocator, typename T, std::enable_if_t<!is_buildtype<T,Buffer>>* = nullptr>
+template<typename Buffer, typename Alignment, typename Allocator, typename T, std::enable_if_t<!is_buildtype_v<T,Buffer>>* = nullptr>
 void cleanup(Allocator &a, T* t)
 {}
 

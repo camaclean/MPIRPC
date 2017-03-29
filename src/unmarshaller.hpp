@@ -50,6 +50,9 @@ struct is_construction_info : std::false_type {};
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple>
 struct is_construction_info<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>> : std::true_type {};
 
+template<typename T>
+constexpr bool is_construction_info_v = is_construction_info<T>::value;
+
 template<typename T, typename Alignment, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename AlignmentsTuple>
 class aligned_type_holder;
 
@@ -58,12 +61,13 @@ struct type_default_alignment_helper<std::tuple<Ts...>,Alignment>
 {
 };*/
 
-template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename AlignmentsTuple, typename = void>
-class construction_info_to_aligned_type_holder;
+template<typename ConstructionInfo, typename AlignmentsTuple>
+struct construction_info_to_aligned_type_holder;
 
 template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
-class construction_info_to_aligned_type_holder<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>
+struct construction_info_to_aligned_type_holder<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,std::tuple<Alignments...>>
 {
+    using alignments = std::tuple<Alignments...>;
     using type_alignment = std::conditional_t<(sizeof...(Alignments) > 0),
                                               internal::alignment_reader_type<std::tuple<Alignments...>>,
                                               std::integral_constant<std::size_t,alignof(T)>
@@ -75,6 +79,14 @@ class construction_info_to_aligned_type_holder<T,std::tuple<ConstructorArgumentT
     using type = aligned_type_holder<T,type_alignment,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,internal_alignments>;
 };
 
+template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, std::size_t Alignment>
+struct construction_info_to_aligned_type_holder<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,std::integral_constant<std::size_t,Alignment>>
+    : construction_info_to_aligned_type_holder<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,std::tuple<std::integral_constant<std::size_t,Alignment>>>
+{};
+
+template<typename ConstructionInfo, typename AlignmentsTuple>
+using construction_info_to_aligned_type_holder_type = typename construction_info_to_aligned_type_holder<ConstructionInfo,AlignmentsTuple>::type;
+
 template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments>
 class construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>
 {
@@ -84,7 +96,7 @@ public:
     using StoredArgumentsTuple = std::tuple<StoredArguments...>;
     
     template<typename AlignmentsTuple>
-    using make_aligned_type_holder = typename construction_info_to_aligned_type_holder<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,AlignmentsTuple>::type;
+    using make_aligned_type_holder = typename construction_info_to_aligned_type_holder<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,AlignmentsTuple>::type;
     
     /*template<typename AlignmentsTuple>
     using make_aligned_type_holder = std::enable_if_t<std::tuple_size<AlignmentsTuple>::value == sizeof...(ArgumentTypes) + 1, aligned_type_holder<
@@ -389,6 +401,9 @@ public:
     
     template<std::size_t I>
     using storage_type_at_storage_index = std::tuple_element_t<I, storage_tuple_types>;
+    
+    template<std::size_t I>
+    using index_to_storage_index = std::tuple_element_t<I,storage_tuple_indexes_type>;
 
 protected:
     template<std::size_t I, 
@@ -542,6 +557,9 @@ public:
     template<std::size_t I>
     using storage_type_at_storage_index = std::tuple_element_t<I, storage_tuple_types>;
     
+    template<std::size_t I>
+    using index_to_storage_index = std::tuple_element_t<I,storage_tuple_indexes_type>;
+    
 public:
     aligned_type_holder(arguments_tuple_type& t)
     {
@@ -602,6 +620,9 @@ public:
     template<std::size_t I>
     using storage_type_at_storage_index = std::tuple_element_t<I, storage_tuple_types>;
     
+    template<std::size_t I>
+    using index_to_storage_index = std::tuple_element_t<I,storage_tuple_indexes_type>;
+    
 protected:
     template<std::size_t... Is>
     void construct(parameter_tuple_type& t, std::index_sequence<Is...>)
@@ -639,6 +660,246 @@ public:
     }
 private:
     storage_tuple_type m_stored_args;
+};
+
+template<typename TypesTuple, typename ConditionsTuple>
+struct filter_tuple_types;
+
+template<typename T, typename... Ts, bool C, bool... Cs>
+struct filter_tuple_types<std::tuple<T,Ts...>,std::tuple<std::integral_constant<bool,C>,std::integral_constant<bool,Cs>...>>
+    : internal::conditional_tuple_type_prepend<C,T,typename filter_tuple_types<std::tuple<Ts...>,std::tuple<std::integral_constant<bool,Cs>...>>::type>
+{};
+
+template<typename T, bool C>
+struct filter_tuple_types<std::tuple<T>,std::tuple<std::integral_constant<bool,C>>>
+    : internal::conditional_tuple_type_prepend<C,T,std::tuple<>>
+{};
+
+template<typename Types, typename Conditions>
+using filter_tuple_types_type = typename filter_tuple_types<Types,Conditions>::type;
+
+template<typename T, typename Buffer, typename Allocator>
+struct unmarshaller_type_helper
+{
+    using type = decltype(mpirpc::get<T>(std::declval<Buffer>(),std::declval<Allocator>()));
+};
+
+template<typename T, typename Buffer, typename Allocator>
+using unmarshaller_type = typename unmarshaller_type_helper<T,Buffer,Allocator>::type;
+
+template<typename T, typename Buffer, typename Alignment, typename=void>
+struct parameter_aligned_storage
+    : std::aligned_storage<sizeof(std::remove_reference_t<T>),internal::alignment_reader<Alignment>::value>
+{};
+
+template<typename T, typename Buffer, typename Alignments>
+struct parameter_aligned_storage<T,Buffer,Alignments,std::enable_if_t<is_construction_info_v<unmarshaller_type<T,Buffer,std::allocator<char>>>>>
+    : std::aligned_storage<
+        sizeof(construction_info_to_aligned_type_holder_type<unmarshaller_type<T,Buffer,std::allocator<char>>,Alignments>),
+        alignof(construction_info_to_aligned_type_holder_type<unmarshaller_type<T,Buffer,std::allocator<char>>,Alignments>)
+    >
+{};
+
+template<typename T, typename Buffer, typename Alignment>
+using parameter_aligned_storage_type = typename parameter_aligned_storage<T,Buffer,Alignment>::type;
+
+template<typename T, typename Buffer, typename Alignment, typename = void>
+struct storage_type_conversion
+{
+    using type = T;
+};
+
+template<typename T, typename Buffer, typename Alignments>
+struct storage_type_conversion<T,Buffer,Alignments,std::enable_if_t<is_construction_info_v<unmarshaller_type<T,Buffer,std::allocator<char>>>>>
+{
+    using type = construction_info_to_aligned_type_holder_type<unmarshaller_type<T,Buffer,std::allocator<char>>,Alignments>;
+};
+
+template<typename T, typename Buffer, typename Alignment>
+using storage_type_conversion_type = typename storage_type_conversion<T,Buffer,Alignment>::type;
+
+template<typename Tuple, typename Buffer, typename AlignmentsTuple>
+struct storage_tuple_from_types;
+
+template<typename Types, typename Buffer, typename Alignments>
+struct storage_construction_types;
+
+template<typename T, typename... Ts, typename Buffer, typename Alignment, typename... Alignments>
+struct storage_construction_types<std::tuple<T,Ts...>, Buffer,std::tuple<Alignment,Alignments...>>
+    : internal::tuple_type_prepend<storage_type_conversion_type<std::remove_reference_t<std::remove_cv_t<T>>,Buffer,Alignment>,
+        typename storage_construction_types<std::tuple<Ts...>,Buffer,std::tuple<Alignments...>>::type>
+{};
+
+template<typename T, typename Buffer, typename Alignment>
+struct storage_construction_types<std::tuple<T>,Buffer,std::tuple<Alignment>>
+//    : internal::tuple_type_prepend<storage_type_conversion_type<T,Buffer,Alignment>,std::tuple<>>
+{
+    using stype = storage_type_conversion_type<T,Buffer,Alignment>;
+    using type = typename internal::tuple_type_prepend<typename storage_type_conversion<T,Buffer,Alignment>::type,std::tuple<>>::type;
+};
+
+template<typename Types, typename Buffer, typename Alignments>
+using storage_construction_types_type = typename storage_construction_types<Types,Buffer,Alignments>::type;
+
+template<bool... Bs>
+struct count_trues;
+
+template<bool B,bool... Bs>
+struct count_trues<B,Bs...>
+    : std::integral_constant<std::size_t,std::size_t(B)+count_trues<Bs...>::value>
+{};
+
+template<bool B>
+struct count_trues<B>
+    : std::integral_constant<std::size_t,std::size_t(B)>
+{};
+
+template<typename... Bs>
+struct count_integral_constant_bools;
+
+template<bool... Bs>
+struct count_integral_constant_bools<std::tuple<std::integral_constant<bool,Bs>...>> : count_trues<Bs...> {};
+
+struct invalid_index_type {};
+
+constexpr invalid_index_type invalid_index;
+
+template<std::size_t Size, bool... Included>
+struct filtered_indexes_helper;
+
+template<std::size_t Size, bool... Included>
+struct filtered_indexes_helper<Size,true,Included...>
+{
+    constexpr static std::size_t index = filtered_indexes_helper<Size,Included...>::next_index;
+    constexpr static std::size_t next_index = index-1;
+    constexpr static std::size_t size = Size;
+    using type = internal::tuple_type_prepend_type<std::tuple<std::integral_constant<std::size_t,index>>, typename filtered_indexes_helper<Size,Included...>::type>;
+};
+
+template<std::size_t Size, bool... Included>
+struct filtered_indexes_helper<Size,false,Included...>
+{
+    constexpr static std::size_t index = filtered_indexes_helper<Size,Included...>::next_index;
+    constexpr static std::size_t next_index = index;
+    constexpr static std::size_t size = Size;
+    using type = internal::tuple_type_prepend_type<std::tuple<invalid_index_type>, typename filtered_indexes_helper<Size,Included...>::type>;
+};
+
+template<std::size_t Size>
+struct filtered_indexes_helper<Size,true>
+{
+    static_assert(Size != 0);
+    constexpr static std::size_t index = Size-1;
+    constexpr static std::size_t next_index = index-1;
+    constexpr static std::size_t size = Size;
+    using type = std::tuple<std::integral_constant<std::size_t,index>>;
+};
+
+template<std::size_t Size>
+struct filtered_indexes_helper<Size,false>
+{
+    static_assert(Size != 0);
+    constexpr static std::size_t index = Size-1;
+    constexpr static std::size_t next_index = index;
+    constexpr static std::size_t size = Size;
+    using type = std::tuple<invalid_index_type>;
+};
+
+template<bool... Included>
+struct filtered_indexes : filtered_indexes_helper<count_trues<Included...>::value,Included...>
+{
+    constexpr static std::size_t size = count_trues<Included...>::value;
+    using input_tuple = std::tuple<std::integral_constant<bool,Included>...>;
+};
+
+template<bool... Included>
+using filtered_indexes_type = typename filtered_indexes<Included...>::type;
+
+template<typename... Included>
+struct filtered_tuple_indexes;
+
+template<bool... Included>
+struct filtered_tuple_indexes<std::tuple<std::integral_constant<bool,Included>...>> : filtered_indexes<Included...> {};
+
+template<typename... Included>
+using filtered_tuple_indexes_type = typename filtered_tuple_indexes<Included...>::type;
+
+template<typename Buffer, typename ArgsTuple, typename FArgsTuple, typename AlignmentsTuple>
+class parameter_setup;
+
+template<typename Buffer, typename... Args, typename... FArgs, typename... Alignments>
+class parameter_setup<Buffer, std::tuple<Args...>, std::tuple<FArgs...>, std::tuple<Alignments...>>
+{
+public:
+    //using storage_type = aligned_parameter_holder<std::tuple<Args...>,std::tuple<std::remove_reference_t<Args>...>,std::tuple<is_buildtype<std::remove_reference_t<Args>,Buffer>...>,std::tuple<Alignments...>>;
+    using build_types = std::tuple<is_buildtype_type<std::remove_cv_t<std::remove_reference_t<Args>>,Buffer>...>;
+    using stored_types = 
+        filter_tuple_types_type<
+            std::tuple<Args...>,
+            build_types
+        >;
+    using filtered_alignments = 
+        filter_tuple_types_type<
+            std::tuple<Alignments...>,
+            build_types
+        >;
+    using storage_types_tuple_type =
+        filter_tuple_types_type<
+            storage_construction_types_type<
+                std::tuple<std::remove_cv_t<std::remove_reference_t<Args>>...>,
+                Buffer,
+                std::tuple<Alignments...>
+            >,
+            build_types
+        >;
+    using aligned_storage_tuple_type = 
+        filter_tuple_types_type<
+            std::tuple<
+                parameter_aligned_storage_type<
+                    std::remove_cv_t<std::remove_reference_t<Args>>,
+                    Buffer,
+                    std::tuple<Alignments>
+                >...
+            >,
+            build_types
+        >;
+    using proxy_tuple_type = std::tuple<FArgs&&...>;
+    
+    template<std::size_t I>
+    using proxy_type = std::tuple_element_t<I,proxy_tuple_type>;
+    
+    template<std::size_t I>
+    using storage_index = std::tuple_element_t<I,filtered_tuple_indexes_type<build_types>>;
+    
+    template<std::size_t I>
+    using alignment = std::tuple_element_t<I,std::tuple<Alignments...>>;
+
+protected:
+    template<std::size_t I, typename T, typename Allocator, std::enable_if_t<!is_buildtype_v<std::remove_cv_t<std::remove_reference_t<T>>,Buffer>>* = nullptr>
+    proxy_type<I> make_from_buffer(Buffer& b, Allocator&& a)
+    {
+        return static_cast<proxy_type<I>>(mpirpc::get<T>(b,a));
+    }
+    
+    template<std::size_t I, typename T, typename Allocator, 
+        std::enable_if_t<is_buildtype_v<std::remove_reference_t<T>,Buffer>>* = nullptr,
+        std::enable_if_t<is_construction_info_v<unmarshaller_type<T,Buffer,std::allocator<char>>>>* = nullptr>
+    void make_from_buffer(Buffer& b, Allocator&& a)
+    {
+        using type = storage_type_conversion_type<T,Buffer,alignment<I>>;
+        
+    }
+    
+public:
+    parameter_setup()
+    {
+    }
+    void prepare(Buffer& b)
+    {
+        //std::cout << 
+    }
+protected:
+    //proxy_tuple_type m_pt;
 };
 
 /*template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>

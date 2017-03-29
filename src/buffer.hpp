@@ -44,7 +44,7 @@ struct type_alignment_helper<mpirpc::pointer_wrapper<T>>
 };*/
 
 template<typename T, typename Buffer, typename Allocator>
-inline decltype(auto) get(Buffer& b, Allocator&& a)
+inline decltype(auto) get(Buffer&& b, Allocator&& a)
 {
     return b.template pop<T>(std::forward<Allocator>(a));
 }

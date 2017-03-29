@@ -50,7 +50,7 @@ struct alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,Pos,std:
     using type = std::tuple_element_t<Pos,std::tuple<Ts...>>;
     using type_alignment = std::tuple_element_t<Pos,std::tuple<Alignments...>>;
     static constexpr std::size_t type_size = sizeof(type);
-    static constexpr bool predicate = (mpirpc::is_buildtype<type,Buffer> && !SkipBuildTypes) || (!mpirpc::is_buildtype<type,Buffer> && !SkipNonBuildTypes);
+    static constexpr bool predicate = (mpirpc::is_buildtype<type,Buffer>() && !SkipBuildTypes) || (!mpirpc::is_buildtype<type,Buffer>() && !SkipNonBuildTypes);
     static constexpr std::size_t prev_end_address_offset = alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,Pos-1,std::tuple<Ts...>,std::tuple<Alignments...>>::end_address_offset;
     static constexpr std::size_t delta = (predicate) ? mpirpc::internal::calculate_alignment_padding(prev_end_address_offset,type_alignment::value) : 0;
     static constexpr std::size_t start_address_offset = (predicate) ? prev_end_address_offset + delta : prev_end_address_offset;
@@ -65,7 +65,7 @@ struct alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,0,std::t
     using type = T;
     using type_alignment = Alignment;
     static constexpr std::size_t type_size = sizeof(type);
-    static constexpr bool predicate = (is_buildtype<type,Buffer> && !SkipBuildTypes) || (!is_buildtype<type,Buffer> && !SkipNonBuildTypes);
+    static constexpr bool predicate = (is_buildtype<type,Buffer>() && !SkipBuildTypes) || (!is_buildtype<type,Buffer>() && !SkipNonBuildTypes);
     static constexpr std::size_t prev_end_address_offset = 0;
     static constexpr std::size_t delta = 0;
     static constexpr std::size_t start_address_offset = 0;

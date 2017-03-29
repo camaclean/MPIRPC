@@ -35,25 +35,30 @@ struct type_identifier
 };
 
 template<typename Buffer>
-struct aligned_binary_buffer_identifier : std::false_type {};
+struct is_aligned_native_binary_buffer : std::false_type {};
 
 template<typename Buffer>
-constexpr bool is_aligned_binary_buffer = aligned_binary_buffer_identifier<std::remove_reference_t<Buffer>>::value;
+constexpr bool is_aligned_native_binary_buffer_v = is_aligned_native_binary_buffer<std::remove_reference_t<Buffer>>::value;
 
-template<typename T, typename Buffer,typename=void>
-struct buildtype_helper
-{
-    constexpr static bool value = !(std::is_scalar<std::remove_reference_t<T>>::value && is_aligned_binary_buffer<Buffer> && !std::is_pointer<T>::value);
-};
-
-template<typename T, std::size_t N, typename Buffer>
-struct buildtype_helper<T[N],Buffer>
-{
-    constexpr static bool value = !(std::is_scalar<std::remove_reference_t<T>>::value && is_aligned_binary_buffer<Buffer> && !std::is_pointer<T>::value);
-};
+template<typename T, typename Buffer, typename = void>
+struct is_aligned_native_buffer_nonpointer_scalar_data
+    : std::integral_constant<bool,
+            std::is_scalar<std::remove_all_extents_t<std::remove_reference_t<T>>>::value &&
+            is_aligned_native_binary_buffer_v<Buffer> &&
+            !std::is_pointer<T>::value> 
+{};
 
 template<typename T, typename Buffer>
-constexpr bool is_buildtype = buildtype_helper<T,Buffer>::value;
+constexpr bool is_aligned_native_buffer_nonpointer_scalar_data_v = is_aligned_native_buffer_nonpointer_scalar_data<T,Buffer>::value;
+
+template<typename T, typename Buffer,typename=void>
+struct is_buildtype : std::integral_constant<bool,!is_aligned_native_buffer_nonpointer_scalar_data_v<T,Buffer>> {};
+
+template<typename T, typename Buffer>
+constexpr bool is_buildtype_v = is_buildtype<T,Buffer>::value;
+
+template<typename T, typename Buffer>
+using is_buildtype_type = typename is_buildtype<T,Buffer>::type;
 
 template<typename T, std::size_t Alignment>
 struct type_default_alignment_helper

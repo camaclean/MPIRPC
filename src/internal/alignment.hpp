@@ -55,14 +55,15 @@ template<std::size_t Alignment>
 struct alignment_reader<std::integral_constant<std::size_t,Alignment>>
 {
     static constexpr std::size_t value = Alignment;
-    using type = std::conditional_t<value,std::true_type,std::false_type>;
+    //using type = std::conditional_t<value,std::true_type,std::false_type>;
+    using type = std::integral_constant<std::size_t,value>;
 };
 
 template<typename Alignment, typename... Alignments>
 struct alignment_reader<std::tuple<Alignment,Alignments...>>
 {
     static constexpr std::size_t value = alignment_reader<Alignment>::value;
-    using type = std::conditional_t<value,std::true_type,std::false_type>;
+    using type = std::integral_constant<std::size_t,value>;
 };
 
 template<typename Alignment>

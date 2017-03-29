@@ -534,6 +534,9 @@ public:
     A(const double v1, int v2 ,const float& v3, bool& v4, long v5, const long long& v6, const B& b)
         : m_v1{v1}, m_v2{v2}, m_v3{v3}, m_v4{v4}, m_v5{v5}, m_v6{v6}, m_b{b}
     { std::cout << "constructed A " << b.m_b << std::endl; }
+    A() = delete;
+    A(const A&) = delete;
+    A(A&&) = delete;
     ~A() { std::cout << "Deleted A" << std::endl; }
     double add () const
     {
@@ -543,12 +546,60 @@ private:
     const double m_v1;
     int m_v2;
     const float m_v3;
-    bool m_v4;
+    bool& m_v4;
     long m_v5;
     const long long m_v6;
     B m_b;
 };
 
+namespace mpirpc
+{
+
+template<typename Buffer, typename Alignment>
+struct unmarshaller<B,Buffer,Alignment>
+{
+    using type = mpirpc::construction_info<B,
+        std::tuple<int>,
+        std::tuple<int>,
+        std::tuple<std::false_type>
+    >;
+    template<typename Allocator>
+    static type unmarshal(Allocator&& a, Buffer& b)
+    {
+        return type{mpirpc::get<int>(b,a)};
+    }
+};
+
+/*
+ * class mpirpc::construction_info_to_aligned_type_holder<
+ *      mpirpc::construction_info<A, 
+ *          std::tuple<const double, int, const float&, bool&, long int, const long long int, const B&>, 
+ *          std::tuple<const double, int, const float&, bool&, long int, const long long int, mpirpc::construction_info<B, 
+ *              std::tuple<int>,
+ *              std::tuple<int>, 
+ *              std::tuple<std::integral_constant<bool, false> > > 
+ *          >, 
+ *          std::tuple<std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, true>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false> > >, 
+ *          std::integral_constant<long unsigned int, 8ul> >
+ * 
+ */
+
+template<typename Buffer, typename Alignment>
+struct unmarshaller<A,Buffer, Alignment>
+{
+    using type = mpirpc::construction_info<A,
+        std::tuple<const double, int, const float&, bool&, long, const long long, const B&>,
+        std::tuple<const double, int, const float&, bool&, long, const long long, mpirpc::unmarshaller_type<B,mpirpc::parameter_buffer<>,std::allocator<char>>>,
+        std::tuple<std::false_type, std::false_type, std::false_type, std::true_type, std::false_type, std::false_type, std::false_type>
+    >;
+    template<typename Allocator>
+    static type unmarshal(Allocator&& a, Buffer& b)
+    {
+        //class construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>
+    }
+};
+
+}
 void test_function(const A& a, int b, double c)
 {
     std::cout << a.add() << " " << b << " " << c << std::endl;
@@ -633,6 +684,7 @@ TEST(Test,test)
     std::cout << abi::__cxa_demangle(typeid(typename stored_arguments_test_type::storage_tuple_reverse_indexes_type).name(),0,0,0) << std::endl;
     b_type bi(5);
     std::cout << abi::__cxa_demangle(typeid(stored_arguments_test_type::construction_info_type).name(),0,0,0) << std::endl;
+    std::cout << alignof(stored_arguments_test_type) << std::endl;
     stored_arguments_test_type::construction_info_type ci(3.5, 4, 12.9f, true, 1004L, 21414LL, bi);
     stored_arguments_test_type h(ci);
     std::cout << h.value().add() << " " << 3.5 + 4 + 12.9f + 1004L + 21414LL + 5 << std::endl;
@@ -643,7 +695,96 @@ TEST(Test,test)
     //std::cout << std::get<1>(proxy_tuple) << " " << std::get<2>(proxy_tuple) << " | " << std::get<1>(ci.args()) << " " << std::get<2>(ci.args()) << std::endl;
     //stored_arguments_test_type::stored_arguments_tuple_type storedtuple(12.9f,true,12414LL);
     //auto proxy_tuple = stored_arguments_test_type::make_proxy(ci,storedtuple);
+    using ArgsTuple = std::tuple<int,A&,B>;
+    using AlignmentsTuple = std::tuple<
+                                std::integral_constant<std::size_t,alignof(int)>,
+                                std::integral_constant<std::size_t,alignof(A)>,
+                                std::integral_constant<std::size_t,alignof(B)>
+                            >;
+#if 1
+    mpirpc::parameter_setup<mpirpc::parameter_buffer<std::allocator<char>>, 
+                            ArgsTuple, 
+                            std::tuple<int, A&, B>, 
+                            AlignmentsTuple
+                            > ps;
+#endif
+    std::cout << "AlignmentsTuple: " << abi::__cxa_demangle(typeid(AlignmentsTuple).name(),0,0,0)<< std::endl;
+    std::cout << "Stored types: " << abi::__cxa_demangle(typeid(mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::stored_types).name(),0,0,0) << std::endl;
+    std::cout << "Storage types tuple type: " << abi::__cxa_demangle(typeid(mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::storage_types_tuple_type).name(),0,0,0) << std::endl;
+    std::cout << "Parameter aligned storage: " << abi::__cxa_demangle(typeid(mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::aligned_storage_tuple_type).name(),0,0,0) << std::endl;
+    std::cout << "Build types: " << abi::__cxa_demangle(typeid(mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types).name(),0,0,0) << std::endl;
+    std::cout << "Filtered indexes size: " << mpirpc::filtered_tuple_indexes<mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types>::size << std::endl;
+    std::cout << "Filtered indexes: " << abi::__cxa_demangle(typeid(mpirpc::filtered_tuple_indexes_type<mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types>).name(),0,0,0) << std::endl;
+    std::cout << "Counting trues: " << mpirpc::count_trues<true,true,true,false>::value << std::endl;
+    std::cout << "Test filtering indexes input: " << abi::__cxa_demangle(typeid(mpirpc::filtered_indexes<true,true,true,false>::input_tuple).name(),0,0,0) << std::endl;
+    std::cout << "Test filtering indexes size: " << mpirpc::filtered_indexes<true,true,true,false>::size << std::endl;
+    std::cout << "Test filtering indexes: " << abi::__cxa_demangle(typeid(mpirpc::filtered_indexes<true,true,true,false>::type).name(),0,0,0) << std::endl;
+    std::cout << "Alignment test: " << alignof(mpirpc::aligned_type_holder<A, std::integral_constant<bool, true>, std::tuple<double const, int, float const&, bool&, long, long long const, B const&>, std::tuple<double const, int, float const&, bool&, long, long long const, mpirpc::construction_info<B, std::tuple<int>, std::tuple<int>, std::tuple<std::integral_constant<bool, false> > > >, std::tuple<std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, true>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false> >, std::tuple<std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 4ul>, std::integral_constant<unsigned long, 4ul>, std::integral_constant<unsigned long, 1ul>, std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 4ul> > >) << std::endl;
     
+    mpirpc::construction_info_to_aligned_type_holder<
+        mpirpc::construction_info<
+            B, 
+            std::tuple<int>,
+            std::tuple<int>,
+            std::tuple<std::integral_constant<bool, false>>
+        >,
+        std::integral_constant<long unsigned int, 4ul>
+    > test6;
+                            
+    mpirpc::storage_type_conversion<
+        B,
+        mpirpc::parameter_buffer<>,
+        std::integral_constant<long unsigned int, 4ul>
+    >
+    test5;
+
+                            
+    mpirpc::construction_info_to_aligned_type_holder<
+        mpirpc::construction_info<
+            A,
+            std::tuple<
+                const double,
+                int,
+                const float&,
+                bool&,
+                long int,
+                const long long int,
+                const B&
+            >,
+            std::tuple<
+                const double,
+                int,
+                const float&,
+                bool&,
+                long int,
+                const long long int,
+                mpirpc::construction_info<
+                    B,
+                    std::tuple<int>,
+                    std::tuple<int>,
+                    std::tuple<std::integral_constant<bool, false>>
+                >
+            >,
+            std::tuple<
+                std::integral_constant<bool, false>,
+                std::integral_constant<bool, false>,
+                std::integral_constant<bool, false>,
+                std::integral_constant<bool, true>,
+                std::integral_constant<bool, false>,
+                std::integral_constant<bool, false>,
+                std::integral_constant<bool, false>
+            >
+        >,
+        std::integral_constant<long unsigned int, 8ul>
+    > test4;
+
+    std::cout << abi::__cxa_demangle(typeid(mpirpc::storage_construction_types<ArgsTuple,mpirpc::parameter_buffer<>,AlignmentsTuple>).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(mpirpc::internal::conditional_tuple_type_prepend_type<true,A,std::tuple<>>).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(mpirpc::filter_tuple_types<std::tuple<A>,std::tuple<std::integral_constant<bool,true>>>).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(decltype(test4)::type_alignment).name(),0,0,0) << std::endl;
+    //std::cout << alignof(test4) << std::endl;
+    std::cout << "is_buildtype test: " << std::is_same<std::integral_constant<bool,false>,mpirpc::is_buildtype<int,mpirpc::parameter_buffer<std::allocator<char>>>::type>::value << std::endl;
+                            
     //double d = 3.14;
     //double&& d2 = std::move(d);
     //blah(d2);

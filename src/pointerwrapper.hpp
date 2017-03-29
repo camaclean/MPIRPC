@@ -178,7 +178,7 @@ struct unmarshaller<mpirpc::pointer_wrapper<T>,Buffer,Alignment>
         b.realign(alignment);
         std::cout << (uintptr_t) b.data_here() << std::endl;
 
-        if (pass_ownership || is_buildtype<T,Buffer>)
+        if (pass_ownership || is_buildtype<T,Buffer>())
         {
             if (std::is_polymorphic<T>::value)
             {
