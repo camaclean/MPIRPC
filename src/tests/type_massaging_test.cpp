@@ -1132,7 +1132,7 @@ void foo4(bool b, i128t i128, i128t* t2)
     ASSERT_EQ(5,*t2);
 };
 
-TEST(ArgumentUnpacking, test0)
+/*TEST(ArgumentUnpacking, test0)
 {
     mpirpc::register_polymorphism<B>();
     mpirpc::parameter_buffer<> p;
@@ -1154,9 +1154,9 @@ TEST(ArgumentUnpacking, test0)
     mpirpc::internal::apply(&foo,a,p,pout);
     mpirpc::parameter_buffer<> pout2;
     mpirpc::internal::apply(&foo3,a,p,pout2);
-}
+}*/
 
-TEST(ArgumentUnpacking, overaligned)
+/*TEST(ArgumentUnpacking, overaligned)
 {
     std::allocator<char> a;
     mpirpc::parameter_buffer<> p2;
@@ -1173,7 +1173,7 @@ TEST(ArgumentUnpacking, overaligned)
     p2.seek(0);
     std::cout << abi::__cxa_demangle(typeid(typename mpirpc::internal::function_parts<decltype(&foo4)>::default_alignments).name(),0,0,0) << std::endl;
     mpirpc::internal::apply(&foo4,a,p2,pout);
-}
+}*/
 
 namespace std
 {

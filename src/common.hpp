@@ -89,9 +89,6 @@ class manager;
 template<typename T, typename Buffer, typename Alignment, typename = void>
 struct unmarshaller;
 
-template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple>
-class construction_info;
-
 using FnHandle = unsigned long long;
 using TypeId = uintptr_t;
 using ObjectId = unsigned long long;

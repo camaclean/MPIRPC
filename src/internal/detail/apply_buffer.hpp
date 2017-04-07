@@ -37,6 +37,87 @@ namespace internal
 namespace detail
 {
 
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, std::size_t Pos, typename Types, typename Alignments>
+struct alignment_padding_helper;
+
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, std::size_t Pos, typename...Ts, typename... Alignments>
+struct alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,Pos,std::tuple<Ts...>,std::tuple<Alignments...>>
+{
+    using type = std::tuple_element_t<Pos,std::tuple<Ts...>>;
+    using type_alignment = std::tuple_element_t<Pos,std::tuple<Alignments...>>;
+    static constexpr std::size_t type_size = sizeof(type);
+    static constexpr bool predicate = (mpirpc::is_buildtype<type,Buffer>() && !SkipBuildTypes) || (!mpirpc::is_buildtype<type,Buffer>() && !SkipNonBuildTypes);
+    static constexpr std::size_t prev_end_address_offset = alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,Pos-1,std::tuple<Ts...>,std::tuple<Alignments...>>::end_address_offset;
+    static constexpr std::size_t delta = (predicate) ? mpirpc::internal::calculate_alignment_padding(prev_end_address_offset,type_alignment::value) : 0;
+    static constexpr std::size_t start_address_offset = (predicate) ? prev_end_address_offset + delta : prev_end_address_offset;
+    static constexpr std::size_t end_address_offset = (predicate) ? start_address_offset + type_size : prev_end_address_offset;
+    static constexpr std::size_t total_padding = alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,Pos-1,std::tuple<Ts...>,std::tuple<Alignments...>>::total_padding + delta;
+    static constexpr std::size_t total_size = alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,Pos-1,std::tuple<Ts...>,std::tuple<Alignments...>>::total_size + delta + type_size;
+};
+
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename T, typename... Ts, typename Alignment, typename... Alignments>
+struct alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,0,std::tuple<T,Ts...>,std::tuple<Alignment,Alignments...>>
+{
+    using type = T;
+    using type_alignment = Alignment;
+    static constexpr std::size_t type_size = sizeof(type);
+    static constexpr bool predicate = (is_buildtype<type,Buffer>() && !SkipBuildTypes) || (!is_buildtype<type,Buffer>() && !SkipNonBuildTypes);
+    static constexpr std::size_t prev_end_address_offset = 0;
+    static constexpr std::size_t delta = 0;
+    static constexpr std::size_t start_address_offset = 0;
+    static constexpr std::size_t end_address_offset = (predicate) ? unpacked_size_v<Buffer,type,type_alignment> : 0;
+    static constexpr std::size_t total_padding = 0;
+    static constexpr std::size_t total_size = type_size;
+};
+
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes>
+struct alignment_padding_helper<Buffer,SkipBuildTypes,SkipNonBuildTypes,0,std::tuple<>,std::tuple<>>
+{
+    using type = std::nullptr_t;
+    static constexpr bool predicate = false;
+    static constexpr std::size_t prev_end_address_offset = 0;
+    static constexpr std::size_t delta = 0;
+    static constexpr std::size_t start_address_offset = 0;
+    static constexpr std::size_t end_address_offset = 0;
+    static constexpr std::size_t total_padding = 0;
+    static constexpr std::size_t total_size = 0;
+};
+
+template<typename T1, typename T2,typename = void>
+struct choose_custom_alignment;
+
+template<typename...T1s,typename...T2s>
+struct choose_custom_alignment<std::tuple<T1s...>,std::tuple<T2s...>, std::enable_if_t<!!sizeof...(T2s)>>
+{
+    using type = std::tuple<T2s...>;
+};
+
+template<typename...T1s, typename... T2s>
+struct choose_custom_alignment<std::tuple<T1s...>,std::tuple<T2s...>, std::enable_if_t<!sizeof...(T2s)>>
+{
+    using type = std::tuple<T1s...>;
+};
+
+}
+
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename Types, typename Alignments>
+constexpr std::size_t alignment_padding = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, (std::tuple_size<Types>::value > 0) ? (std::tuple_size<Types>::value-1) : 0, Types, Alignments>::total_padding;
+
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename Types, typename Alignments>
+constexpr std::size_t aligned_buffer_size = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, (std::tuple_size<Types>::value > 0) ? (std::tuple_size<Types>::value-1) : 0, Types, Alignments>::total_size;
+
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, std::size_t Index, typename Types, typename Alignments>
+constexpr std::size_t aligned_buffer_address_offset = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, Index, Types, Alignments>::start_address_offset;
+
+template<typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, std::size_t Index, typename Types, typename Alignments>
+constexpr std::size_t aligned_buffer_delta = detail::alignment_padding_helper<Buffer, SkipBuildTypes, SkipNonBuildTypes, Index, Types, Alignments>::delta;
+
+template<typename T1, typename T2>
+using custom_alignments = typename detail::choose_custom_alignment<T1,T2>::type;
+
+namespace detail
+{
+
 template<typename F, typename Allocator, typename InBuffer, typename OutBuffer, typename...FArgs, typename...Ts, bool... PBs, std::size_t... Is, typename... Alignments,
          std::enable_if_t<std::is_same<::mpirpc::internal::function_return_type<std::remove_reference_t<F>>,void>::value>* = nullptr>
 void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_return, ::mpirpc::internal::type_pack<FArgs...>, ::mpirpc::internal::type_pack<Ts...>, ::mpirpc::internal::bool_template_list<PBs...>, std::index_sequence<Is...>, std::tuple<Alignments...>)
@@ -105,6 +186,7 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, bool
     }
     (void)swallow{(cleanup<InBuffer,Alignments>(std::forward<Allocator>(a),std::get<Is>(t)), 0)...};
 }
+
 
 }
 

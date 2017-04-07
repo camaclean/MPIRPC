@@ -225,6 +225,7 @@ void apply(F&& f, Class *c, Allocator&& a, InBuffer&& s, OutBuffer&& os, bool ge
     detail::apply_impl(std::forward<F>(f),c,std::forward<Allocator>(a),std::forward<InBuffer>(s), std::forward<OutBuffer>(os), get_return, FArgs{}, Ts{}, PassBacks{}, std::make_index_sequence<num_args>{}, alignments{});
 }
 
+
 }
 
 }
