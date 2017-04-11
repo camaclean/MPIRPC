@@ -17,11 +17,11 @@
  *
  */
 
-#ifndef MPIRPC__INTERNAL__RECONSTRUCTION_TYPE_CONVERSION_HPP
-#define MPIRPC__INTERNAL__RECONSTRUCTION_TYPE_CONVERSION_HPP
+#ifndef MPIRPC__INTERNAL__RECONSTRUCTION__TYPE_CONVERSION_HPP
+#define MPIRPC__INTERNAL__RECONSTRUCTION__TYPE_CONVERSION_HPP
 
 #include <tuple>
-#include <../internal/alignment.hpp>
+#include "alignment.hpp"
 
 namespace mpirpc
 {
@@ -53,13 +53,33 @@ using reconstruction_storage_constructor_type = typename reconstruction_storage_
 template<typename T, typename Store, typename Alignment>
 using reconstruction_storage_aligned_storage_type = typename reconstruction_storage_type_helper<T,Store,Alignment>::aligned_storage_type;
 
-/*******************************************************************/
+/*************************************************************************************/
+/*************************************************************************************/
+/*                                  Implementation                                   */
+/*************************************************************************************/
+/*************************************************************************************/
 
+/*************************************************************************************/
+/*     mpirpc::internal::reconstruction::construction_info_to_aligned_type_holder    */
+/*************************************************************************************/
 
 template<typename T, typename Alignment, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename AlignmentsTuple>
 class aligned_type_holder;
 
-template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
+template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentTypesTuple, typename StoredArgumentsTuple, typename Alignments>
+struct construction_info_to_aligned_type_holder<construction_info<T,ConstructorArgumentTypesTuple,ArgumentTypesTuple,StoredArgumentsTuple>,Alignments>
+{
+    using type = aligned_type_holder<
+                    T,
+                    construction_type_alignment_type<T,ArgumentTypesTuple,Alignments>,
+                    ConstructorArgumentTypesTuple,
+                    ArgumentTypesTuple,
+                    StoredArgumentsTuple,
+                    construction_arg_alignments_type<T,ArgumentTypesTuple,Alignments>
+                >;
+};
+
+/*template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
 struct construction_info_to_aligned_type_holder<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,std::tuple<Alignments...>>
 {
     using alignments = std::tuple<Alignments...>;
@@ -77,7 +97,7 @@ struct construction_info_to_aligned_type_holder<construction_info<T,std::tuple<C
 template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, std::size_t Alignment>
 struct construction_info_to_aligned_type_holder<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,std::integral_constant<std::size_t,Alignment>>
     : construction_info_to_aligned_type_holder<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,std::tuple<std::integral_constant<std::size_t,Alignment>>>
-{};
+{};*/
 
 template<typename T, typename Store, typename Alignment>
 struct reconstruction_storage_type_helper
@@ -105,9 +125,8 @@ struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumen
 
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename Stored, std::size_t Alignment>
 struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,Stored,std::integral_constant<std::size_t, Alignment>>
-    : reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,Stored,tuple_type_prepend_type<
-        typename construction_info_to_aligned_type_holder<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,std::integral_constant<std::size_t,Alignment>>::type_alignment,
-        typename construction_info_to_aligned_type_holder<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,std::integral_constant<std::size_t,Alignment>>::internal_alignments>>
+    : reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,Stored,
+        construction_alignments_type<T,ArgumentsTuple,std::integral_constant<std::size_t, Alignment>>>
 {};
 
 }
@@ -116,5 +135,5 @@ struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumen
 
 }
 
-#endif /* MPIRPC__INTERNAL__RECONSTRUCTION_TYPE_CONVERSION_HPP */
+#endif /* MPIRPC__INTERNAL__RECONSTRUCTION__TYPE_CONVERSION_HPP */
 

@@ -163,14 +163,41 @@ struct filter_tuple_types<std::tuple<T>,std::tuple<std::integral_constant<bool,C
 template<typename Types, typename Conditions>
 using filter_tuple_types_type = typename filter_tuple_types<Types,Conditions>::type;
 
+namespace detail
+{
+
+template<typename T, typename Buffer, typename Allocator, typename=void>
+struct has_unmarshaller_helper : std::false_type {};
+
 template<typename T, typename Buffer, typename Allocator>
+struct has_unmarshaller_helper<T,Buffer,Allocator,
+    std::void_t<decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>>::unmarshal(std::declval<Allocator&&>(),std::declval<Buffer&>()))>>
+    : std::true_type
+{};
+
+template<typename T, typename Buffer, typename Allocator, typename=void>
 struct unmarshaller_type_helper
 {
-    using type = decltype(mpirpc::get<T>(std::declval<Buffer>(),std::declval<Allocator>()));
+    static_assert(std::is_same<void,T>::value, "ERROR: mpirpc::unmarshaller<T,Buffer,Alignment> not defined for this type");
+    using type = decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>>::unmarshal(std::declval<Allocator&&>(),std::declval<Buffer&>()));
 };
 
 template<typename T, typename Buffer, typename Allocator>
-using unmarshaller_type = typename unmarshaller_type_helper<T,Buffer,Allocator>::type;
+struct unmarshaller_type_helper<T,Buffer,Allocator,std::enable_if_t<has_unmarshaller_helper<T,Buffer,Allocator>::value>>
+{
+    using type = decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>>::unmarshal(std::declval<Allocator>(),std::declval<Buffer&>()));
+};
+
+}
+
+template<typename T, typename Buffer, typename Allocator>
+using has_unmarshaller = typename detail::has_unmarshaller_helper<T,Buffer,Allocator>::type;
+
+template<typename T, typename Buffer, typename Allocator>
+constexpr bool has_unmarshaller_v = detail::has_unmarshaller_helper<T,Buffer,Allocator>::value;
+
+template<typename T, typename Buffer, typename Allocator>
+using unmarshaller_type = typename detail::unmarshaller_type_helper<T,Buffer,Allocator>::type;
 
 template<typename T, typename Buffer, typename Alignment, typename=void>
 struct parameter_aligned_storage
@@ -402,7 +429,7 @@ protected:
         std::cout << "INDEX: " << abi::__cxa_demangle(typeid(storage_index<I>).name(),0,0,0) << std::endl;
         //using index_type = storage_index<I>;
         //constexpr auto index = index_type::value;
-        Type* rawstorage = static_cast<Type*>(&std::get<storage_index<I>::value>(m_storage));
+        Type* rawstorage = static_cast<Type*>(std::addressof(std::get<storage_index<I>::value>(m_storage)));
         new (rawstorage) Type(mpirpc::get<arg_type<I>>(b,a));
         return static_cast<proxy_type<I>>(*rawstorage);
     }

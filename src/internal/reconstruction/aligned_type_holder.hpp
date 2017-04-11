@@ -23,6 +23,7 @@
 #include "construction_info.hpp"
 #include "detail/stored_arguments_info.hpp"
 #include "type_conversion.hpp"
+#include "../alignment.hpp"
 #include <cxxabi.h>
 
 namespace mpirpc

@@ -809,7 +809,7 @@ TEST(Test,test)
     std::cout << abi::__cxa_demangle(typeid(mpirpc::storage_construction_types<ArgsTuple,mpirpc::parameter_buffer<>,AlignmentsTuple>).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(mpirpc::internal::conditional_tuple_type_prepend_type<true,A,std::tuple<>>).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(mpirpc::filter_tuple_types<std::tuple<A>,std::tuple<std::integral_constant<bool,true>>>).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(decltype(test4)::type_alignment).name(),0,0,0) << std::endl;
+    //std::cout << abi::__cxa_demangle(typeid(decltype(test4)::type_alignment).name(),0,0,0) << std::endl;
     //std::cout << alignof(test4) << std::endl;
     std::cout << "is_buildtype test: " << std::is_same<std::integral_constant<bool,false>,mpirpc::is_buildtype<int,mpirpc::parameter_buffer<std::allocator<char>>>::type>::value << std::endl;
                             

@@ -22,6 +22,7 @@
 
 #include "type_conversion.hpp"
 #include <experimental/type_traits>
+#include "../../alignment.hpp"
 
 namespace mpirpc
 {
@@ -29,6 +30,12 @@ namespace mpirpc
 
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple>
 class construction_info;
+
+template<typename T, typename ConstructorArgumentTypesTuple, typename... ArgumentTypes, typename StoredArgumentsTuple>
+struct default_alignment_helper<construction_info<T,ConstructorArgumentTypesTuple,std::tuple<ArgumentTypes...>,StoredArgumentsTuple>>
+{
+    using type = std::tuple<std::integral_constant<std::size_t,alignof(T)>,default_alignment_type<ArgumentTypes>...>;
+};
 
 template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments>
 class construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>

@@ -1,3 +1,4 @@
+#include <gtest/gtest.h>
 /*
  * MPIRPC: MPI based invocation of functions on other ranks
  * Copyright (C) 2014-2016 Colin MacLean <cmaclean@illinois.edu>
@@ -43,8 +44,105 @@ TEST(reconstruct_types, is_aligned_type_holder)
     ASSERT_EQ(false, mpirpc::internal::reconstruction::is_aligned_type_holder_v<std::vector<double>>);
     using ATH1 = typename CI1::template aligned_type_holder<std::integral_constant<std::size_t, alignof(int)>>;
     ASSERT_EQ(true, mpirpc::internal::reconstruction::is_aligned_type_holder_v<ATH1>);
-    using ATH2 = typename CI1::template aligned_type_holder<std::tuple<std::integral_constant<std::size_t, 32>,std::integral_constant<std::size_t,alignof(int)>,std::integral_constant<std::size_t,alignof(std::vector<double>)>>>;
+    using ATH2 = typename CI2::template aligned_type_holder<std::tuple<std::integral_constant<std::size_t, 32>,std::integral_constant<std::size_t,alignof(int)>,std::integral_constant<std::size_t,alignof(std::vector<double>)>>>;
     ASSERT_EQ(true, mpirpc::internal::reconstruction::is_aligned_type_holder_v<ATH2>);
+}
+
+class C
+{
+public:
+    C(int a, double b) : m_a(a), m_b(b) {};
+    int a() const { return m_a; }
+    double b() const { return m_b; }
+private:
+    int m_a;
+    double m_b;
+};
+
+class D {};
+
+TEST(construction_alignment,scalar)
+{
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(double)>,std::integral_constant<std::size_t,alignof(double)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<double,std::tuple<double>,std::tuple<>>
+        >::value)
+    );
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(double)>,std::integral_constant<std::size_t,alignof(double)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<double,std::tuple<double>,std::integral_constant<std::size_t,alignof(double)>>
+        >::value)
+    );
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(double)>,std::integral_constant<std::size_t,alignof(double)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<double,std::tuple<double>,std::tuple<std::integral_constant<std::size_t,alignof(double)>>>
+        >::value)
+    );
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(double)>,std::integral_constant<std::size_t,alignof(double)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<double,std::tuple<double>,std::tuple<std::integral_constant<std::size_t,alignof(double)>,std::integral_constant<std::size_t,alignof(double)>>>
+        >::value)
+    );
+}
+
+TEST(construction_alignment,class)
+{
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(C)>,std::integral_constant<std::size_t,alignof(int)>,std::integral_constant<std::size_t,alignof(double)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<C,std::tuple<int,double>,std::tuple<>>
+        >::value)
+    );
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(C)>,std::integral_constant<std::size_t,alignof(int)>,std::integral_constant<std::size_t,alignof(double)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<C,std::tuple<int,double>,std::integral_constant<std::size_t,alignof(C)>>
+        >::value)
+    );
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(C)>,std::integral_constant<std::size_t,alignof(int)>,std::integral_constant<std::size_t,alignof(double)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<C,std::tuple<int,double>,std::tuple<std::integral_constant<std::size_t,alignof(C)>>>
+        >::value)
+    );
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(C)>,std::integral_constant<std::size_t,alignof(int)>,std::integral_constant<std::size_t,alignof(double)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<C,std::tuple<int,double>,std::tuple<std::integral_constant<std::size_t,alignof(C)>,std::integral_constant<std::size_t,alignof(int)>,std::integral_constant<std::size_t,alignof(double)>>>
+        >::value)
+    );
+}
+
+TEST(construction_alignment,noargs)
+{
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(D)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<D,std::tuple<>,std::tuple<>>
+        >::value)
+    );
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(D)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<D,std::tuple<>,std::integral_constant<std::size_t,alignof(D)>>
+        >::value)
+    );
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(D)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<D,std::tuple<>,std::tuple<std::integral_constant<std::size_t,alignof(D)>>>
+        >::value)
+    );
+    ASSERT_TRUE(
+        (std::is_same<
+            std::tuple<std::integral_constant<std::size_t,alignof(C)>,std::integral_constant<std::size_t,alignof(int)>,std::integral_constant<std::size_t,alignof(double)>>,
+            mpirpc::internal::reconstruction::construction_alignments_type<C,std::tuple<int,double>,std::tuple<std::integral_constant<std::size_t,alignof(C)>,std::integral_constant<std::size_t,alignof(int)>,std::integral_constant<std::size_t,alignof(double)>>>
+        >::value)
+    );
 }
 
 class B
@@ -167,6 +265,7 @@ struct unmarshaller<A,Buffer,Alignment>
 
 TEST(Test,parameter_setup)
 {
+    mpirpc::unmarshaller_type<std::vector<double>,mpirpc::parameter_buffer<>,std::allocator<char>> a;
     mpirpc::parameter_buffer<> pb;
     pb.template push<int,std::integral_constant<std::size_t,32>>(2);
     B bval(5);
