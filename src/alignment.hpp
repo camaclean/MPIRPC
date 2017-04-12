@@ -31,8 +31,20 @@ struct default_alignment_helper : std::integral_constant<std::size_t,alignof(T)>
 template<typename T>
 using default_alignment_type = typename default_alignment_helper<T>::type;
 
+/*template<std::size_t Alignment>
+using alignment_type = std::integral_constant<std::size_t,Alignment>;*/
+
+template<std::size_t... Alignments>
+struct alignment_data
+{
+    using type = std::tuple<std::integral_constant<std::size_t,Alignments>...>;
+};
+
 template<std::size_t Alignment>
-using alignment_type = std::integral_constant<std::size_t,Alignment>;
+struct alignment_data<Alignment> : std::integral_constant<std::size_t,Alignment> {};
+
+template<std::size_t... Alignments>
+using align = typename alignment_data<Alignments...>::type;
 
 }
 

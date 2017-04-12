@@ -22,6 +22,7 @@
 
 #include <utility>
 #include "common.hpp"
+#include "detail/unmarshaller.hpp"
 #include "internal/type_properties.hpp"
 #include "internal/alignment.hpp"
 #include "internal/utility.hpp"
@@ -162,33 +163,6 @@ struct filter_tuple_types<std::tuple<T>,std::tuple<std::integral_constant<bool,C
 
 template<typename Types, typename Conditions>
 using filter_tuple_types_type = typename filter_tuple_types<Types,Conditions>::type;
-
-namespace detail
-{
-
-template<typename T, typename Buffer, typename Allocator, typename=void>
-struct has_unmarshaller_helper : std::false_type {};
-
-template<typename T, typename Buffer, typename Allocator>
-struct has_unmarshaller_helper<T,Buffer,Allocator,
-    std::void_t<decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>>::unmarshal(std::declval<Allocator&&>(),std::declval<Buffer&>()))>>
-    : std::true_type
-{};
-
-template<typename T, typename Buffer, typename Allocator, typename=void>
-struct unmarshaller_type_helper
-{
-    static_assert(std::is_same<void,T>::value, "ERROR: mpirpc::unmarshaller<T,Buffer,Alignment> not defined for this type");
-    using type = decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>>::unmarshal(std::declval<Allocator&&>(),std::declval<Buffer&>()));
-};
-
-template<typename T, typename Buffer, typename Allocator>
-struct unmarshaller_type_helper<T,Buffer,Allocator,std::enable_if_t<has_unmarshaller_helper<T,Buffer,Allocator>::value>>
-{
-    using type = decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>>::unmarshal(std::declval<Allocator>(),std::declval<Buffer&>()));
-};
-
-}
 
 template<typename T, typename Buffer, typename Allocator>
 using has_unmarshaller = typename detail::has_unmarshaller_helper<T,Buffer,Allocator>::type;
@@ -364,17 +338,7 @@ public:
             >,
             build_types
         >;
-    /*using aligned_storage_tuple_type = 
-        filter_tuple_types_type<
-            std::tuple<
-                parameter_aligned_storage_type<
-                    std::remove_cv_t<std::remove_reference_t<Args>>,
-                    Buffer,
-                    std::tuple<Alignments>
-                >...
-            >,
-            build_types
-        >;*/
+    
     using proxy_tuple_type = std::tuple<FArgs&&...>;
     
     template<std::size_t I>
@@ -549,32 +513,23 @@ private:
 };*/
 
 
-/*template<typename R, typename...Ts, std::size_t...Is>
-R construct_impl(const std::tuple<std::piecewise_construct_t,Ts...>& t, std::index_sequence<Is...>)
-{
-    return R(std::get<Is+1>(t)...);
-}
-
-template<typename R, typename...Ts>
-R construct(const std::tuple<std::piecewise_construct_t,Ts...>& t)
-{
-    return construct_impl<R>(t,std::index_sequence_for<Ts...>{});
-}
-
-template<typename R, typename T, std::enable_if_t<!internal::is_piecewise_construct_tuple<std::remove_reference_t<T>>::value>* = nullptr>
-R construct(T&& t)
-{
-    return R(std::forward<T>(t));
-}*/
-
 template<typename Buffer, typename Alignment, typename... Ts>
 struct unmarshaller<std::tuple<Ts...>,Buffer,Alignment>
 {
     template<typename Allocator>
-    static std::tuple<Ts...> unmarshal(Allocator&& a, Buffer& b)
+    static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
+        return construction_info<
+            std::tuple<Ts...>, //type
+            std::tuple<Ts...>, //constructor arguments
+            std::tuple<unmarshaller_type<Ts,Buffer,Allocator>...>, //unmarshalled arguments
+            std::tuple<typename std::is_reference<Ts>::type...> //store?
+        >{mpirpc::get<std::remove_reference_t<Ts>>(b,a)...};
         //return std::tuple<std::remove_reference_t<Ts>...>{ construct<std::remove_reference_t<Ts>>(unmarshaller<Ts,Buffer,alignof(Ts)>::unmarshal(std::forward<Allocator>(a),b))... };
     }
+    
+    //template<typename Allocator>
+    //static decltype(auto)
 };
 
 }

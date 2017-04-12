@@ -265,7 +265,7 @@ struct unmarshaller<A,Buffer,Alignment>
 
 TEST(Test,parameter_setup)
 {
-    mpirpc::unmarshaller_type<std::vector<double>,mpirpc::parameter_buffer<>,std::allocator<char>> a;
+    //mpirpc::unmarshaller_type<std::vector<double>,mpirpc::parameter_buffer<>,std::allocator<char>> a;
     mpirpc::parameter_buffer<> pb;
     pb.template push<int,std::integral_constant<std::size_t,32>>(2);
     B bval(5);
@@ -298,7 +298,14 @@ TEST(Test,parameter_setup)
     std::cout << "------------------------" << std::endl;
 }
 
+std::tuple<double[5]> make_test_tuple()
+{
+    return {};
+}
+
 int main(int argc, char **argv) {
+    std::tuple<double[5]> test2();
+    const std::tuple<double[5]>& test = make_test_tuple();
     //std::cout << std::boolalpha;
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

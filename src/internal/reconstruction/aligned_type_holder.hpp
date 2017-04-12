@@ -35,13 +35,115 @@ namespace internal
 namespace reconstruction
 {
     
-template<typename T>
+template<typename T,typename=void>
 struct type_constructor
 {
     template<typename... Args>
     static void construct(T *t, Args&&... args)
     {
         new (t) T(std::forward<Args>(args)...);
+    }
+};
+
+// template<typename T, typename U>
+// struct deep_assigner
+// {
+//     constexpr void assign(T& t, U&& u)
+//     {
+//         t = u;
+//     }
+// }
+// 
+// template<typename T, std::size_t N, typename U>
+// struct deep_assigner<T[N],U>
+// {
+//     constexpr void assign(T& t, U&& u)
+//     {
+//     }
+// }
+// 
+// template<typename T, typename U>
+// void deep_assign(T& t, U&& u)
+// {
+//     deep_assigner<T,U&&>::assign(t,u);
+// }
+
+template<typename... Ts>
+struct type_constructor<std::tuple<Ts...>,
+        std::enable_if_t<
+            !std::is_constructible<std::tuple<Ts...>,Ts...>::value &&
+            std::is_default_constructible<std::tuple<Ts...>>::value
+        >
+    >
+{
+    //TODO: arrays with multiple extents
+    template<typename T, typename U>
+    constexpr static void do_assign(T& t, U&& u)
+    {
+        t = u;
+    }
+    
+    template<typename T, typename U, std::size_t N>
+    constexpr static void do_assign(T(&t)[N], U(&u)[N])
+    {
+        for (std::size_t i = 0; i < N; ++i)
+            do_assign(t[i],u[i]);
+    }
+    
+    template<typename T, typename U, std::size_t N>
+    constexpr static void do_assign(T(&t)[N], U(&&u)[N])
+    {
+        for (std::size_t i = 0; i < N; ++i)
+            do_assign(t[i],std::move(u[i]));
+    }
+    
+    template<std::size_t I, typename T, std::size_t N,
+             std::enable_if_t<
+                !std::is_assignable<decltype(std::get<I>(std::declval<std::tuple<Ts...>&>())),T(&)[N]>::value &&
+                std::is_array<std::remove_reference_t<std::tuple_element_t<I,std::tuple<Ts...>>>>::value
+             >* = nullptr>
+    static void assign(std::tuple<Ts...>& t, T(&arg)[N])
+    {
+        auto& tmp = std::get<I>(t);
+        for (std::size_t i = 0; i < N; ++i)
+        {
+            tmp[i] = arg[i];
+        }
+    }
+    
+    template<std::size_t I, typename T, std::size_t N,
+             std::enable_if_t<
+                !std::is_assignable<decltype(std::get<I>(std::declval<std::tuple<Ts...>&>())),T(&&)[N]>::value &&
+                std::is_array<std::remove_reference_t<std::tuple_element_t<I,std::tuple<Ts...>>>>::value
+             >* = nullptr>
+    static void assign(std::tuple<Ts...>& t, T(&&arg)[N])
+    {
+        auto& tmp = std::get<I>(t);
+        for (std::size_t i = 0; i < N; ++i)
+        {
+            tmp[i] = std::move(arg[i]);
+        }
+    }
+    
+    template<std::size_t I, typename Arg,
+             std::enable_if_t<std::is_assignable<decltype(std::get<I>(std::declval<std::tuple<Ts...>&>())),Arg>::value>* = nullptr>
+    static void assign(std::tuple<Ts...>& t, Arg&& arg)
+    {
+        std::get<I>(t) = arg;
+    }
+    
+    template<typename... Args, std::size_t... Is>
+    static void assign(std::tuple<Ts...>& t, std::index_sequence<Is...>, Args&&... args)
+    {
+        using swallow = int[];
+        (void)swallow{assign<Is>(t,std::forward<Args>(args))...};
+    }
+    
+    template<typename... Args>
+    static void construct(std::tuple<Ts...> *t, Args&&... args)
+    {
+        new (t) std::tuple<Ts...>();
+        assign(t, std::index_sequence_for<Args...>(), std::forward<Args>(args)...);
     }
 };
 
