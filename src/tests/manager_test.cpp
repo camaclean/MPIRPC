@@ -21,6 +21,7 @@
 
 #include "../manager.hpp"
 #include "../parameter_buffer.hpp"
+#include "../internal/reconstruction/parameter_container.hpp"
 
 TEST(Manager,construct)
 {
@@ -229,8 +230,8 @@ std::tuple<float,long> tcrn_r(bool b, double d)
         return std::make_tuple(2.718f,(long) (d*10));
 }
 
-/* TODO: Fix
-TEST(ManagerInvokers,tcrn_r)
+/* TODO: Fix */
+/*TEST(ManagerInvokers,tcrn_r)
 {
     mpirpc::mpi_manager m;
     m.register_function<decltype(&tcrn_r),&tcrn_r>();
@@ -244,8 +245,8 @@ TEST(ManagerInvokers,tcrn_r)
     std::tuple<int[5]>* t2 = reinterpret_cast<std::tuple<int[5]>*>(&t);
     int t3 = std::get<0>(*t2)[0];
     ASSERT_EQ(1,t3);
-}
-*/
+}*/
+
 
 /*template<typename Buffer, typename Type, typename Alignment>
 constexpr std::size_t element_size_v = unpacked_elemet_info<Buffer,Type,Alignment>::size;*/
@@ -392,86 +393,6 @@ struct reference_types
  * Construction tuple: A, A&, A&&, B&
  * Construction tuple forwarded to constructor: A&&, A&, A&&, B&
  */
-/*template<std::size_t Index, typename T, typename Alignment, typename... Alignments>
-class aligned_type_storage_element<Index,T,std::tuple<Alignment,Alignments...>>
-{
-public:
-    using type = T;
-    using pointer = T*;
-    using reference = T&;
-    using const_reference = const T&;
-    static constexpr std::size_t index = Index;
-    using alignment_type = Alignment;
-    static constexpr std::size_t alignment = alignment_reader<Alignment>::value;
-    using reference_types_tuple = reference_types_type<type>;
-    //using reference_map = reference_types_map<type>;
-    using reference_storage_type = aligned_type_storage<reference_types_tuple,std::tuple<Alignments...>>;
-    using data_type = std::pair<typename std::aligned_storage<sizeof(T),alignment>::type,reference_storage_type>;
-private:
-    data_type elem;
-
-    template<typename... Args, typename... CArgs, std::size_t... Is>
-    void construct_reference_types(std::tuple<std::piecewise_construct_t,CArgs...>& args, std::index_sequence<Is...>)
-    {
-
-    }
-
-    template<typename U, typename... Args>
-    U construct_type(std::tuple<std::piecewise_construct_t,Args...>& args)
-    {
-        return U();
-    }
-
-    template<typename U, std::size_t I, typename... CArgs,
-             std::enable_if_t<!std::is_same<U, std::tuple_element_t<I,std::tuple<CArgs...>>>::value>* = nullptr,
-             std::enable_if_t<!std::is_reference<U>::value>* = nullptr>
-    U get_arg(std::tuple<std::piecewise_construct_t,CArgs...>& pre_args)
-    {
-        return construct_type(std::get<I>(pre_args));
-    }
-
-    template<typename U, std::size_t I, typename... CArgs, std::enable_if_t<std::is_same<U, std::tuple_element_t<I,std::tuple<CArgs...>>>::value>* = nullptr>
-    U& get_arg(std::tuple<std::piecewise_construct_t,CArgs...>& pre_args)
-    {
-        return static_cast<T&&>(std::get<I>(pre_args));
-    }
-
-    template<typename... Args, typename... CArgs, std::size_t... Is>
-    void construct_impl(std::tuple<std::piecewise_construct_t, CArgs...>& pre_args, std::index_sequence<Is...>)
-    {
-        //using reference_types = typename reference_types_filter<sizeof...(Args),Args...>::type;
-        //using reference_map = typename reference_types_filter<sizeof...(Args),Args...>::map;
-        std::tuple<decltype(get_arg<Args,Is>(pre_args))...> args{get_arg<Args,Is>(pre_args)...};
-        new (static_cast<T*>(static_cast<void*>(&elem.first))) T(std::get<Is>(args)...);
-    }
-    
-    template<typename... Args, typename... CArgs, typename... RArgs, std::size_t... Is, std::size_t... RIs>
-    void construct_impl(std::tuple<reference_piecewise_construct_type,std::tuple<CArgs...>,std::tuple<RArgs...>> &pre_args, std::index_sequence<Is...>, std::index_sequence<RIs...>)
-    {
-        
-    }
-
-public:
-
-    template<typename... Args, typename... CArgs, std::enable_if_t<std::is_constructible<T,CArgs...>::value>* = nullptr>
-    void construct(std::tuple<std::piecewise_construct_t, CArgs...>& args)
-    {
-    }
-
-    template<typename... Args, typename... CArgs, typename... RArgs, std::enable_if_t<std::is_constructible<T,CArgs...>::value>* = nullptr>
-    void construct(std::tuple<reference_piecewise_construct_type,std::tuple<CArgs...>,std::tuple<RArgs...>>)
-    {
-
-    }
-
-    void destruct() { static_cast<T*>(static_cast<void*>(&elem))->~T(); }
-
-    pointer address() { return static_cast<pointer>(static_cast<void*>(&elem)); }
-    const pointer address() const { return static_cast<pointer>(static_cast<void*>(&elem)); }
-
-    reference get() { return *static_cast<pointer>(static_cast<void*>(&elem)); }
-    const_reference get() const { return *static_cast<const pointer>(static_cast<const void*>(&elem)); }
-} PACKED;*/
 
 /*template<typename Sizes, typename Types, typename Alignments>
 class __attribute__((packed)) aligned_type_storage_impl;
@@ -741,12 +662,12 @@ TEST(Test,test)
                             >;
     using ArgsTuple = std::tuple<int,A&,B>;
     std::cout << "AlignmentsTuple: " << abi::__cxa_demangle(typeid(AlignmentsTuple).name(),0,0,0)<< std::endl;
-    std::cout << "Stored types: " << abi::__cxa_demangle(typeid(mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::stored_types).name(),0,0,0) << std::endl;
-    std::cout << "Storage types tuple type: " << abi::__cxa_demangle(typeid(mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::storage_tuple_type).name(),0,0,0) << std::endl;
+    std::cout << "Stored types: " << abi::__cxa_demangle(typeid(mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::stored_types).name(),0,0,0) << std::endl;
+    std::cout << "Storage types tuple type: " << abi::__cxa_demangle(typeid(mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::storage_tuple_type).name(),0,0,0) << std::endl;
     //std::cout << "Parameter aligned storage: " << abi::__cxa_demangle(typeid(mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::aligned_storage_tuple_type).name(),0,0,0) << std::endl;
-    std::cout << "Build types: " << abi::__cxa_demangle(typeid(mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types).name(),0,0,0) << std::endl;
-    std::cout << "Filtered indexes size: " << mpirpc::filtered_tuple_indexes<mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types>::size << std::endl;
-    std::cout << "Filtered indexes: " << abi::__cxa_demangle(typeid(mpirpc::filtered_tuple_indexes_type<mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types>).name(),0,0,0) << std::endl;
+    std::cout << "Build types: " << abi::__cxa_demangle(typeid(mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types).name(),0,0,0) << std::endl;
+    std::cout << "Filtered indexes size: " << mpirpc::filtered_tuple_indexes<mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types>::size << std::endl;
+    std::cout << "Filtered indexes: " << abi::__cxa_demangle(typeid(mpirpc::filtered_tuple_indexes_type<mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types>).name(),0,0,0) << std::endl;
     std::cout << "Counting trues: " << mpirpc::count_trues<true,true,true,false>::value << std::endl;
     std::cout << "Test filtering indexes input: " << abi::__cxa_demangle(typeid(mpirpc::filtered_indexes<true,true,true,false>::input_tuple).name(),0,0,0) << std::endl;
     std::cout << "Test filtering indexes size: " << mpirpc::filtered_indexes<true,true,true,false>::size << std::endl;
@@ -812,7 +733,7 @@ TEST(Test,test)
 
     std::cout << abi::__cxa_demangle(typeid(mpirpc::storage_construction_types<ArgsTuple,mpirpc::parameter_buffer<>,AlignmentsTuple>).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(mpirpc::internal::conditional_tuple_type_prepend_type<true,A,std::tuple<>>).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(mpirpc::filter_tuple_types<std::tuple<A>,std::tuple<std::integral_constant<bool,true>>>).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(mpirpc::internal::filter_tuple<std::tuple<A>,std::tuple<std::integral_constant<bool,true>>>).name(),0,0,0) << std::endl;
     //std::cout << abi::__cxa_demangle(typeid(decltype(test4)::type_alignment).name(),0,0,0) << std::endl;
     //std::cout << alignof(test4) << std::endl;
     std::cout << "is_buildtype test: " << std::is_same<std::integral_constant<bool,false>,mpirpc::is_buildtype<int,mpirpc::parameter_buffer<std::allocator<char>>>::type>::value << std::endl;

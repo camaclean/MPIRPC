@@ -22,6 +22,7 @@
 #include <vector>
 #include "../parameter_buffer.hpp"
 #include "../internal/reconstruction/construction_info.hpp"
+#include "../internal/reconstruction/parameter_container.hpp"
 #include "../unmarshaller.hpp"
 
 TEST(reconstruct_types, is_construction_info)
@@ -282,7 +283,7 @@ TEST(Test,parameter_setup)
                                 std::integral_constant<std::size_t,alignof(B)>
                             >;
 #if 1
-    mpirpc::parameter_setup<mpirpc::parameter_buffer<std::allocator<char>>, 
+    mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<std::allocator<char>>, 
                             ArgsTuple, 
                             std::tuple<int, A&, B>, 
                             AlignmentsTuple

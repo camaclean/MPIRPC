@@ -200,6 +200,22 @@ struct conditional_tuple_type_append
 template<bool Condition, typename Tuple, typename T>
 using conditional_tuple_type_append_type = typename conditional_tuple_type_append<Condition,Tuple,T>::type;
 
+template<typename TypesTuple, typename ConditionsTuple>
+struct filter_tuple_types;
+
+template<typename T, typename... Ts, bool C, bool... Cs>
+struct filter_tuple_types<std::tuple<T,Ts...>,std::tuple<std::integral_constant<bool,C>,std::integral_constant<bool,Cs>...>>
+    : conditional_tuple_type_prepend<C,T,typename filter_tuple_types<std::tuple<Ts...>,std::tuple<std::integral_constant<bool,Cs>...>>::type>
+{};
+
+template<typename T, bool C>
+struct filter_tuple_types<std::tuple<T>,std::tuple<std::integral_constant<bool,C>>>
+    : conditional_tuple_type_prepend<C,T,std::tuple<>>
+{};
+
+template<typename Types, typename Conditions>
+using filter_tuple = typename filter_tuple_types<Types,Conditions>::type;
+
 } //internal
 
 } //mpirpc
