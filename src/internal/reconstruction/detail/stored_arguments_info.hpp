@@ -23,6 +23,7 @@
 #include <tuple>
 #include "../type_conversion.hpp"
 #include "../type_properties.hpp"
+#include "../../utility.hpp"
 
 namespace mpirpc
 {
@@ -38,7 +39,7 @@ namespace ath_detail
 
 template<typename ConstructorArgumentsTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename AlignmentsTuple>
 struct stored_arguments_info;
-    
+
 template<std::size_t Size, typename ArgumentsTuple, typename StoredArgumentsTuple, typename AlignmentsTuple>
 struct stored_arguments_impl;
 
@@ -101,11 +102,11 @@ struct stored_arguments_impl<Size,std::tuple<Argument,Arguments...>,std::tuple<S
                       , typename std::aligned_storage<sizeof(std::remove_reference_t<type>),mpirpc::internal::alignment_reader<Alignment>::value>::type
                       , prev_tuple
                   >;
-    
-    using indexes = mpirpc::internal::conditional_index_sequence_prepend_type<
+
+    using indexes = mpirpc::internal::conditional_integer_sequence_prepend_type<
                         is_stored_type<Argument,StoredArgument,Alignment>::value
-                      , index
                       , prev_indexes
+                      , index
                   >;
     using static_construct_types = mpirpc::internal::conditional_tuple_type_prepend_type<
                         is_static_construct_temporary_type<Argument,StoredArgument,Alignment>::value
@@ -117,10 +118,10 @@ struct stored_arguments_impl<Size,std::tuple<Argument,Arguments...>,std::tuple<S
                       , typename std::aligned_storage<sizeof(std::remove_reference_t<type>),mpirpc::internal::alignment_reader<Alignment>::value>::type
                       , typename prev::static_construct_tuple
                   >;
-    using static_construct_indexes = mpirpc::internal::conditional_index_sequence_prepend_type<
+    using static_construct_indexes = mpirpc::internal::conditional_integer_sequence_prepend_type<
                         is_static_construct_temporary_type<Argument,StoredArgument,Alignment>::value
-                      , index
                       , typename prev::static_construct_indexes
+                      , index
                   >;
 };
 
@@ -143,10 +144,10 @@ struct stored_arguments_impl2<Size,std::tuple<Argument,Arguments...>,std::tuple<
     using type = reconstruction_storage_type<Argument,StoredArgument,Alignment>;
     using prev_stored_arguments = stored_arguments_impl2<Size,std::tuple<Arguments...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>;
     using prev_tuple_indexes = typename prev_stored_arguments::tuple_indexes;
-    
+
     //constexpr static std::size_t index = (StoredArgument::value) ? prev_stored_arguments::index - 1 : prev_stored_arguments::index;
     constexpr static std::size_t index = (is_stored_v<Argument,StoredArgument,Alignment>) ? prev_stored_arguments::index - 1 : prev_stored_arguments::index;
-    
+
     using tuple_indexes = std::conditional_t<
                               is_stored_v<Argument,StoredArgument,Alignment>
                             , mpirpc::internal::tuple_type_prepend_type<

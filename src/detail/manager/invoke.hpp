@@ -228,8 +228,8 @@ void mpirpc::manager<MessageInterface, Allocator>::send_function_invocation(int 
     stream.template push<FnHandle>(function_handle);
     stream.template push<bool>(get_return);
     stream << function_handle << get_return;
-    using swallow = int[];
-    (void)swallow{(marshal(stream,std::forward<Args>(args)), 0)...};
+    //using swallow = int[];
+    (void)internal::swallow{(marshal(stream,std::forward<Args>(args)), 0)...};
     send_raw_message(rank, stream.dataVector(), MPIRPC_TAG_INVOKE);
 }*/
 

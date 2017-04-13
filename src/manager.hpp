@@ -546,8 +546,8 @@ protected:
             Buffer stream(data);
             MPI_Recv((void*) data->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
             ret = get<R>(stream,m_alloc);
-            using swallow = int[];
-            (void)swallow{((internal::is_pass_back<FArgs>::value) ? ( internal::pass_back_unmarshaller<Buffer,FArgs>::unmarshal(stream,m_alloc,args) /*args = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
+            //using swallow = int[];
+            (void)internal::swallow{((internal::is_pass_back<FArgs>::value) ? ( internal::pass_back_unmarshaller<Buffer,FArgs>::unmarshal(stream,m_alloc,args) /*args = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
             delete data;
         }
         return ret;
@@ -574,8 +574,8 @@ protected:
             std::vector<char,Allocator>* data = new std::vector<char,Allocator>(len,m_alloc);
             Buffer stream(data);
             MPI_Recv((void*) data->data(), len, MPI_CHAR, rank, MPIRPC_TAG_RETURN, m_comm, &status);
-            using swallow = int[];
-            (void)swallow{((internal::is_pass_back<FArgs>::value) ? (internal::pass_back_unmarshaller<Buffer,FArgs>::unmarshal(stream,m_alloc,args) /* = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
+            //using swallow = int[];
+            (void)internal::swallow{((internal::is_pass_back<FArgs>::value) ? (internal::pass_back_unmarshaller<Buffer,FArgs>::unmarshal(stream,m_alloc,args) /* = unmarshal<Args,Allocator<Args>>(stream)*/, 1) : 0)...};
             delete data;
         }
     }

@@ -21,7 +21,7 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include "../parameter_buffer.hpp"
-#include "../internal/reconstruction/construction_info.hpp"
+#include "../construction_info.hpp"
 #include "../internal/reconstruction/parameter_container.hpp"
 #include "../unmarshaller.hpp"
 
@@ -209,16 +209,16 @@ struct marshaller<B,Buffer,Alignment>
 
 /*
  * class mpirpc::construction_info_to_aligned_type_holder<
- *      mpirpc::construction_info<A, 
- *          std::tuple<const double, int, const float&, bool&, long int, const long long int, const B&>, 
- *          std::tuple<const double, int, const float&, bool&, long int, const long long int, mpirpc::construction_info<B, 
+ *      mpirpc::construction_info<A,
+ *          std::tuple<const double, int, const float&, bool&, long int, const long long int, const B&>,
+ *          std::tuple<const double, int, const float&, bool&, long int, const long long int, mpirpc::construction_info<B,
  *              std::tuple<int>,
- *              std::tuple<int>, 
- *              std::tuple<std::integral_constant<bool, false> > > 
- *          >, 
- *          std::tuple<std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, true>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false> > >, 
+ *              std::tuple<int>,
+ *              std::tuple<std::integral_constant<bool, false> > >
+ *          >,
+ *          std::tuple<std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, true>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false> > >,
  *          std::integral_constant<long unsigned int, 8ul> >
- * 
+ *
  */
 
 template<typename Buffer, typename Alignment>
@@ -283,9 +283,9 @@ TEST(Test,parameter_setup)
                                 std::integral_constant<std::size_t,alignof(B)>
                             >;
 #if 1
-    mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<std::allocator<char>>, 
-                            ArgsTuple, 
-                            std::tuple<int, A&, B>, 
+    mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<std::allocator<char>>,
+                            ArgsTuple,
+                            std::tuple<int, A&, B>,
                             AlignmentsTuple
                             > ps(pb,std::allocator<char>());
 #endif

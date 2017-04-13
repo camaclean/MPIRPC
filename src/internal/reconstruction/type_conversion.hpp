@@ -22,6 +22,7 @@
 
 #include <tuple>
 #include "alignment.hpp"
+#include "type_properties.hpp"
 
 namespace mpirpc
 {

@@ -70,7 +70,7 @@ decltype(auto) apply_impl(F&& f, Class *c, Tuple&& t, std::index_sequence<I...>)
     return ((*c).*(std::forward<F>(f)))(static_cast<std::tuple_element_t<I,typename ::mpirpc::internal::function_parts<std::remove_reference_t<F>>::args_tuple_type>>(std::get<I>(std::forward<Tuple>(t)))...);
 }
 
-template<std::size_t Pos, typename Int, Int Max, Int...Is>
+/*template<std::size_t Pos, typename Int, Int Max, Int...Is>
 struct get_integer_sequence_clamped_impl;
 
 template<std::size_t Pos, typename Int, Int Max, Int I, Int... Is>
@@ -89,22 +89,7 @@ template<std::size_t Pos, typename Int, Int Max>
 struct get_integer_sequence_clamped_impl<Pos,Int,Max>
 {
     constexpr static Int value = Max;
-};
-
-template<std::size_t Pos, typename Int, Int... Is>
-struct get_integer_sequence_impl;
-
-template<std::size_t Pos, typename Int, Int I, Int... Is>
-struct get_integer_sequence_impl<Pos,Int,I,Is...>
-{
-    constexpr static Int value = get_integer_sequence_impl<Pos-1,Int,Is...>::value;
-};
-
-template<typename Int, Int I, Int... Is>
-struct get_integer_sequence_impl<0,Int,I,Is...>
-{
-    constexpr static Int value = I;
-};
+};*/
 
 }
 

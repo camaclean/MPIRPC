@@ -125,7 +125,7 @@ void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_retur
     constexpr std::size_t buffer_size = ::mpirpc::internal::aligned_buffer_size<InBuffer,false,true,std::tuple<Ts...>,std::tuple<Alignments...>>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
     std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype_v<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + ::mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,std::tuple<Ts...>,std::tuple<Alignments...>>)) : nullptr)...};
-    using swallow = int[];
+    //using swallow = int[];
     (void)swallow{(::mpirpc::internal::detail::get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
     if (get_return)
@@ -141,7 +141,7 @@ void apply_impl(F&& f, Allocator&& a, InBuffer& s, OutBuffer& os, bool get_retur
     using PointerTuple = std::tuple<std::add_pointer_t<Ts>...>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
     PointerTuple t{((is_buildtype_v<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + ::mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,std::tuple<Ts...>,std::tuple<Alignments...>>)) : nullptr)...};
-    using swallow = int[];
+    //using swallow = int[];
     (void)swallow{(::mpirpc::internal::detail::get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     auto&& ret = std::forward<F>(f)(static_cast<FArgs>(*std::get<Is>(t))...);
     if (get_return)
@@ -160,7 +160,7 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, bool
     constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,std::tuple<Ts...>,std::tuple<Alignments...>>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
     std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype_v<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + ::mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,std::tuple<Ts...>,std::tuple<Alignments...>>)) : nullptr)...};
-    using swallow = int[];
+    //using swallow = int[];
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
     if (get_return)
@@ -175,7 +175,7 @@ void apply_impl(F&& f, Class *c, Allocator&& a, InBuffer& s, OutBuffer& os, bool
     constexpr std::size_t buffer_size = mpirpc::internal::aligned_buffer_size<InBuffer,false,true,std::tuple<Ts...>,std::tuple<Alignments...>>;
     char * buffer = (buffer_size > 0) ? static_cast<char*>(alloca(buffer_size)) : nullptr;
     std::tuple<std::add_pointer_t<Ts>...> t{((is_buildtype_v<Ts,InBuffer>) ? static_cast<std::add_pointer_t<Ts>>(static_cast<void*>(buffer + mpirpc::internal::aligned_buffer_address_offset<InBuffer,false,true,Is,std::tuple<Ts...>,std::tuple<Alignments>>)) : nullptr)...};
-    using swallow = int[];
+    //using swallow = int[];
     (void)swallow{(get_from_buffer<Alignments>(std::forward<Allocator>(a),std::get<Is>(t),s), 0)...};
     auto&& ret = ((*c).*(std::forward<F>(f)))(static_cast<FArgs>(*std::get<Is>(t))...);
     if (get_return)
