@@ -96,6 +96,13 @@ struct integer_sequence_element<Pos,std::integer_sequence<Int,Is...>> : extract_
 
 /**
  * \internal
+ * Convenience template alias for integer_sequence_element. Gets a std::integral_constant\<Int,I\>
+ */
+template<std::size_t Pos, typename IntegerSequence>
+using integer_sequence_element_type = typename integer_sequence_element<Pos,IntegerSequence>::type;
+
+/**
+ * \internal
  * Convenience variable template for integer_sequence_element::value.
  *
  * TEST: utility_test.cpp: Utility.integer_sequence_element_v
@@ -306,7 +313,7 @@ using conditional_tuple_type_append_type = typename conditional_tuple_type_appen
  *
  * TEST: utility_test.cpp: Utility.filter_tuple_types
  */
-template<typename TypesTuple, typename ConditionsTuple>
+template<typename ConditionsTuple, typename TypesTuple>
 struct filter_tuple_types;
 
 /**
@@ -315,8 +322,8 @@ struct filter_tuple_types;
  *
  * TEST: utility_test.cpp: Utility.filter_tuple_types
  */
-template<typename Types, typename Conditions>
-using filter_tuple = typename filter_tuple_types<Types,Conditions>::type;
+template<typename Conditions, typename Types>
+using filter_tuple = typename filter_tuple_types<Conditions,Types>::type;
 
 /**
  * \internal
@@ -370,7 +377,7 @@ constexpr invalid_index_type invalid_index;
  * \internal
  * For use with filter_tuple. Creates a tuple with each position either mapping to
  * the index in the filtered tuple (std::integral_constant\<std::size_t,index\>
- * or invalid_index_type.
+ * or mpirpc::internal::invalid_index_type.
  *
  * For example:
  *      false   false   true    true    false   true
@@ -383,12 +390,176 @@ struct filtered_indexes;
 
 /**
  * \internal
- * Convenience template alias for conditional_tuple_type_append::type
+ * Convenience template alias for filtered_indexes::type
  *
  * TEST: utility_test.cpp: Utility.filtered_indexes
  */
 template<bool... Included>
 using filtered_indexes_type = typename filtered_indexes<Included...>::type;
+
+/**
+ * \internal
+ * Map an unfiltered index to a filtered index. This is useful when processing elements
+ * of an unfilted tuple with an index sequence and access to the index of a related
+ * filtered tuple is needed. Maps to a std::integral_constant\<std::size_t,index>
+ * or mpirpc::internal::invalid_index_type type.
+ */
+template<std::size_t Index, bool... Included>
+using filtered_index_type = std::tuple_element_t<Index,filtered_indexes_type<Included...>>;
+
+/**
+ * \internal
+ * This convenience template variable can be used when it is known that the unfiltered
+ * index maps to a valid filtered index.
+ */
+template<std::size_t Index, bool... Included>
+constexpr std::size_t filtered_index_v = filtered_index_type<Index,Included...>::value;
+
+/**
+ * \internal
+ * Like filtered_indexes, but taking a tuple of std::integral_constant\<bool,value\>
+ */
+template<typename Included>
+struct filtered_true_type_indexes;
+
+/**
+ * \internal
+ * Like filtered_indexes_type, but taking a tuple of std::integral_constant\<bool,value\>
+ */
+template<typename Included>
+using filtered_true_type_indexes_type = typename filtered_true_type_indexes<Included>::type;
+
+/**
+ * \internal
+ * Like filtered_index_type, but taking a tuple of std::integral_constant\<bool,value\>
+ */
+template<std::size_t Index, typename Included>
+using filtered_true_type_index_type = std::tuple_element_t<Index,filtered_true_type_indexes_type<Included>>;
+
+/**
+ * \internal
+ * Like filtered_index_v, but taking a tuple of std::integral_constant\<bool,value\>
+ */
+template<std::size_t Index, typename Included>
+constexpr std::size_t filtered_true_type_index_v = filtered_true_type_index_type<Index,Included>::value;
+
+/**
+ * \internal
+ * Like filtered_indexes, but taking a tuple of std::integer_sequence\<bool,values...\>
+ */
+template<typename Included>
+struct filtered_bool_sequence_indexes;
+
+/**
+ * \internal
+ * Like filtered_indexes_type, but taking a tuple of std::integer_sequence\<bool,values...\>
+ */
+template<typename Included>
+using filtered_bool_sequence_indexes_type = typename filtered_bool_sequence_indexes<Included>::type;
+
+/**
+ * \internal
+ * Like filtered_index_type, but taking a tuple of std::integer_sequence\<bool,values...\>
+ */
+template<std::size_t Index, typename Included>
+using filtered_bool_sequence_index_type = std::tuple_element_t<Index,filtered_bool_sequence_indexes_type<Included>>;
+
+/**
+ * \internal
+ * Like filtered_index_v, but taking a tuple of std::integer_sequence\<bool,values...\>
+ */
+template<std::size_t Index, typename Included>
+constexpr std::size_t filtered_bool_sequence_index_v = filtered_bool_sequence_index_type<Index,Included>::value;
+
+/**
+ * \internal
+ * Maps a filtered index to an unfiltered index. This is useful when processing elements
+ * of a filtered tuple with an index sequence and access to the index of a related
+ * unfiltered tuple is needed. Maps to a tuple of std::integral_constant\<std::size_t,index\>.
+ *
+ * TEST: utility_test.cpp: Utility.unfiltered_indexes
+ */
+template<bool... Included>
+struct unfiltered_indexes;
+
+/**
+ * \internal
+ * Convenience template alias for unfiltered::type
+ *
+ * TEST: utility_test.cpp: Utility.filtered_indexes
+ */
+template<bool... Included>
+using unfiltered_indexes_type = typename unfiltered_indexes<Included...>::type;
+
+/**
+ * \internal
+ * Map a filtered index to an unfiltered index.
+ */
+template<std::size_t Index, bool... Included>
+using unfiltered_index_type = std::tuple_element_t<Index,unfiltered_indexes_type<Included...>>;
+
+/**
+ * \internal
+ * Map a filtered index to an unfiltered index value.
+ */
+template<std::size_t Index, bool... Included>
+constexpr std::size_t unfiltered_index_v = unfiltered_index_type<Index,Included...>::value;
+
+/**
+ * \internal
+ * Like unfiltered_indexes, but taking a tuple of std::integral_constant\<bool,value\>
+ */
+template<typename Included>
+struct unfiltered_true_type_indexes;
+
+/**
+ * \internal
+ * Like unfiltered_indexes_type, but taking a tuple of std::integral_constant\<bool,value\>
+ */
+template<typename Included>
+using unfiltered_true_type_indexes_type = typename unfiltered_true_type_indexes<Included>::type;
+
+/**
+ * \internal
+ * Like unfiltered_index_type, but taking a tuple of std::integral_constant\<bool,value\>
+ */
+template<std::size_t Index, typename Included>
+using unfiltered_true_type_index_type = std::tuple_element_t<Index,unfiltered_true_type_indexes_type<Included>>;
+
+/**
+ * \internal
+ * Like unfiltered_index_v, but taking a tuple of std::integral_constant\<bool,value\>
+ */
+template<std::size_t Index, typename Included>
+constexpr std::size_t unfiltered_true_type_index_v = unfiltered_true_type_index_type<Index,Included>::value;
+
+/**
+ * \internal
+ * Like unfiltered_indexes, but taking a std::integer_sequence\<bool,values...\>
+ */
+template<typename Included>
+struct unfiltered_bool_sequence_indexes;
+
+/**
+ * \internal
+ * Like unfiltered_indexes_type, but taking a std::integer_sequence\<bool,values...\>
+ */
+template<typename Included>
+using unfiltered_bool_sequence_indexes_type = typename unfiltered_bool_sequence_indexes<Included>::type;
+
+/**
+ * \internal
+ * Like unfiltered_index_type, but taking a std::integer_sequence\<bool,values...\>
+ */
+template<std::size_t Index, typename Included>
+using unfiltered_bool_sequence_index_type = std::tuple_element_t<Index,unfiltered_bool_sequence_indexes_type<Included>>;
+
+/**
+ * \internal
+ * Like unfiltered_index_v, but taking a std::integer_sequence\<bool,values...\>
+ */
+template<std::size_t Index, typename Included>
+constexpr std::size_t unfiltered_bool_sequence_index_v = unfiltered_bool_sequence_index_type<Index,Included>::value;
 
 /*************************************************************************************/
 /*************************************************************************************/
@@ -539,28 +710,39 @@ struct conditional_tuple_type_append
 /*************************************************************************************/
 
 template<typename T, typename... Ts, bool C, bool... Cs>
-struct filter_tuple_types<std::tuple<T,Ts...>,std::tuple<std::integral_constant<bool,C>,std::integral_constant<bool,Cs>...>>
-    : conditional_tuple_type_prepend<C,T,typename filter_tuple_types<std::tuple<Ts...>,std::tuple<std::integral_constant<bool,Cs>...>>::type>
+struct filter_tuple_types<std::tuple<std::integral_constant<bool,C>,std::integral_constant<bool,Cs>...>,std::tuple<T,Ts...>>
+    : conditional_tuple_type_prepend<C,T,typename filter_tuple_types<std::integer_sequence<bool,Cs...>,std::tuple<Ts...>>::type>
 {};
 
-template<typename T, bool C>
-struct filter_tuple_types<std::tuple<T>,std::tuple<std::integral_constant<bool,C>>>
-    : conditional_tuple_type_prepend<C,T,std::tuple<>>
+template<bool C, bool... Cs, typename T, typename... Ts>
+struct filter_tuple_types<std::integer_sequence<bool,C,Cs...>, std::tuple<T,Ts...>>
+    : conditional_tuple_type_prepend<C,T,typename filter_tuple_types<std::integer_sequence<bool,Cs...>,std::tuple<Ts...>>::type>
 {};
+
+template<>
+struct filter_tuple_types<std::tuple<>,std::tuple<>>
+{
+    using type = std::tuple<>;
+};
+
+template<>
+struct filter_tuple_types<std::integer_sequence<bool>,std::tuple<>>
+{
+    using type = std::tuple<>;
+};
 
 /*************************************************************************************/
 /*                          mpirpc::internal::count_trues                            */
 /*************************************************************************************/
 
 template<bool B,bool... Bs>
-struct count_trues<B,Bs...>
-    : std::integral_constant<std::size_t,std::size_t(B)+count_trues<Bs...>::value>
-{};
+struct count_trues<B,Bs...> : std::integral_constant<std::size_t,std::size_t(B)+count_trues<Bs...>::value> {};
 
 template<bool B>
-struct count_trues<B>
-    : std::integral_constant<std::size_t,std::size_t(B)>
-{};
+struct count_trues<B> : std::integral_constant<std::size_t,std::size_t(B)> {};
+
+template<>
+struct count_trues<> : std::integral_constant<std::size_t,0> {};
 
 /*************************************************************************************/
 /*                        mpirpc::internal::count_true_types                         */
@@ -569,89 +751,48 @@ struct count_trues<B>
 template<bool... Bs>
 struct count_true_types<std::tuple<std::integral_constant<bool,Bs>...>> : count_trues<Bs...>::type {};
 
-
-
-template<std::size_t Size, bool... Included>
-struct filtered_indexes_helper;
-
-template<std::size_t Size, bool... Included>
-struct filtered_indexes_helper<Size,true,Included...>
-{
-    constexpr static std::size_t index = filtered_indexes_helper<Size,Included...>::next_index;
-    constexpr static std::size_t next_index = index-1;
-    constexpr static std::size_t size = Size;
-    using type = internal::tuple_type_prepend_type<std::integral_constant<std::size_t,index>, typename filtered_indexes_helper<Size,Included...>::type>;
-};
-
-template<std::size_t Size, bool... Included>
-struct filtered_indexes_helper<Size,false,Included...>
-{
-    constexpr static std::size_t index = filtered_indexes_helper<Size,Included...>::next_index;
-    constexpr static std::size_t next_index = index;
-    constexpr static std::size_t size = Size;
-    using type = internal::tuple_type_prepend_type<invalid_index_type, typename filtered_indexes_helper<Size,Included...>::type>;
-};
-
-template<std::size_t Size>
-struct filtered_indexes_helper<Size,true>
-{
-    static_assert(Size != 0);
-    constexpr static std::size_t index = Size-1;
-    constexpr static std::size_t next_index = index-1;
-    constexpr static std::size_t size = Size;
-    using type = std::tuple<std::integral_constant<std::size_t,index>>;
-};
-
-template<std::size_t Size>
-struct filtered_indexes_helper<Size,false>
-{
-    static_assert(Size != 0);
-    constexpr static std::size_t index = Size-1;
-    constexpr static std::size_t next_index = index;
-    constexpr static std::size_t size = Size;
-    using type = std::tuple<invalid_index_type>;
-};
+/*************************************************************************************/
+/*                        mpirpc::internal::filtered_indexes                         */
+/*************************************************************************************/
 
 template<bool... Included>
-struct filtered_indexes : filtered_indexes_helper<internal::count_trues_v<Included...>,Included...>
-{
-    constexpr static std::size_t size = internal::count_trues_v<Included...>;
-    using input_tuple = std::tuple<std::integral_constant<bool,Included>...>;
-};
+struct filtered_indexes : detail::filtered_indexes_helper<internal::count_trues_v<Included...>,Included...> {};
 
-
-
-template<std::size_t Size, bool... Included>
-struct unfiltered_indexes_helper;
-
-template<std::size_t Size, bool B, bool... Included>
-struct unfiltered_indexes_helper<Size,B,Included...>
-{
-    constexpr static std::size_t index = unfiltered_indexes_helper<Size,Included...>::index-1;
-    using type = conditional_tuple_type_prepend_type<B,std::integral_constant<std::size_t,index>, typename unfiltered_indexes_helper<Size,Included...>::type>;
-};
-
-template<std::size_t Size, bool Included>
-struct unfiltered_indexes_helper<Size,Included>
-{
-    constexpr static std::size_t index = Size-1;
-    using type = std::conditional_t<Included,std::tuple<std::integral_constant<std::size_t,index>>,std::tuple<>>;
-};
+/*************************************************************************************/
+/*                       mpirpc::internal::unfiltered_indexes                        */
+/*************************************************************************************/
 
 template<bool... Included>
-struct unfiltered_indexes : unfiltered_indexes_helper<sizeof...(Included),Included...> {};
+struct unfiltered_indexes : detail::unfiltered_indexes_helper<sizeof...(Included),Included...> {};
 
-template<bool... Included>
-using unfiltered_indexes_type = typename unfiltered_indexes<Included...>::type;
-
-template<typename Included>
-struct filtered_true_type_indexes;
+/*************************************************************************************/
+/*                   mpirpc::internal::filtered_true_type_indexes                    */
+/*************************************************************************************/
 
 template<bool... Included>
 struct filtered_true_type_indexes<std::tuple<std::integral_constant<bool,Included>...>> : filtered_indexes<Included...> {};
 
-template<typename Included>
-using filter_true_type_indexes_type = typename filtered_true_type_indexes<Included>::type;
+/*************************************************************************************/
+/*                   mpirpc::internal::filtered_true_type_indexes                    */
+/*************************************************************************************/
+
+template<bool... Included>
+struct filtered_bool_sequence_indexes<std::integer_sequence<bool,Included...>> : filtered_indexes<Included...> {};
+
+/*************************************************************************************/
+/*                  mpirpc::internal::unfiltered_true_type_indexes                   */
+/*************************************************************************************/
+
+template<bool... Included>
+struct unfiltered_true_type_indexes<std::tuple<std::integral_constant<bool,Included>...>> : unfiltered_indexes<Included...> {};
+
+/*************************************************************************************/
+/*                  mpirpc::internal::unfiltered_true_type_indexes                   */
+/*************************************************************************************/
+
+template<bool... Included>
+struct unfiltered_bool_sequence_indexes<std::integer_sequence<bool,Included...>> : unfiltered_indexes<Included...> {};
+
 
 } //internal
 

@@ -50,22 +50,22 @@ public:
     using build_types = std::tuple<is_buildtype_type<std::remove_cv_t<std::remove_reference_t<Args>>,Buffer>...>;
     using stored_types =
         internal::filter_tuple<
-            std::tuple<Args...>,
-            build_types
-        >;
+            build_types,
+            std::tuple<Args...>
+          >;
     using filtered_alignments =
         internal::filter_tuple<
-            std::tuple<Alignments...>,
-            build_types
-        >;
+            build_types,
+            std::tuple<Alignments...>
+          >;
     using storage_tuple_type =
         internal::filter_tuple<
+            build_types,
             detail::storage_construction_types_type<
                 std::tuple<std::remove_cv_t<std::remove_reference_t<Args>>...>,
                 Buffer,
                 std::tuple<Alignments...>
-            >,
-            build_types
+            >
         >;
 
     using proxy_tuple_type = std::tuple<FArgs&&...>;
@@ -74,7 +74,7 @@ public:
     using proxy_type = std::tuple_element_t<I,proxy_tuple_type>;
 
     template<std::size_t I>
-    using storage_index = std::tuple_element_t<I,filter_true_type_indexes_type<build_types>>;
+    using storage_index = filtered_true_type_index_type<I, build_types>;
 
     template<std::size_t I>
     using alignment = std::tuple_element_t<I,std::tuple<Alignments...>>;
@@ -103,7 +103,7 @@ protected:
         std::enable_if_t<internal::reconstruction::is_aligned_type_holder_v<storage_type<I>>>* = nullptr>
     proxy_type<I> make_from_buffer(Buffer& b, Allocator&& a)
     {
-        std::cout << "INDEXS: " << abi::__cxa_demangle(typeid(filter_true_type_indexes_type<build_types>).name(),0,0,0) << std::endl;
+        std::cout << "INDEXS: " << abi::__cxa_demangle(typeid(filtered_true_type_indexes_type<build_types>).name(),0,0,0) << std::endl;
         std::cout << "INDEX: " << abi::__cxa_demangle(typeid(storage_index<I>).name(),0,0,0) << std::endl;
         //using index_type = storage_index<I>;
         //constexpr auto index = index_type::value;
@@ -118,7 +118,7 @@ protected:
         std::enable_if_t<!is_aligned_type_holder_v<storage_type<I>>>* = nullptr>
     proxy_type<I> make_from_buffer(Buffer& b, Allocator&& a)
     {
-        std::cout << "INDEXS: " << abi::__cxa_demangle(typeid(filter_true_type_indexes_type<build_types>).name(),0,0,0) << std::endl;
+        std::cout << "INDEXS: " << abi::__cxa_demangle(typeid(filtered_true_type_indexes_type<build_types>).name(),0,0,0) << std::endl;
         std::cout << "INDEX: " << abi::__cxa_demangle(typeid(storage_index<I>).name(),0,0,0) << std::endl;
         //using index_type = storage_index<I>;
         //constexpr auto index = index_type::value;

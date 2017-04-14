@@ -25,16 +25,16 @@
 
 namespace mpirpc
 {
-    
+
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple>
 class construction_info;
 
 namespace internal
 {
-    
+
 namespace reconstruction
 {
-    
+
 template<typename T, typename Alignment, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename AlignmentsTuple>
 class aligned_type_holder;
 
@@ -59,7 +59,7 @@ template<typename T>
 constexpr bool is_aligned_type_holder_v = is_aligned_type_holder<T>::value;
 
 template<typename T, typename Store, typename Alignment, typename = void>
-struct is_stored : std::false_type {};
+struct is_stored;
 
 template<typename T, typename Store, typename Alignment>
 using is_stored_type = typename is_stored<T,Store,Alignment>::type;
@@ -67,18 +67,11 @@ using is_stored_type = typename is_stored<T,Store,Alignment>::type;
 template<typename T, typename Store, typename Alignment>
 constexpr bool is_stored_v = is_stored<T,Store,Alignment>::value;
 
-template<typename T, typename Store, typename Alignment, typename = void>
-struct is_static_construct_temporary : std::false_type {};
-
-template<typename T, typename Store, typename Alignment>
-using is_static_construct_temporary_type = typename is_static_construct_temporary<T,Store,Alignment>::type;
-
-template<typename T, typename Store, typename Alignment>
-constexpr bool is_static_construct_temporary_v = is_static_construct_temporary<T,Store,Alignment>::value;
-
-
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple>
 struct is_construction_info<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>> : std::true_type {};
+
+template<typename T, typename Store, typename Alignment, typename>
+struct is_stored : std::false_type {};
 
 template<typename T, typename Store, typename Alignment>
 struct is_stored<T,Store,Alignment,
@@ -98,18 +91,6 @@ struct is_aligned_type_holder : std::false_type {};
 
 template<typename T, typename Alignment, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename AlignmentsTuple>
 struct is_aligned_type_holder<aligned_type_holder<T,Alignment,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple,AlignmentsTuple>> : std::true_type {};
-
-template<typename T, typename Store, typename Alignment>
-struct is_static_construct_temporary<T,Store,Alignment,
-                      std::enable_if_t<
-                          is_construction_info<T>::value ||
-                          (
-                              std::is_reference<T>::value &&
-                              is_overaligned_type_v<T,Alignment>
-                          )
-                      >
-                     >
-        : std::true_type {};
 
 }
 

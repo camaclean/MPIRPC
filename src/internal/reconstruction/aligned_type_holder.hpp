@@ -161,18 +161,24 @@ class aligned_type_holder<T,std::integral_constant<std::size_t,0ULL>,std::tuple<
 {
 public:
     using type = T;
-    //using type_storage = typename std::aligned_storage<sizeof(T),Alignment::value>::type;
-    using constructor_argument_types_tuple = std::tuple<ConstructorArgumentTypes...>;
-    //static constexpr std::size_t alignment = mpirpc::internal::alignment_reader<Alignment>::value;
+    using constructor_argument_types_tuple_type = std::tuple<ConstructorArgumentTypes...>;
+    using arguments_tuple_type = std::tuple<ArgumentTypes...>;
+    using stored_arguments_tuple_type = std::tuple<StoredArguments...>;
+    using alignments_tuple_type = std::tuple<Alignments...>;
+
+    using stored = std::integer_sequence<bool, is_stored_v<ArgumentTypes,StoredArguments,Alignments>...>;
+    using stored_types = filter_tuple<stored, std::tuple<std::remove_cv_t<std::remove_reference_t<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>>>...>>;
+
     using sai = ath_detail::stored_arguments_info<std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>;
-    using stored_arguments_tuple_type = typename sai::stored_arguments_tuple_type;
-    using arguments_tuple_type = typename sai::arguments_tuple_type;
+
+
+
     using proxy_tuple_type = typename sai::proxy_tuple_type;
     using storage_tuple_type = typename sai::storage_tuple_type;
     using storage_tuple_types = typename sai::storage_types;
     using storage_tuple_indexes_type = typename sai::storage_tuple_indexes_type;
-    using storage_tuple_reverse_indexes_type = typename sai::storage_tuple_reverse_indexes_type;
-    using construction_info_type = construction_info<T,constructor_argument_types_tuple,arguments_tuple_type,stored_arguments_tuple_type>;
+    //using storage_tuple_reverse_indexes_type = typename sai::storage_tuple_reverse_indexes_type;
+    using construction_info_type = construction_info<T,constructor_argument_types_tuple_type,arguments_tuple_type,stored_arguments_tuple_type>;
     using storage_types = std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>;
     using storage_construction_types = std::tuple<reconstruction_storage_constructor_type<ArgumentTypes,StoredArguments,Alignments>...>;
 

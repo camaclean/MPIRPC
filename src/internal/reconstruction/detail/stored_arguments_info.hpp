@@ -66,21 +66,6 @@ struct stored_arguments_impl<Size,std::tuple<Argument>,std::tuple<StoredArgument
                       , std::index_sequence<index>
                       , std::index_sequence<>
                   >;
-    using static_construct_types = std::conditional_t<
-                        is_static_construct_temporary_v<Argument,StoredArgument,Alignment>
-                      , std::tuple<std::remove_reference_t<type>>
-                      , std::tuple<>
-                  >;
-    using static_construct_tuple = std::conditional_t<
-                        is_static_construct_temporary_v<Argument,StoredArgument,Alignment>
-                      , std::tuple<typename std::aligned_storage<sizeof(std::remove_reference_t<type>), mpirpc::internal::alignment_reader<Alignment>::value>::type>
-                      , std::tuple<>
-                  >;
-    using static_construct_indexes = std::conditional_t<
-                        is_static_construct_temporary_v<Argument,StoredArgument,Alignment>
-                      , std::index_sequence<index>
-                      , std::index_sequence<>
-                  >;
 };
 
 template<std::size_t Size, typename Argument, typename... Arguments, typename StoredArgument, typename... StoredArguments, typename Alignment, typename... Alignments>
@@ -106,21 +91,6 @@ struct stored_arguments_impl<Size,std::tuple<Argument,Arguments...>,std::tuple<S
     using indexes = mpirpc::internal::conditional_integer_sequence_prepend_type<
                         is_stored_type<Argument,StoredArgument,Alignment>::value
                       , prev_indexes
-                      , index
-                  >;
-    using static_construct_types = mpirpc::internal::conditional_tuple_type_prepend_type<
-                        is_static_construct_temporary_type<Argument,StoredArgument,Alignment>::value
-                      , std::remove_reference_t<type>
-                      , typename prev::static_construct_types
-                  >;
-    using static_construct_tuple = mpirpc::internal::conditional_tuple_type_prepend_type<
-                        is_static_construct_temporary_type<Argument,StoredArgument,Alignment>::value
-                      , typename std::aligned_storage<sizeof(std::remove_reference_t<type>),mpirpc::internal::alignment_reader<Alignment>::value>::type
-                      , typename prev::static_construct_tuple
-                  >;
-    using static_construct_indexes = mpirpc::internal::conditional_integer_sequence_prepend_type<
-                        is_static_construct_temporary_type<Argument,StoredArgument,Alignment>::value
-                      , typename prev::static_construct_indexes
                       , index
                   >;
 };
@@ -173,9 +143,9 @@ struct stored_arguments_info<std::tuple<ConstructorArguments...>,std::tuple<Argu
     using storage_tuple_indexes_type = typename stored_arguments_impl2<std::tuple_size<storage_tuple_type>::value,arguments_tuple_type,stored_arguments_tuple_type,alignments_tuple_type>::tuple_indexes;
     using storage_tuple_reverse_indexes_type = typename stored_arguments_impl<sizeof...(Arguments),arguments_tuple_type,stored_arguments_tuple_type,alignments_tuple_type>::indexes;
     using proxy_tuple_type = std::tuple<ConstructorArguments&&...>;
-    using static_construct_types = typename stored_arguments_impl<sizeof...(Arguments),arguments_tuple_type,stored_arguments_tuple_type,alignments_tuple_type>::static_construct_types;
-    using static_construct_tuple = typename stored_arguments_impl<sizeof...(Arguments),arguments_tuple_type,stored_arguments_tuple_type,alignments_tuple_type>::static_construct_tuple;
-    using static_construct_indexes = typename stored_arguments_impl<sizeof...(Arguments),arguments_tuple_type,stored_arguments_tuple_type,alignments_tuple_type>::static_construct_indexes;
+    //using static_construct_types = typename stored_arguments_impl<sizeof...(Arguments),arguments_tuple_type,stored_arguments_tuple_type,alignments_tuple_type>::static_construct_types;
+    //using static_construct_tuple = typename stored_arguments_impl<sizeof...(Arguments),arguments_tuple_type,stored_arguments_tuple_type,alignments_tuple_type>::static_construct_tuple;
+    //using static_construct_indexes = typename stored_arguments_impl<sizeof...(Arguments),arguments_tuple_type,stored_arguments_tuple_type,alignments_tuple_type>::static_construct_indexes;
 };
 
 }

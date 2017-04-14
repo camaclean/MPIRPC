@@ -669,11 +669,11 @@ TEST(Test,test)
     //std::cout << "Parameter aligned storage: " << abi::__cxa_demangle(typeid(mpirpc::parameter_setup<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::aligned_storage_tuple_type).name(),0,0,0) << std::endl;
     std::cout << "Build types: " << abi::__cxa_demangle(typeid(mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types).name(),0,0,0) << std::endl;
     std::cout << "Filtered indexes size: " << mpirpc::internal::filtered_true_type_indexes<mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types>::size << std::endl;
-    std::cout << "Filtered indexes: " << abi::__cxa_demangle(typeid(mpirpc::internal::filter_true_type_indexes_type<mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types>).name(),0,0,0) << std::endl;
-    std::cout << "Counting trues: " << mpirpc::internal::count_trues_v<true,true,true,false> << std::endl;
-    std::cout << "Test filtering indexes input: " << abi::__cxa_demangle(typeid(mpirpc::internal::filtered_indexes<true,true,true,false>::input_tuple).name(),0,0,0) << std::endl;
-    std::cout << "Test filtering indexes size: " << mpirpc::internal::filtered_indexes<true,true,true,false>::size << std::endl;
-    std::cout << "Test filtering indexes: " << abi::__cxa_demangle(typeid(mpirpc::internal::filtered_indexes<true,true,true,false>::type).name(),0,0,0) << std::endl;
+    std::cout << "Filtered indexes: " << abi::__cxa_demangle(typeid(mpirpc::internal::filtered_true_type_indexes_type<mpirpc::internal::reconstruction::parameter_container<mpirpc::parameter_buffer<>,ArgsTuple,ArgsTuple,AlignmentsTuple>::build_types>).name(),0,0,0) << std::endl;
+    //std::cout << "Counting trues: " << mpirpc::internal::count_trues_v<true,true,true,false> << std::endl;
+    //std::cout << "Test filtering indexes input: " << abi::__cxa_demangle(typeid(mpirpc::internal::filtered_indexes<true,true,true,false>::input_tuple).name(),0,0,0) << std::endl;
+    //std::cout << "Test filtering indexes size: " << mpirpc::internal::filtered_indexes<true,true,true,false>::size << std::endl;
+    //std::cout << "Test filtering indexes: " << abi::__cxa_demangle(typeid(mpirpc::internal::filtered_indexes<true,true,true,false>::type).name(),0,0,0) << std::endl;
     std::cout << "Alignment test: " << alignof(mpirpc::internal::reconstruction::aligned_type_holder<A, std::integral_constant<bool, true>, std::tuple<double const, int, float const&, bool&, long, long long const, B const&>, std::tuple<double const, int, float const&, bool&, long, long long const, mpirpc::construction_info<B, std::tuple<int>, std::tuple<int>, std::tuple<std::integral_constant<bool, false> > > >, std::tuple<std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, true>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false> >, std::tuple<std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 4ul>, std::integral_constant<unsigned long, 4ul>, std::integral_constant<unsigned long, 1ul>, std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 4ul> > >) << std::endl;
 
     mpirpc::internal::reconstruction::construction_info_to_aligned_type_holder<
@@ -694,7 +694,7 @@ TEST(Test,test)
     test5;
 
 
-    mpirpc::internal::reconstruction::construction_info_to_aligned_type_holder<
+    mpirpc::internal::reconstruction::construction_info_to_aligned_type_holder_type<
         mpirpc::construction_info<
             A,
             std::tuple<
@@ -735,11 +735,14 @@ TEST(Test,test)
 
     std::cout << abi::__cxa_demangle(typeid(mpirpc::internal::reconstruction::detail::storage_construction_types<ArgsTuple,mpirpc::parameter_buffer<>,AlignmentsTuple>).name(),0,0,0) << std::endl;
     std::cout << abi::__cxa_demangle(typeid(mpirpc::internal::conditional_tuple_type_prepend_type<true,A,std::tuple<>>).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(mpirpc::internal::filter_tuple<std::tuple<A>,std::tuple<std::integral_constant<bool,true>>>).name(),0,0,0) << std::endl;
+    //std::cout << abi::__cxa_demangle(typeid(mpirpc::internal::filter_tuple<std::tuple<std::integral_constant<bool,true>>,std::tuple<A>>).name(),0,0,0) << std::endl;
     //std::cout << abi::__cxa_demangle(typeid(decltype(test4)::type_alignment).name(),0,0,0) << std::endl;
     //std::cout << alignof(test4) << std::endl;
     std::cout << "is_buildtype test: " << std::is_same<std::integral_constant<bool,false>,mpirpc::is_buildtype<int,mpirpc::parameter_buffer<std::allocator<char>>>::type>::value << std::endl;
-
+    std::cout << std::endl << std::endl;
+    std::cout << "stored_types:\t\t " << abi::__cxa_demangle(typeid(decltype(test4)::stored_types).name(),0,0,0) << std::endl;
+    std::cout << "storage_tuple_types:\t " <<abi::__cxa_demangle(typeid(decltype(test4)::storage_tuple_types).name(),0,0,0) << std::endl;
+    std::cout << "storage_tuple_type:\t " <<abi::__cxa_demangle(typeid(decltype(test4)::storage_tuple_type).name(),0,0,0) << std::endl;
     //double d = 3.14;
     //double&& d2 = std::move(d);
     //blah(d2);

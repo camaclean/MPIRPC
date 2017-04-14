@@ -223,9 +223,33 @@ TEST(Utility, conditional_tuple_type_append)
  */
 TEST(Utility, filter_tuple_types)
 {
-    ASSERT_TRUE((std::is_same<std::tuple<int, const int, double, const double, const long, long, short>, mpirpc::internal::filter_tuple<std::tuple<int, const int, double, const double, const long, long, short>, std::tuple<std::true_type, std::true_type, std::true_type, std::true_type, std::true_type, std::true_type, std::true_type>>>::value));
-    ASSERT_TRUE((std::is_same<std::tuple<>, mpirpc::internal::filter_tuple<std::tuple<int, const int, double, const double, const long, long, short>, std::tuple<std::false_type, std::false_type, std::false_type, std::false_type, std::false_type, std::false_type, std::false_type>>>::value));
-    ASSERT_TRUE((std::is_same<std::tuple<const int, const double, const long>, mpirpc::internal::filter_tuple<std::tuple<int, const int, double, const double, const long, long, short>, std::tuple<std::false_type, std::true_type, std::false_type, std::true_type, std::true_type, std::false_type, std::false_type>>>::value));
+    ASSERT_TRUE((std::is_same<std::tuple<>, mpirpc::internal::filter_tuple<std::tuple<>, std::tuple<>>>::value));
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<int, const int, double, const double, const long, long, short>,
+            mpirpc::internal::filter_tuple<
+                std::tuple<std::true_type, std::true_type, std::true_type, std::true_type, std::true_type, std::true_type, std::true_type>,
+                std::tuple<int, const int, double, const double, const long, long, short>
+              >
+          >::value
+      ));
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<>,
+            mpirpc::internal::filter_tuple<
+                std::tuple<std::false_type, std::false_type, std::false_type, std::false_type, std::false_type, std::false_type, std::false_type>,
+                std::tuple<int, const int, double, const double, const long, long, short>
+              >
+          >::value
+      ));
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<const int, const double, const long>,
+            mpirpc::internal::filter_tuple<
+                std::integer_sequence<bool, false, true, false, true, true, false, false>,
+                std::tuple<int, const int, double, const double, const long, long, short>
+              >
+          >::value));
 }
 
 /**
@@ -233,6 +257,7 @@ TEST(Utility, filter_tuple_types)
  */
 TEST(Utility, count_trues)
 {
+    ASSERT_EQ(0, (mpirpc::internal::count_trues_v<>));
     ASSERT_EQ(5, (mpirpc::internal::count_trues_v<true, true, true, true, true>));
     ASSERT_EQ(5, (mpirpc::internal::count_trues_v<false, false, true, true, true, false, true, true, false>));
     ASSERT_EQ(0, (mpirpc::internal::count_trues_v<false, false, false, false>));
@@ -246,6 +271,165 @@ TEST(Utility, count_true_types)
     ASSERT_EQ(5, (mpirpc::internal::count_true_types_v<std::tuple<std::true_type, std::true_type, std::true_type, std::true_type, std::true_type>>));
     ASSERT_EQ(5, (mpirpc::internal::count_true_types_v<std::tuple<std::false_type, std::false_type, std::true_type, std::true_type, std::true_type, std::false_type, std::true_type, std::true_type, std::false_type>>));
     ASSERT_EQ(0, (mpirpc::internal::count_true_types_v<std::tuple<std::false_type, std::false_type, std::false_type, std::false_type>>));
+}
+
+/**
+ * Test mpirpc::internal::filtered_indexes
+ */
+TEST(Utility, filtered_indexes)
+{
+    ASSERT_TRUE((std::is_same<std::tuple<>, mpirpc::internal::filtered_indexes_type<>>::value));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<
+                std::integral_constant<std::size_t, 0>
+              >,
+            mpirpc::internal::filtered_indexes_type<true>
+          >::value
+      ));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<
+                mpirpc::internal::invalid_index_type
+              >,
+            mpirpc::internal::filtered_indexes_type<false>
+          >::value
+      ));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<
+                mpirpc::internal::invalid_index_type,
+                mpirpc::internal::invalid_index_type,
+                mpirpc::internal::invalid_index_type,
+                mpirpc::internal::invalid_index_type,
+                mpirpc::internal::invalid_index_type,
+                mpirpc::internal::invalid_index_type,
+                mpirpc::internal::invalid_index_type
+              >,
+            mpirpc::internal::filtered_indexes_type<false, false, false, false, false, false, false>
+          >::value
+      ));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<
+                std::integral_constant<std::size_t, 0>,
+                std::integral_constant<std::size_t, 1>,
+                std::integral_constant<std::size_t, 2>,
+                std::integral_constant<std::size_t, 3>,
+                std::integral_constant<std::size_t, 4>,
+                std::integral_constant<std::size_t, 5>,
+                std::integral_constant<std::size_t, 6>
+              >,
+            mpirpc::internal::filtered_indexes_type<true, true, true, true, true, true, true>
+          >::value
+      ));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<
+                mpirpc::internal::invalid_index_type,
+                std::integral_constant<std::size_t, 0>,
+                mpirpc::internal::invalid_index_type,
+                mpirpc::internal::invalid_index_type,
+                std::integral_constant<std::size_t, 1>,
+                std::integral_constant<std::size_t, 2>,
+                mpirpc::internal::invalid_index_type
+              >,
+            mpirpc::internal::filtered_indexes_type<false, true, false, false, true, true, false>
+          >::value
+      ));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<
+                std::integral_constant<std::size_t, 0>,
+                mpirpc::internal::invalid_index_type,
+                std::integral_constant<std::size_t, 1>,
+                std::integral_constant<std::size_t, 2>,
+                mpirpc::internal::invalid_index_type,
+                mpirpc::internal::invalid_index_type,
+                std::integral_constant<std::size_t, 3>
+              >,
+            mpirpc::internal::filtered_indexes_type<true, false, true, true, false, false, true>
+          >::value
+      ));
+}
+
+TEST(Utility, unfiltered_indexes)
+{
+    ASSERT_TRUE((std::is_same<std::tuple<>, mpirpc::internal::unfiltered_indexes_type<>>::value));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<
+                std::integral_constant<std::size_t, 0>
+              >,
+            mpirpc::internal::unfiltered_indexes_type<true>
+          >::value
+      ));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<>,
+            mpirpc::internal::unfiltered_indexes_type<false>
+          >::value
+      ));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<>,
+            mpirpc::internal::unfiltered_indexes_type<false, false, false, false, false, false, false>
+          >::value
+      ));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<
+                std::integral_constant<std::size_t, 0>,
+                std::integral_constant<std::size_t, 1>,
+                std::integral_constant<std::size_t, 2>,
+                std::integral_constant<std::size_t, 3>,
+                std::integral_constant<std::size_t, 4>,
+                std::integral_constant<std::size_t, 5>,
+                std::integral_constant<std::size_t, 6>
+              >,
+            mpirpc::internal::unfiltered_indexes_type<true, true, true, true, true, true, true>
+          >::value
+      ));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<
+                // false 0
+                std::integral_constant<std::size_t, 1>,
+                // false 2
+                // false 3
+                std::integral_constant<std::size_t, 4>,
+                std::integral_constant<std::size_t, 5>
+                // false 6
+              >,
+            mpirpc::internal::unfiltered_indexes_type<false, true, false, false, true, true, false>
+          >::value
+      ));
+
+    ASSERT_TRUE((
+        std::is_same<
+            std::tuple<
+                std::integral_constant<std::size_t, 0>,
+                // false 1
+                std::integral_constant<std::size_t, 2>,
+                std::integral_constant<std::size_t, 3>,
+                // false 4
+                // false 5
+                std::integral_constant<std::size_t, 6>
+              >,
+            mpirpc::internal::unfiltered_indexes_type<true, false, true, true, false, false, true>
+          >::value
+      ));
 }
 
 int main(int argc, char **argv) {

@@ -33,6 +33,14 @@ namespace mpirpc
 namespace internal
 {
 
+template<typename T, typename Tuple>
+struct tuple_type_prepend;
+
+template<bool Condition, typename T, typename Tuple>
+struct conditional_tuple_type_prepend;
+
+struct invalid_index_type;
+
 namespace detail
 {
 
@@ -69,6 +77,85 @@ decltype(auto) apply_impl(F&& f, Class *c, Tuple&& t, std::index_sequence<I...>)
 {
     return ((*c).*(std::forward<F>(f)))(static_cast<std::tuple_element_t<I,typename ::mpirpc::internal::function_parts<std::remove_reference_t<F>>::args_tuple_type>>(std::get<I>(std::forward<Tuple>(t)))...);
 }
+
+template<std::size_t Size, bool... Included>
+struct filtered_indexes_helper;
+
+template<std::size_t Size, bool... Included>
+struct filtered_indexes_helper<Size,true,Included...>
+{
+    constexpr static std::size_t index = filtered_indexes_helper<Size,Included...>::next_index;
+    constexpr static std::size_t next_index = index-1;
+    constexpr static std::size_t size = Size;
+    using type = typename tuple_type_prepend<std::integral_constant<std::size_t,index>, typename filtered_indexes_helper<Size,Included...>::type>::type;
+};
+
+template<std::size_t Size, bool... Included>
+struct filtered_indexes_helper<Size,false,Included...>
+{
+    constexpr static std::size_t index = filtered_indexes_helper<Size,Included...>::next_index;
+    constexpr static std::size_t next_index = index;
+    constexpr static std::size_t size = Size;
+    using type = typename tuple_type_prepend<invalid_index_type, typename filtered_indexes_helper<Size,Included...>::type>::type;
+};
+
+template<std::size_t Size>
+struct filtered_indexes_helper<Size,true>
+{
+    static_assert(Size != 0);
+    constexpr static std::size_t index = Size-1;
+    constexpr static std::size_t next_index = index-1;
+    constexpr static std::size_t size = Size;
+    using type = std::tuple<std::integral_constant<std::size_t,index>>;
+};
+
+template<std::size_t Size>
+struct filtered_indexes_helper<Size,false>
+{
+    static_assert(Size != 0);
+    constexpr static std::size_t index = Size-1;
+    constexpr static std::size_t next_index = index;
+    constexpr static std::size_t size = Size;
+    using type = std::tuple<invalid_index_type>;
+};
+
+template<>
+struct filtered_indexes_helper<0,false>
+{
+    constexpr static std::size_t index = 0;
+    constexpr static std::size_t next_index = 0;
+    constexpr static std::size_t size = 0;
+    using type = std::tuple<invalid_index_type>;
+};
+
+template<>
+struct filtered_indexes_helper<0>
+{
+    using type = std::tuple<>;
+};
+
+template<std::size_t Size, bool... Included>
+struct unfiltered_indexes_helper;
+
+template<std::size_t Size, bool B, bool... Included>
+struct unfiltered_indexes_helper<Size,B,Included...>
+{
+    constexpr static std::size_t index = unfiltered_indexes_helper<Size,Included...>::index-1;
+    using type = typename conditional_tuple_type_prepend<B,std::integral_constant<std::size_t,index>, typename unfiltered_indexes_helper<Size,Included...>::type>::type;
+};
+
+template<std::size_t Size, bool Included>
+struct unfiltered_indexes_helper<Size,Included>
+{
+    constexpr static std::size_t index = Size-1;
+    using type = std::conditional_t<Included,std::tuple<std::integral_constant<std::size_t,index>>,std::tuple<>>;
+};
+
+template<>
+struct unfiltered_indexes_helper<0>
+{
+    using type = std::tuple<>;
+};
 
 /*template<std::size_t Pos, typename Int, Int Max, Int...Is>
 struct get_integer_sequence_clamped_impl;
