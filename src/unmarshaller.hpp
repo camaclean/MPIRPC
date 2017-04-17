@@ -42,7 +42,18 @@ namespace mpirpc
  * which need to be handled. First of all, there is the issue of allocating memory. This
  * will often be different for local and remote unmarshalling, since local unmarshalling
  * will already have references or pointers to already-existing memory pass in as parameters.
- * Remote unmarshalling, on the other hand, often requires allocating memory.
+ * Remote unmarshalling, on the other hand, can require allocating additional memory to 
+ * hold reference types. There may also be limitations on how types can be constructed or a
+ * lack of assignment operators.
+ * 
+ * Take, for example, std::tuple<A&>. This requires constructing a std::tuple<A&> and an
+ * object A, requiring at least sizeof(std::tuple<A&>)+sizeof(A) storage (more depending on
+ * the alignment requirements).
+ * 
+ * Additionally, there are types without copy or move assignment operators/constructors to
+ * consider. Take, for example, std::tuple<int[5]>. This type needs to be default constructed,
+ * then modified. It can't be coppied. std::tuple<A&>, on the other hand, can't be default
+ * constructed.
  */
 
 

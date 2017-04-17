@@ -54,6 +54,9 @@ using reconstruction_storage_constructor_type = typename reconstruction_storage_
 template<typename T, typename Store, typename Alignment>
 using reconstruction_storage_aligned_storage_type = typename reconstruction_storage_type_helper<T,Store,Alignment>::aligned_storage_type;
 
+template<typename T, typename Store, typename Alignment>
+using reconstruction_proxy_type = typename reconstruction_storage_type_helper<T,Store,Alignment>::proxy_type;
+
 /*************************************************************************************/
 /*************************************************************************************/
 /*                                  Implementation                                   */
@@ -80,47 +83,30 @@ struct construction_info_to_aligned_type_holder<construction_info<T,ConstructorA
                 >;
 };
 
-/*template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
-struct construction_info_to_aligned_type_holder<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,std::tuple<Alignments...>>
-{
-    using alignments = std::tuple<Alignments...>;
-    using type_alignment = std::conditional_t<(sizeof...(Alignments) > 0),
-                                              internal::alignment_reader_type<std::tuple<Alignments...>>,
-                                              std::integral_constant<std::size_t,alignof(T)>
-                                             >;
-    using internal_alignments = std::conditional_t<(sizeof...(Alignments) == sizeof...(ArgumentTypes) +1),
-                                                   internal::internal_alignments_tuple_type<std::tuple<Alignments...>>,
-                                                   std::tuple<type_default_alignment<ArgumentTypes,alignof(ArgumentTypes)>...>
-                                                  >;
-    using type = aligned_type_holder<T,type_alignment,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,internal_alignments>;
-};
-
-template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, std::size_t Alignment>
-struct construction_info_to_aligned_type_holder<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,std::integral_constant<std::size_t,Alignment>>
-    : construction_info_to_aligned_type_holder<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,std::tuple<std::integral_constant<std::size_t,Alignment>>>
-{};*/
-
 template<typename T, typename Store, typename Alignment>
 struct reconstruction_storage_type_helper
 {
-    using type = T;
+    using type = std::remove_reference_t<T>;
+    using proxy_type = T&&;
     using constructor_type = T;
-    using aligned_storage_type = typename std::aligned_storage<sizeof(type),Alignment::value>;
+    using aligned_storage_type = typename std::aligned_storage<sizeof(type),Alignment::value>::type;
 };
 
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename Alignment, typename... Alignments>
 struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,std::true_type,std::tuple<Alignment,Alignments...>>
 {
-    using type = aligned_type_holder<T,Alignment,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple,std::tuple<Alignments...>>;
-    using constructor_type = aligned_type_holder<T,Alignment,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple,std::tuple<Alignments...>>;
+    using type = aligned_type_holder<std::remove_reference_t<T>,Alignment,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple,std::tuple<Alignments...>>;
+    using proxy_type = T&&;
+    using constructor_type = aligned_type_holder<std::remove_reference_t<T>,Alignment,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple,std::tuple<Alignments...>>;
     using aligned_storage_type = typename std::aligned_storage<sizeof(type),Alignment::value>::type;
 };
 
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename Alignment, typename... Alignments>
 struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,std::false_type,std::tuple<Alignment,Alignments...>>
 {
-    using type = T;
-    using constructor_type = aligned_type_holder<T,std::integral_constant<std::size_t,0ULL>,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple,std::tuple<Alignments...>>;
+    using type = std::remove_reference_t<T>;
+    using proxy_type = T&&;
+    using constructor_type = aligned_type_holder<std::remove_reference_t<T>,Alignment,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple,std::tuple<Alignments...>>;
     using aligned_storage_type = typename std::aligned_storage<sizeof(type),Alignment::value>::type;
 };
 

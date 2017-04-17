@@ -26,6 +26,8 @@
 #include "../alignment.hpp"
 #include "../utility.hpp"
 #include <cxxabi.h>
+#include <type_traits>
+#include <utility>
 
 namespace mpirpc
 {
@@ -136,14 +138,14 @@ struct type_constructor<std::tuple<Ts...>,
     template<typename... Args, std::size_t... Is>
     static void assign(std::tuple<Ts...>& t, std::index_sequence<Is...>, Args&&... args)
     {
-        (void)mpirpc::internal::swallow{assign<Is>(t,std::forward<Args>(args))...};
+        (void)mpirpc::internal::swallow{(assign<Is>(t,std::forward<Args>(args)), 0)...};
     }
 
     template<typename... Args>
     static void construct(std::tuple<Ts...> *t, Args&&... args)
     {
         new (t) std::tuple<Ts...>();
-        assign(t, std::index_sequence_for<Args...>(), std::forward<Args>(args)...);
+        assign(*t, std::index_sequence_for<Args...>(), std::forward<Args>(args)...);
     }
 };
 
@@ -156,8 +158,8 @@ struct type_constructor<std::tuple<Ts...>,
 template<typename T, typename Alignment, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename AlignmentsTuple>
 class aligned_type_holder;
 
-template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
-class aligned_type_holder<T,std::integral_constant<std::size_t,0ULL>,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>
+template<typename T, typename Alignment, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
+class aligned_type_holder<T,Alignment,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>
 {
 public:
     using type = T;
@@ -165,22 +167,17 @@ public:
     using arguments_tuple_type = std::tuple<ArgumentTypes...>;
     using stored_arguments_tuple_type = std::tuple<StoredArguments...>;
     using alignments_tuple_type = std::tuple<Alignments...>;
-
-    using stored = std::integer_sequence<bool, is_stored_v<ArgumentTypes,StoredArguments,Alignments>...>;
-    using stored_types = filter_tuple<stored, std::tuple<std::remove_cv_t<std::remove_reference_t<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>>>...>>;
-
-    using sai = ath_detail::stored_arguments_info<std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>;
-
-
-
-    using proxy_tuple_type = typename sai::proxy_tuple_type;
-    using storage_tuple_type = typename sai::storage_tuple_type;
-    using storage_tuple_types = typename sai::storage_types;
-    using storage_tuple_indexes_type = typename sai::storage_tuple_indexes_type;
-    //using storage_tuple_reverse_indexes_type = typename sai::storage_tuple_reverse_indexes_type;
     using construction_info_type = construction_info<T,constructor_argument_types_tuple_type,arguments_tuple_type,stored_arguments_tuple_type>;
+
+    using type_storage = typename std::aligned_storage<sizeof(T),Alignment::value>::type;
+    using stored = std::integer_sequence<bool, is_stored_v<ArgumentTypes,StoredArguments,Alignments>...>;
+    using stored_types = filter_tuple<stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    static constexpr std::size_t stored_count = std::tuple_size<stored_types>::value;
+    using aligned_storage_tuple_type = filter_tuple<stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
     using storage_types = std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>;
     using storage_construction_types = std::tuple<reconstruction_storage_constructor_type<ArgumentTypes,StoredArguments,Alignments>...>;
+    using proxy_types = std::tuple<ConstructorArgumentTypes&&...>;
+    using stored_indexes = filtered_sequence_indexes_type<stored>;
 
     template<std::size_t I>
     using argument_at_index = std::tuple_element_t<I,arguments_tuple_type>;
@@ -189,62 +186,78 @@ public:
     using storage_constructor_type_at_index = std::tuple_element_t<I,storage_construction_types>;
 
     template<std::size_t I>
-    using storage_type_at_index = std::tuple_element_t<I,storage_types>;
+    using stored_type = std::tuple_element_t<I,stored_types>;
+    
+    template<std::size_t I>
+    using proxy_type = std::tuple_element_t<I,proxy_types>;
 
     template<std::size_t I>
-    using storage_type_at_storage_index = std::tuple_element_t<I, storage_tuple_types>;
+    using storage_type_at_storage_index = std::tuple_element_t<I, stored_types>;
 
     template<std::size_t I>
-    using index_to_storage_index = std::tuple_element_t<I,storage_tuple_indexes_type>;
+    using index_to_storage_index = std::tuple_element_t<I,stored_indexes>;
+    
+    template<std::size_t I>
+    static constexpr std::size_t index_to_storage_index_v = index_to_storage_index<I>::value;
+    
+    template<std::size_t I>
+    static constexpr bool is_stored_v = integer_sequence_element_v<I,stored>;
 
 protected:
     template<std::size_t I,
-             std::enable_if_t<std::tuple_element_t<I,std::tuple<StoredArguments...>>::value>* = nullptr,
-             std::enable_if_t<is_construction_info_v<argument_at_index<I>>>* = nullptr>
-    static std::tuple_element_t<I,proxy_tuple_type> construct(storage_tuple_type& stored_args, arguments_tuple_type& args)
+             std::enable_if_t<
+                is_stored_v<I> && is_construction_info_v<argument_at_index<I>>
+              >* = nullptr>
+    static proxy_type<I> construct(aligned_storage_tuple_type& stored_args, arguments_tuple_type& args)
     {
         using arg_type = argument_at_index<I>;
         using con_type = storage_constructor_type_at_index<I>;
-        constexpr std::size_t SI = std::tuple_element_t<I,storage_tuple_indexes_type>::value;
-        type_constructor<con_type>::construct(reinterpret_cast<con_type*>(&std::get<SI>(stored_args)), std::get<I>(args));
-        std::cout << "Constructing using construction_info (saved)" << abi::__cxa_demangle(typeid(con_type).name(),0,0,0) << std::endl;
-        return reinterpret_cast<std::tuple_element_t<I,proxy_tuple_type>>(std::get<SI>(stored_args));
+        constexpr std::size_t SI = index_to_storage_index_v<I>;
+        std::cout << "Constructing using construction_info (saved)" << abi::__cxa_demangle(typeid(con_type).name(),0,0,0) << " " << abi::__cxa_demangle(typeid(std::tuple<proxy_type<I>>).name(),0,0,0) << std::endl;
+        
+        con_type *storage = reinterpret_cast<con_type*>(&std::get<SI>(stored_args));
+        new (storage) con_type{std::get<I>(args)};
+        //type_constructor<con_type>::construct(storage, std::get<I>(args));
+        return static_cast<proxy_type<I>>(storage->value());
     }
 
     template<std::size_t I,
-             std::enable_if_t<std::tuple_element_t<I,std::tuple<StoredArguments...>>::value>* = nullptr,
-             std::enable_if_t<!is_construction_info_v<argument_at_index<I>>>* = nullptr>
-    static std::tuple_element_t<I,proxy_tuple_type> construct(storage_tuple_type& stored_args, arguments_tuple_type& args)
+             std::enable_if_t<
+                is_stored_v<I> && !is_construction_info_v<argument_at_index<I>>
+              >* = nullptr>
+    static proxy_type<I> construct(aligned_storage_tuple_type& stored_args, arguments_tuple_type& args)
     {
-        constexpr std::size_t SI = std::tuple_element_t<I,storage_tuple_indexes_type>::value;
+        constexpr std::size_t SI = index_to_storage_index_v<I>;;
         using arg_type = argument_at_index<I>;
         type_constructor<std::remove_cv_t<std::remove_reference_t<arg_type>>>::construct(reinterpret_cast<std::remove_cv_t<std::remove_reference_t<arg_type>>*>(&std::get<SI>(stored_args)), std::get<I>(args));
         std::cout << "Copy constructing: " << abi::__cxa_demangle(typeid(arg_type).name(),0,0,0) << std::endl;
-        return reinterpret_cast<std::tuple_element_t<I,proxy_tuple_type>>(std::get<SI>(stored_args));
+        return reinterpret_cast<proxy_type<I>>(std::get<SI>(stored_args));
     }
 
     //do not store and is_construction_info true
     template<std::size_t I,
-             std::enable_if_t<!std::tuple_element_t<I,std::tuple<StoredArguments...>>::value>* = nullptr,
-             std::enable_if_t<is_construction_info_v<argument_at_index<I>>>* = nullptr>
-    static std::remove_cv_t<std::remove_reference_t<std::tuple_element_t<I,proxy_tuple_type>>> construct(storage_tuple_type& stored_args, arguments_tuple_type& args)
+             std::enable_if_t<
+                !is_stored_v<I> && is_construction_info_v<argument_at_index<I>>
+               >* = nullptr>
+    static stored_type<index_to_storage_index<I>::value> construct(aligned_storage_tuple_type& stored_args, arguments_tuple_type& args)
     {
-        using arg_type = std::remove_cv_t<std::remove_reference_t<std::tuple_element_t<I,proxy_tuple_type>>>;
+        using arg_type = stored_type<index_to_storage_index_v<I>>;//std::remove_cv_t<std::remove_reference_t<std::tuple_element_t<I,proxy_tuple_type>>>;
         using con_type = storage_constructor_type_at_index<I>;
-        std::cout << "Constructing using construction_info (non-saved): " << abi::__cxa_demangle(typeid(std::tuple_element_t<I,proxy_tuple_type>).name(),0,0,0) << " | " << abi::__cxa_demangle(typeid(con_type).name(),0,0,0) << std::endl;
+        std::cout << "Constructing using construction_info (non-saved): " << abi::__cxa_demangle(typeid(std::tuple<proxy_type<I>>).name(),0,0,0) << " | " << abi::__cxa_demangle(typeid(con_type).name(),0,0,0) << std::endl;
         return con_type::construct(std::get<I>(args));//tuple_construct<arg_type>(std::get<I>(args).args());
     }
 
     template<std::size_t I,
-             std::enable_if_t<!std::tuple_element_t<I,std::tuple<StoredArguments...>>::value>* = nullptr,
-             std::enable_if_t<!is_construction_info_v<argument_at_index<I>>>* = nullptr>
-    static std::tuple_element_t<I,proxy_tuple_type> construct(storage_tuple_type&, arguments_tuple_type& args)
+             std::enable_if_t<
+                !is_stored_v<I> && !is_construction_info_v<argument_at_index<I>>
+              >* = nullptr>
+    static proxy_type<I> construct(aligned_storage_tuple_type&, arguments_tuple_type& args)
     {
-        return reinterpret_cast<std::tuple_element_t<I,proxy_tuple_type>>(std::get<I>(args));
+        return reinterpret_cast<proxy_type<I>>(std::get<I>(args));
     }
 
     template<std::size_t... Is>
-    static void construct(std::remove_cv_t<T> *val, storage_tuple_type &stored_args, arguments_tuple_type& t, std::index_sequence<Is...>)
+    static void construct(std::remove_cv_t<T> *val, aligned_storage_tuple_type &stored_args, arguments_tuple_type& t, std::index_sequence<Is...>)
     {
         type_constructor<std::remove_cv_t<T>>::construct(reinterpret_cast<std::remove_cv_t<T>*>(val),aligned_type_holder::construct<Is>(stored_args, t)...);
     }
@@ -252,7 +265,7 @@ protected:
     template<std::size_t... Is>
     static T construct(arguments_tuple_type& t, std::index_sequence<Is...>)
     {
-        storage_tuple_type stored_args;
+        aligned_storage_tuple_type stored_args;
         T ret{aligned_type_holder::construct<Is>(stored_args, t)...};
         destruct_stored_args(stored_args);
         return ret;
@@ -271,7 +284,7 @@ protected:
     }
 
     template<std::size_t I>
-    static void destruct_stored_arg(storage_tuple_type& storage_tuple)
+    static void destruct_stored_arg(aligned_storage_tuple_type& storage_tuple)
     {
         using storage_type = storage_type_at_storage_index<I>;
         //std::cout << "Reverse indexes: " << abi::__cxa_demangle(typeid(storage_tuple_types).name(),0,0,0) << std::endl;
@@ -280,123 +293,87 @@ protected:
     }
 
     template<std::size_t... Is>
-    static void destruct_stored_args(storage_tuple_type& storage_tuple, std::index_sequence<Is...>)
+    static void destruct_stored_args(aligned_storage_tuple_type& storage_tuple, std::index_sequence<Is...>)
     {
-        //using swallow = int[];
         (void)swallow{(destruct_stored_arg<Is>(storage_tuple), 0)...};
     }
 
 public:
 
     template<std::size_t I>
-    static storage_type_at_storage_index<I>& argument(storage_tuple_type& storage_tuple)
+    static storage_type_at_storage_index<I>& argument(aligned_storage_tuple_type& storage_tuple)
     {
         using arg_type = storage_type_at_storage_index<I>;
         return reinterpret_cast<arg_type&>(std::get<I>(storage_tuple));
     }
-
-    /*template<std::size_t I>
-    static const storage_type_at_storage_index<I>& argument(storage_tuple_type& storage_tuple)
-    {
-        using arg_type = storage_type_at_storage_index<I>;
-        return reinterpret_cast<const arg_type&>(std::get<I>(storage_tuple));
-    }*/
 
     static T construct(construction_info_type& t)
     {
         return construct(t.args(),std::make_index_sequence<construction_info_type::num_args()>{});
     }
 
-    static void destruct_stored_args(storage_tuple_type& storage_tuple)
+    static void destruct_stored_args(aligned_storage_tuple_type& storage_tuple)
     {
-        destruct_stored_args(storage_tuple, std::make_index_sequence<std::tuple_size<storage_tuple_type>::value>{});
+        destruct_stored_args(storage_tuple, std::make_index_sequence<stored_count>{});
     }
-
-    constexpr static std::size_t stored_argument_count() { return std::tuple_size<storage_tuple_type>::value; }
-};
-
-template<typename T, typename Alignment, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
-class aligned_type_holder<T,Alignment,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>
-    : public aligned_type_holder<T,std::integral_constant<std::size_t,0ULL>,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>
-{
-public:
-    using type = T;
-    using type_storage = typename std::aligned_storage<sizeof(T),Alignment::value>::type;
-    using constructor_argument_types_tuple = std::tuple<ConstructorArgumentTypes...>;
-    static constexpr std::size_t alignment = mpirpc::internal::alignment_reader<Alignment>::value;
-    using sai = ath_detail::stored_arguments_info<std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>;
-    using stored_arguments_tuple_type = typename sai::stored_arguments_tuple_type;
-    using arguments_tuple_type = typename sai::arguments_tuple_type;
-    using proxy_tuple_type = typename sai::proxy_tuple_type;
-    using storage_tuple_type = typename sai::storage_tuple_type;
-    using storage_tuple_types = typename sai::storage_types;
-    using storage_tuple_indexes_type = typename sai::storage_tuple_indexes_type;
-    using storage_tuple_reverse_indexes_type = typename sai::storage_tuple_reverse_indexes_type;
-    using construction_info_type = construction_info<T,constructor_argument_types_tuple,arguments_tuple_type,stored_arguments_tuple_type>;
-    using storage_types = std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>;
-    using storage_construction_types = std::tuple<reconstruction_storage_constructor_type<ArgumentTypes,StoredArguments,Alignments>...>;
-    using super = aligned_type_holder<T,std::integral_constant<std::size_t,0ULL>,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>;
-
-    template<std::size_t I>
-    using argument_at_index = std::tuple_element_t<I,arguments_tuple_type>;
-
-    template<std::size_t I>
-    using storage_constructor_type_at_index = std::tuple_element_t<I,storage_construction_types>;
-
-    template<std::size_t I>
-    using storage_type_at_index = std::tuple_element_t<I,storage_types>;
-
-    template<std::size_t I>
-    using storage_type_at_storage_index = std::tuple_element_t<I, storage_tuple_types>;
-
-    template<std::size_t I>
-    using index_to_storage_index = std::tuple_element_t<I,storage_tuple_indexes_type>;
-
-public:
-    aligned_type_holder(arguments_tuple_type& t)
+    
+    aligned_type_holder(typename aligned_type_holder::arguments_tuple_type& t)
         : m_val{}
         , m_stored_args{}
     {
-        super::construct(reinterpret_cast<std::remove_cv_t<T>*>(&m_val), m_stored_args, t, std::make_index_sequence<sizeof...(ArgumentTypes)>{});
+        construct(reinterpret_cast<std::remove_cv_t<T>*>(&m_val), m_stored_args, t, std::make_index_sequence<sizeof...(ArgumentTypes)>{});
     }
 
-    aligned_type_holder(construction_info_type& t)
-        : aligned_type_holder(t.args())
+    aligned_type_holder(typename aligned_type_holder::construction_info_type& t) : aligned_type_holder(t.args())
     {}
 
     aligned_type_holder()
-        : m_val{}
-        , m_stored_args{}
+        : m_val{}, m_stored_args{}
     {}
 
-    void construct(arguments_tuple_type& t)
+    void construct(typename aligned_type_holder::arguments_tuple_type& t)
     {
-        super::construct(reinterpret_cast<std::remove_cv_t<T>*>(&m_val), m_stored_args, t, std::make_index_sequence<sizeof...(ArgumentTypes)>{});
+        construct(reinterpret_cast<std::remove_cv_t<T>*>(&m_val), m_stored_args, t, std::make_index_sequence<sizeof...(ArgumentTypes)>{});
     }
 
     T& value() { return reinterpret_cast<T&>(m_val); }
     const T& value() const { return reinterpret_cast<const T&>(m_val); }
 
     template<std::size_t I>
-    storage_type_at_storage_index<I>& argument()
-    {
-        return super::argument<I>(m_stored_args);
-    }
+    storage_type_at_storage_index<I>& argument() { return argument<I>(m_stored_args); }
 
     template<std::size_t I>
-    const storage_type_at_storage_index<I>& argument() const
-    {
-        return super::argument<I>(m_stored_args);
-    }
+    const storage_type_at_storage_index<I>& argument() const { return argument<I>(m_stored_args); }
 
     ~aligned_type_holder()
     {
         reinterpret_cast<T*>(&m_val)->~T();
-        super::destruct_stored_args(m_stored_args);
+        destruct_stored_args(m_stored_args);
     }
+    
 private:
     type_storage m_val;
-    storage_tuple_type m_stored_args;
+    aligned_storage_tuple_type m_stored_args;
+};
+
+template<typename T, std::size_t N, typename Alignment, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
+class aligned_type_holder<T[N],Alignment,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>
+{
+};
+
+template<typename T, std::size_t N, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
+class aligned_type_holder<T[N],std::integral_constant<std::size_t,0>,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>
+{
+};
+
+template<typename T, typename Alignment, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
+class aligned_type_holder<T[],Alignment,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>
+{
+};
+
+template<typename T, typename... ConstructorArgumentTypes, typename... ArgumentTypes, typename... StoredArguments, typename... Alignments>
+class aligned_type_holder<T[],std::integral_constant<std::size_t,0>,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>,std::tuple<Alignments...>>
+{
 };
 
 }

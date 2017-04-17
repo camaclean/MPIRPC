@@ -390,12 +390,27 @@ struct filtered_indexes;
 
 /**
  * \internal
+ * Like filtered_indexes, but takes a std::integer_sequence\<bool,Is...\>
+ * or std::tuple\<std::integral_constant\<bool,value\>...\> as a parameter.
+ */
+template<typename T>
+struct filtered_sequence_indexes;
+
+/**
+ * \internal
  * Convenience template alias for filtered_indexes::type
  *
  * TEST: utility_test.cpp: Utility.filtered_indexes
  */
 template<bool... Included>
 using filtered_indexes_type = typename filtered_indexes<Included...>::type;
+
+/**
+ * \internal
+ * Convenience template alias for filtered_sequence_indexes
+ */
+template<typename T>
+using filtered_sequence_indexes_type = typename filtered_sequence_indexes<T>::type;
 
 /**
  * \internal
@@ -756,7 +771,17 @@ struct count_true_types<std::tuple<std::integral_constant<bool,Bs>...>> : count_
 /*************************************************************************************/
 
 template<bool... Included>
-struct filtered_indexes : detail::filtered_indexes_helper<internal::count_trues_v<Included...>,Included...> {};
+struct filtered_indexes : detail::filtered_indexes_helper<count_trues_v<Included...>,Included...> {};
+
+/*************************************************************************************/
+/*                   mpirpc::internal::filtered_sequence_indexes                     */
+/*************************************************************************************/
+
+template<bool... Included>
+struct filtered_sequence_indexes<std::integer_sequence<bool,Included...>> : detail::filtered_indexes_helper<count_trues_v<Included...>,Included...> {};
+
+template<bool... Included>
+struct filtered_sequence_indexes<std::tuple<std::integral_constant<bool,Included>...>> : detail::filtered_indexes_helper<count_trues_v<Included...>,Included...> {};
 
 /*************************************************************************************/
 /*                       mpirpc::internal::unfiltered_indexes                        */

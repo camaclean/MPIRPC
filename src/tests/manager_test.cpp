@@ -641,9 +641,9 @@ TEST(Test,test)
                 >
             >
         >;
-    std::cout << abi::__cxa_demangle(typeid(typename stored_arguments_test_type::storage_tuple_type).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(typename stored_arguments_test_type::storage_tuple_indexes_type).name(),0,0,0) << std::endl;
-    std::cout << abi::__cxa_demangle(typeid(typename stored_arguments_test_type::storage_tuple_reverse_indexes_type).name(),0,0,0) << std::endl;
+    std::cout << abi::__cxa_demangle(typeid(typename stored_arguments_test_type::aligned_storage_tuple_type).name(),0,0,0) << std::endl;
+    //std::cout << abi::__cxa_demangle(typeid(typename stored_arguments_test_type::storage_tuple_indexes_type).name(),0,0,0) << std::endl;
+    //std::cout << abi::__cxa_demangle(typeid(typename stored_arguments_test_type::storage_tuple_reverse_indexes_type).name(),0,0,0) << std::endl;
     b_type bi(5);
     std::cout << abi::__cxa_demangle(typeid(stored_arguments_test_type::construction_info_type).name(),0,0,0) << std::endl;
     std::cout << alignof(stored_arguments_test_type) << std::endl;
@@ -693,6 +693,24 @@ TEST(Test,test)
     >
     test5;
 
+    
+    
+    std::tuple<int[5]> ttest;
+    std::get<0>(ttest)[0] = 0;
+    std::get<0>(ttest)[1] = 1;
+    std::get<0>(ttest)[2] = 2;
+    std::get<0>(ttest)[3] = 3;
+    std::get<0>(ttest)[4] = 4;
+    
+    mpirpc::internal::reconstruction::construction_info_to_aligned_type_holder_type<
+        mpirpc::construction_info<
+            std::tuple<int[5]>,
+            std::tuple<int[5]>,
+            std::tuple<int[5]>,
+            std::tuple<std::integral_constant<bool, false>>
+        >,
+        std::integral_constant<long unsigned int, 4ul>
+    > test7(ttest);
 
     mpirpc::internal::reconstruction::construction_info_to_aligned_type_holder_type<
         mpirpc::construction_info<
@@ -722,7 +740,7 @@ TEST(Test,test)
             >,
             std::tuple<
                 std::integral_constant<bool, false>,
-                std::integral_constant<bool, false>,
+                std::integral_constant<bool, true>,
                 std::integral_constant<bool, false>,
                 std::integral_constant<bool, true>,
                 std::integral_constant<bool, false>,
@@ -741,8 +759,15 @@ TEST(Test,test)
     std::cout << "is_buildtype test: " << std::is_same<std::integral_constant<bool,false>,mpirpc::is_buildtype<int,mpirpc::parameter_buffer<std::allocator<char>>>::type>::value << std::endl;
     std::cout << std::endl << std::endl;
     std::cout << "stored_types:\t\t " << abi::__cxa_demangle(typeid(decltype(test4)::stored_types).name(),0,0,0) << std::endl;
-    std::cout << "storage_tuple_types:\t " <<abi::__cxa_demangle(typeid(decltype(test4)::storage_tuple_types).name(),0,0,0) << std::endl;
-    std::cout << "storage_tuple_type:\t " <<abi::__cxa_demangle(typeid(decltype(test4)::storage_tuple_type).name(),0,0,0) << std::endl;
+    std::cout << "storage_tuple_types:\t " <<abi::__cxa_demangle(typeid(decltype(test4)::stored_types).name(),0,0,0) << std::endl;
+    std::cout << "storage_tuple_type:\t\t " <<abi::__cxa_demangle(typeid(decltype(test4)::aligned_storage_tuple_type).name(),0,0,0) << std::endl;
+    std::cout << "aligned_storage_tuple_type:\t " <<abi::__cxa_demangle(typeid(decltype(test4)::aligned_storage_tuple_type).name(),0,0,0) << std::endl;
+    std::cout << "proxy_tuple_type:\t " <<abi::__cxa_demangle(typeid(decltype(test4)::proxy_types).name(),0,0,0) << std::endl;
+    std::cout << "proxy_types:\t\t " << abi::__cxa_demangle(typeid(decltype(test4)::proxy_types).name(),0,0,0) << std::endl;
+    std::cout << "storage_tuple_indexes_type:\t " << abi::__cxa_demangle(typeid(decltype(test4)::stored_indexes).name(),0,0,0) << std::endl;
+    std::cout << "storage_tuple_indexes_type:\t " << abi::__cxa_demangle(typeid(mpirpc::internal::filtered_sequence_indexes_type<decltype(test4)::stored>).name(),0,0,0) << std::endl;
+    std::cout << "storage_tuple_indexes_type:\t " << abi::__cxa_demangle(typeid(mpirpc::internal::filtered_sequence_indexes_type<decltype(test4)::stored>).name(),0,0,0) << std::endl;
+    std::cout << "stored_indexes_type:\t\t " << abi::__cxa_demangle(typeid(decltype(test4)::stored_indexes).name(),0,0,0) << std::endl;
     //double d = 3.14;
     //double&& d2 = std::move(d);
     //blah(d2);
