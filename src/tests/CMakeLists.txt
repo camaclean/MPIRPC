@@ -21,5 +21,8 @@ target_link_libraries(reconstruct_test mpirpc ${GTEST_BOTH_LIBRARIES})
 add_executable(utility_test utility_test.cpp)
 target_link_libraries(utility_test mpirpc ${GTEST_BOTH_LIBRARIES})
 
+add_executable(aligned_type_holder_test aligned_type_holder_test.cpp)
+target_link_libraries(aligned_type_holder_test mpirpc ${GTEST_BOTH_LIBRARIES})
+
 add_executable(manager_test manager_test.cpp)
 target_link_libraries(manager_test mpirpc ${GTEST_BOTH_LIBRARIES} ${MPI_CXX_LIBRARIES})

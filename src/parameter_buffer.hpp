@@ -144,7 +144,7 @@ template<typename T>
 constexpr bool is_parameter_buffer_v = is_parameter_buffer<T>::value;
 
 template<typename T, typename Buffer, typename Alignment>
-struct marshaller<T,Buffer,Alignment,std::enable_if_t<!is_buildtype_v<std::remove_reference_t<T>,Buffer> && is_parameter_buffer_v<Buffer>>>
+struct marshaller<T,Buffer,Alignment,std::enable_if_t<!is_buildtype_v<std::remove_reference_t<T>, Buffer> && !std::is_array<std::remove_reference_t<T>>::value && is_parameter_buffer_v<Buffer>>>
 {
     template<typename U,std::enable_if_t<std::is_same<std::decay_t<T>,std::decay_t<U>>::value>* = nullptr>
     static void marshal(Buffer& b, U&& val)
@@ -155,7 +155,7 @@ struct marshaller<T,Buffer,Alignment,std::enable_if_t<!is_buildtype_v<std::remov
 };
 
 template<typename T, typename Buffer, typename Alignment>
-struct unmarshaller<T,Buffer,Alignment,std::enable_if_t<!is_buildtype_v<std::remove_reference_t<T>,Buffer> && is_parameter_buffer_v<Buffer>>>
+struct unmarshaller<T,Buffer,Alignment,std::enable_if_t<!is_buildtype_v<std::remove_all_extents_t<std::remove_reference_t<T>>,Buffer> && is_parameter_buffer_v<Buffer>>>
 {
     template<typename Allocator>
     static T& unmarshal(Allocator&&, Buffer& b)
@@ -163,6 +163,16 @@ struct unmarshaller<T,Buffer,Alignment,std::enable_if_t<!is_buildtype_v<std::rem
         return *b.template reinterpret_and_advance<std::remove_reference_t<T>>(sizeof(std::remove_reference_t<T>));
     }
 };
+
+/*template<typename Buffer, typename Alignment, typename T, std::size_t N>
+struct unmarshaller<T[N],Buffer,Alignment,std::enable_if_t<!is_buildtype_v<std::remove_all_extents_t<T>> && is_parameter_buffer_v<Buffer>>>
+{
+    template<typename Allocator>
+    static T(& unmarshal(Allocator&& a, Buffer& b))[N]
+    {
+        return *b.template reinterpret_and_advance<T[N]>(sizeof(T[N]));
+    }
+};*/
 
 template<typename Buffer, typename Alignment>
 struct marshaller<char*,Buffer,Alignment,std::enable_if_t<is_parameter_buffer_v<Buffer>>>

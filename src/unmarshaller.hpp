@@ -29,7 +29,9 @@
 //#include "internal/reconstruction/aligned_type_holder.hpp"
 #include "construction_info.hpp"
 #include "types.hpp"
+#include "alignment.hpp"
 #include <cxxabi.h>
+#include <vector>
 
 namespace mpirpc
 {
@@ -42,14 +44,14 @@ namespace mpirpc
  * which need to be handled. First of all, there is the issue of allocating memory. This
  * will often be different for local and remote unmarshalling, since local unmarshalling
  * will already have references or pointers to already-existing memory pass in as parameters.
- * Remote unmarshalling, on the other hand, can require allocating additional memory to 
+ * Remote unmarshalling, on the other hand, can require allocating additional memory to
  * hold reference types. There may also be limitations on how types can be constructed or a
  * lack of assignment operators.
- * 
+ *
  * Take, for example, std::tuple<A&>. This requires constructing a std::tuple<A&> and an
  * object A, requiring at least sizeof(std::tuple<A&>)+sizeof(A) storage (more depending on
  * the alignment requirements).
- * 
+ *
  * Additionally, there are types without copy or move assignment operators/constructors to
  * consider. Take, for example, std::tuple<int[5]>. This type needs to be default constructed,
  * then modified. It can't be coppied. std::tuple<A&>, on the other hand, can't be default
@@ -84,6 +86,70 @@ struct unmarshaller<std::tuple<Ts...>,Buffer,Alignment>
 
     //template<typename Allocator>
     //static decltype(auto)
+};
+
+template<typename T, typename U>
+struct retype_array
+{
+    constexpr static std::size_t extent = 0;
+    constexpr static std::size_t elements = 1;
+    using type = U;
+};
+
+template<typename T, std::size_t N, typename U>
+struct retype_array<T[N],U>
+{
+    constexpr static std::size_t extent = N;
+    constexpr static std::size_t elements = N*retype_array<T,U>::elements;
+    using type = typename retype_array<T,U>::type[N];
+};
+
+template<typename T, typename U>
+using retype_array_type = typename retype_array<T,U>::type;
+
+template<typename T>
+constexpr std::size_t array_total_elements_v = retype_array<T,T>::elements;
+
+template<typename Buffer, typename Alignment, typename T, std::size_t N>
+struct unmarshaller<T[N],Buffer,Alignment,std::enable_if_t<is_buildtype_v<std::remove_all_extents_t<T>,Buffer>>>
+{
+    using return_type = std::decay_t<retype_array_type<T[N],unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>>>;
+
+    template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
+    static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
+    {
+        std::vector<unmarshaller_type<T,Buffer,Alignment>> ret;
+        for (std::size_t i = 0; i < N; ++i)
+            ret.emplace_back(unmarshaller<T,Buffer,Alignment>::unmarshall(a,b));
+        return ret;
+    }
+
+    template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
+    static void unmarshal_into(Allocator&& a, Buffer& b, T(&v)[N])
+    {
+        for (std::size_t i = 0; i < N; ++i)
+            new (&v[i]) T(mpirpc::get<T>(b,a));
+    }
+
+    template<typename Allocator, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
+    static void unmarshal_into(Allocator&& a, Buffer& b, T(&v)[N])
+    {
+        for (std::size_t i = 0; i < N; ++i)
+            unmarshaller<T,Buffer,Alignment>::unmarshal_into(a,b,v);
+    }
+
+    template<typename Allocator, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
+    static return_type unmarshal(Allocator&& a, Buffer& b)
+    {
+        //std::cout << abi::__cxa_demangle(typeid(ret2).name(),0,0,0) << std::endl;
+        return_type ret;
+        constexpr std::size_t alignment = max(mpirpc::internal::alignment_reader<Alignment>::value,alignof(unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>));
+        posix_memalign(&ret,alignment,array_total_elements_v<T[N]>*sizeof(unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>));
+        //std::vector<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>> ret;
+        for (std::size_t i = 0; i < N; ++i)
+            unmarshaller<T,Buffer,Alignment>::unmarshall_into(a,b,ret[i]);
+        return ret;
+    }
 };
 
 }

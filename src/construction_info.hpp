@@ -61,6 +61,7 @@ public:
     }
 
     arguments_tuple& args() { return arguments; }
+    const arguments_tuple& args() const { return arguments; }
 
     static constexpr std::size_t num_args() { return sizeof...(ArgumentTypes); }
 private:

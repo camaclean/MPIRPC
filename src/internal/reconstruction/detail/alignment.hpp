@@ -22,23 +22,25 @@
 
 #include <tuple>
 #include "../internal/alignment.hpp"
+#include "../alignment.hpp"
+#include "../types.hpp"
 
 namespace mpirpc
 {
-    
+
 namespace internal
 {
-    
+
 namespace reconstruction
 {
 
 namespace detail
 {
-    
+
 /**
  * \internal
  * Helper class for preparing alignment data tuples for aligned_type_holder.
- * 
+ *
  * Typedefs:
  *      alignments:
  *          The full tuple representation of the alignments for the type and
@@ -49,7 +51,7 @@ namespace detail
  *          A tuple of alignment info for the constructor arguments, populated
  *          with default values if data is incomplete.
  *      type_alignment:
- *          The alignment of the type to be constructed. Uses the default 
+ *          The alignment of the type to be constructed. Uses the default
  *          alignment if the data is incomplete.
  */
 template<typename T, typename ArgumentsTuple, typename Alignments,typename=void>
@@ -97,7 +99,7 @@ struct construction_alignments<T, std::tuple<Arguments...>, std::integral_consta
     using arg_alignments = std::tuple<type_default_alignment<Arguments,alignof(Arguments)>...>;
     using type_alignment = std::integral_constant<std::size_t,Alignment>;
 };
-    
+
 }
 
 }

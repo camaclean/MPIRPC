@@ -1,6 +1,6 @@
 /*
  * MPIRPC: MPI based invocation of functions on other ranks
- * Copyright (C) 2014-2016 Colin MacLean <cmaclean@illinois.edu>
+ * Copyright (C) 2014-2017 Colin MacLean <cmaclean@illinois.edu>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,7 +45,7 @@ struct is_aligned_native_buffer_nonpointer_scalar_data
     : std::integral_constant<bool,
             std::is_scalar<std::remove_all_extents_t<std::remove_reference_t<T>>>::value &&
             is_aligned_native_binary_buffer_v<Buffer> &&
-            !std::is_pointer<T>::value> 
+            !std::is_pointer<T>::value>
 {};
 
 template<typename T, typename Buffer>
