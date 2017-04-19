@@ -210,15 +210,6 @@ constexpr std::size_t unpacked_size_v = sizeof(T);
 template<typename Buffer, typename... Ts, typename... Alignments>
 constexpr std::size_t unpacked_size_v<Buffer, std::tuple<Ts...>,std::tuple<Alignments>> = sizeof(std::tuple<Ts...>) + tuple_reference_storage_info<sizeof...(Ts)-1,sizeof(std::tuple<Ts...>),Buffer,false,true,std::tuple<Ts...>,std::tuple<Alignments...>>::total_size;
 
-template<typename T, typename Alignment, typename = void>
-struct is_overaligned_type : std::false_type {};
-
-template<typename T, typename Alignment>
-struct is_overaligned_type<T,Alignment,std::enable_if_t<(mpirpc::internal::alignment_reader<Alignment>::value > alignof(T))>> : std::true_type {};
-
-template<typename T, typename Alignment>
-constexpr bool is_overaligned_type_v = is_overaligned_type<T,Alignment>::value;
-
 }
 
 }

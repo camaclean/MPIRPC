@@ -65,9 +65,6 @@ struct marshaller<std::tuple<Ts...>,Buffer,Alignment>
     static void marshal_impl(Buffer &b, const std::tuple<Ts...>& t, std::index_sequence<Is...>)
     {
         using swallow = int[];
-        //(void)swallow{ (marshaller<RTs,Buffer,alignof(RTs)>::marshal(b,std::get<Is>(t)), 0)... };
-        //(void)swallow{ (marshaller<NTs,Buffer,alignof(NTs)>::marshal(b,std::get<Is>(t)), 0)... };
-        //(void)swallow{ (marshaller<std::remove_reference_t<Ts>,Buffer,alignof(Ts)>::marshal(b, std::get<Is>(t)), 0)... };
         (void)swallow{ (marshaller<std::remove_reference_t<Ts>,Buffer,std::integral_constant<std::size_t,alignof(Ts)>>::marshal(b, std::get<Is>(t)), 0)... };
     }
 

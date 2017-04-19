@@ -109,7 +109,7 @@ public:
     template<typename T, typename Alloc, typename Alignment = type_default_alignment<T,alignof(T)>>
     decltype(auto) pop(Alloc&& a)
     {
-        realign<Alignment>();
+        // realign<Alignment>();
         using U = mpirpc::internal::storage_type<T>;
         return mpirpc::unmarshaller<U,parameter_buffer<Allocator>,Alignment>::unmarshal(std::forward<Alloc>(a),*this);
     }
@@ -160,6 +160,7 @@ struct unmarshaller<T,Buffer,Alignment,std::enable_if_t<!is_buildtype_v<std::rem
     template<typename Allocator>
     static T& unmarshal(Allocator&&, Buffer& b)
     {
+        b.template realign<Alignment>();
         return *b.template reinterpret_and_advance<std::remove_reference_t<T>>(sizeof(std::remove_reference_t<T>));
     }
 };

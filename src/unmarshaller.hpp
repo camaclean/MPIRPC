@@ -32,6 +32,7 @@
 #include "alignment.hpp"
 #include <cxxabi.h>
 #include <vector>
+#include <memory>
 
 namespace mpirpc
 {
@@ -111,43 +112,69 @@ template<typename T>
 constexpr std::size_t array_total_elements_v = retype_array<T,T>::elements;
 
 template<typename Buffer, typename Alignment, typename T, std::size_t N>
-struct unmarshaller<T[N],Buffer,Alignment,std::enable_if_t<is_buildtype_v<std::remove_all_extents_t<T>,Buffer>>>
+struct unmarshaller<T[N],Buffer,Alignment,
+    std::enable_if_t<
+        is_buildtype_v<std::remove_all_extents_t<T>,Buffer> &&
+        is_construction_info_v<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>>
+      >
+  >
 {
-    using return_type = std::decay_t<retype_array_type<T[N],unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>>>;
+    using UT = unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>;
 
     template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
     static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
-        std::vector<unmarshaller_type<T,Buffer,Alignment>> ret;
+        using return_type = std::unique_ptr<retype_array_type<T,UT>[]>;
+        return_type ret{ new UT[N] };
         for (std::size_t i = 0; i < N; ++i)
-            ret.emplace_back(unmarshaller<T,Buffer,Alignment>::unmarshall(a,b));
+            new (&ret[i]) UT(unmarshaller<T,Buffer,Alignment>::unmarshall(a,b));
         return ret;
     }
 
     template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
-    static void unmarshal_into(Allocator&& a, Buffer& b, T(&v)[N])
+    static void unmarshal_into(Allocator&& a, Buffer& b, UT(&v)[N])
     {
         for (std::size_t i = 0; i < N; ++i)
-            new (&v[i]) T(mpirpc::get<T>(b,a));
+            new (&v[i]) UT(mpirpc::get<T>(b,a));
     }
 
     template<typename Allocator, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
-    static void unmarshal_into(Allocator&& a, Buffer& b, T(&v)[N])
+    static void unmarshal_into(Allocator&& a, Buffer& b, UT(&v)[N])
     {
         for (std::size_t i = 0; i < N; ++i)
             unmarshaller<T,Buffer,Alignment>::unmarshal_into(a,b,v);
     }
 
+    template<typename U, std::size_t M, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
+    static void destruct(U(&v)[M])
+    {
+        for (std::size_t i = 0; i < M; ++i)
+            v[i].~U();
+    }
+
+    template<typename U, std::size_t M, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
+    static void destruct(U(&v)[M])
+    {
+        for (std::size_t i = 0; i < M; ++i)
+                unmarshaller<T,Buffer,Alignment>::destruct(v[i]);
+    }
+
     template<typename Allocator, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
-    static return_type unmarshal(Allocator&& a, Buffer& b)
+    static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
         //std::cout << abi::__cxa_demangle(typeid(ret2).name(),0,0,0) << std::endl;
-        return_type ret;
-        constexpr std::size_t alignment = max(mpirpc::internal::alignment_reader<Alignment>::value,alignof(unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>));
-        posix_memalign(&ret,alignment,array_total_elements_v<T[N]>*sizeof(unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>));
+        retype_array_type<T,UT>* ptr;
+        posix_memalign((void**) &ptr, internal::alignment_reader<Alignment>::value, N*sizeof(retype_array_type<T,UT>));
+
+        auto ret = std::unique_ptr<retype_array_type<T,UT>[],std::function<void(retype_array_type<T,UT>*)>>{ptr, [](retype_array_type<T,UT>* p) {
+            for (std::size_t i = 0; i < N; ++i)
+                unmarshaller<T,Buffer,Alignment>::destruct(p[i]);
+            free(p);
+            std::cout << "freed p" << std::endl;
+        }};
         //std::vector<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>> ret;
         for (std::size_t i = 0; i < N; ++i)
-            unmarshaller<T,Buffer,Alignment>::unmarshall_into(a,b,ret[i]);
+            unmarshaller<T,Buffer,Alignment>::unmarshal_into(a,b,ret[i]);
         return ret;
     }
 };

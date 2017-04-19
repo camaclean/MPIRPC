@@ -72,6 +72,16 @@ struct internal_alignments_tuple_type_helper<std::tuple<Alignment,Alignments...>
 template<typename Alignments>
 using internal_alignments_tuple_type = typename internal_alignments_tuple_type_helper<Alignments>::type;
 
+template<typename T, typename Alignment, typename = void>
+struct is_overaligned_type : std::false_type {};
+
+template<typename T, typename Alignment>
+struct is_overaligned_type<T,Alignment,std::enable_if_t<(mpirpc::internal::alignment_reader<Alignment>::value > alignof(T))>> : std::true_type {};
+
+template<typename T, typename Alignment>
+constexpr bool is_overaligned_type_v = is_overaligned_type<T,Alignment>::value;
+
+
 }
 
 }

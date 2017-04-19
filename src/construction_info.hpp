@@ -27,6 +27,17 @@
 namespace mpirpc
 {
 
+template<typename T>
+struct is_construction_info : std::false_type {};
+
+template<typename T>
+using is_construction_info_type = typename is_construction_info<T>::type;
+
+template<typename T>
+constexpr bool is_construction_info_v = is_construction_info<T>::value;
+
+template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple>
+struct is_construction_info<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>> : std::true_type {};
 
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple>
 class construction_info;

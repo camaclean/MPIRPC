@@ -21,7 +21,7 @@
 #define MPIRPC__INTERNAL__RECONSTRUCTION__TYPE_PROPERTIES_HPP
 
 #include <type_traits>
-#include "../type_properties.hpp"
+//#include "../type_properties.hpp"
 
 namespace mpirpc
 {
