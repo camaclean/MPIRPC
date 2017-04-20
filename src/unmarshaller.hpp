@@ -114,8 +114,8 @@ constexpr std::size_t array_total_elements_v = retype_array<T,T>::elements;
 template<typename Buffer, typename Alignment, typename T, std::size_t N>
 struct unmarshaller<T[N],Buffer,Alignment,
     std::enable_if_t<
-        is_buildtype_v<std::remove_all_extents_t<T>,Buffer> &&
-        is_construction_info_v<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>>
+        is_buildtype_v<std::remove_all_extents_t<T>,Buffer> //&&
+        //is_construction_info_v<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>>
       >
   >
 {
@@ -178,6 +178,8 @@ struct unmarshaller<T[N],Buffer,Alignment,
         return ret;
     }
 };
+
+
 
 }
 
