@@ -111,18 +111,30 @@ using retype_array_type = typename retype_array<T,U>::type;
 template<typename T>
 constexpr std::size_t array_total_elements_v = retype_array<T,T>::elements;
 
-template<typename T>
+template<typename T, std::size_t N>
 class unmarshalled_array_holder
 {
 public:
+    unmarshalled_array_holder(T&& ptr)
+        : m_ptr(std::move(ptr)) {}
 
+    constexpr std::size_t size() const { return N; }
+    T&& pointer() { return std::move(m_ptr); }
+    decltype(auto) operator[] (std::size_t index) { return m_ptr[index]; }
+
+private:
+    T m_ptr;
+};
+
+template<typename T>
+class unmarshalled_array_holder<T,0>
+{
+public:
     unmarshalled_array_holder(std::size_t size, T&& ptr)
-        : m_size(size), m_ptr(std::move(ptr)) {
-            std::cout << "made unmarshalled_array_holder" << std::endl;
-        }
+        : m_size(size), m_ptr(std::move(ptr)) {}
 
     const std::size_t size() const { return m_size; }
-    T&& pointer() { std::cout << "getting pointer" << std::endl; return std::move(m_ptr); }
+    T&& pointer() { return std::move(m_ptr); }
     decltype(auto) operator[] (std::size_t index) { return m_ptr[index]; }
 
 private:
@@ -132,10 +144,18 @@ private:
 
 template<typename T>
 auto make_unmarshalled_array_holder(std::size_t size, T&& t)
-    -> unmarshalled_array_holder<T>
+    -> unmarshalled_array_holder<T,0>
 {
     std::cout << "making array holder" << std::endl;
     return {size, std::move(t)};
+}
+
+template<std::size_t N, typename T>
+auto make_unmarshalled_array_holder(T&& t)
+    -> unmarshalled_array_holder<T,N>
+{
+    std::cout << "making array holder" << std::endl;
+    return {std::move(t)};
 }
 
 template<typename Buffer, typename Alignment, typename T, std::size_t N>
@@ -163,7 +183,7 @@ struct unmarshaller<T[N],Buffer,Alignment,
         }};
         for (std::size_t i = 0; i < N; ++i)
             new (&ret[i]) UT(unmarshaller<T,Buffer,Alignment>::unmarshall(a,b));
-        return make_unmarshalled_array_holder(N,std::move(ret));
+        return make_unmarshalled_array_holder<N>(std::move(ret));
     }
 
     template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
@@ -210,7 +230,7 @@ struct unmarshaller<T[N],Buffer,Alignment,
         //std::vector<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>> ret;
         for (std::size_t i = 0; i < N; ++i)
             unmarshaller<T,Buffer,Alignment>::unmarshal_into(a,b,ret[i]);
-        return make_unmarshalled_array_holder(N,std::move(ret));
+        return make_unmarshalled_array_holder<N>(std::move(ret));
     }
 };
 
