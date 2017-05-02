@@ -24,13 +24,11 @@
 #include <type_traits>
 #include "buffer.hpp"
 #include "internal/direct_initializer.hpp"
-#include "marshaller.hpp"
-#include "unmarshaller.hpp"
 #include "polymorphic.hpp"
+#include "common.hpp"
 
 namespace mpirpc
 {
-
 
 template<typename T>
 struct array_destroy_helper

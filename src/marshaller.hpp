@@ -21,6 +21,7 @@
 #define MPIRPC__MARSHALLER_HPP
 
 #include "types.hpp"
+#include "common.hpp"
 #include "internal/type_properties.hpp"
 #include <string>
 #include <utility>
@@ -28,7 +29,7 @@
 namespace mpirpc
 {
 
-template<typename T, typename Buffer, typename Alignment, typename = void>
+template<typename T, typename Buffer, typename Alignment, typename>
 struct marshaller;
 
 /*

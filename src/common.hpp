@@ -75,6 +75,9 @@ class parameter_buffer;
 template<typename MessageInterface, typename Allocator = std::allocator<char>, typename Buffer = parameter_buffer<Allocator>>
 class manager;
 
+template<typename T, typename Buffer, typename Alignment,typename=void>
+struct marshaller;
+
 /**
  * unmarshaller should define a unmarshaller<T,Buffer,Alignment,void>::unmarshal<Allocator,Buffer>(Allocator,Buffer)
  * function which returns one of two types: T or construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<Arguments...>,std::tuple<StoredArguments...>>

@@ -24,6 +24,7 @@
 #include "common.hpp"
 #include "detail/unmarshaller.hpp"
 #include "internal/type_properties.hpp"
+#include "internal/type_massaging.hpp"
 #include "internal/alignment.hpp"
 #include "internal/utility.hpp"
 //#include "internal/reconstruction/aligned_type_holder.hpp"
@@ -89,28 +90,6 @@ struct unmarshaller<std::tuple<Ts...>,Buffer,Alignment>
     //static decltype(auto)
 };
 
-template<typename T, typename U>
-struct retype_array
-{
-    constexpr static std::size_t extent = 0;
-    constexpr static std::size_t elements = 1;
-    using type = U;
-};
-
-template<typename T, std::size_t N, typename U>
-struct retype_array<T[N],U>
-{
-    constexpr static std::size_t extent = N;
-    constexpr static std::size_t elements = N*retype_array<T,U>::elements;
-    using type = typename retype_array<T,U>::type[N];
-};
-
-template<typename T, typename U>
-using retype_array_type = typename retype_array<T,U>::type;
-
-template<typename T>
-constexpr std::size_t array_total_elements_v = retype_array<T,T>::elements;
-
 template<typename T, std::size_t N>
 class unmarshalled_array_holder
 {
@@ -161,21 +140,21 @@ auto make_unmarshalled_array_holder(T&& t)
 template<typename Buffer, typename Alignment, typename T, std::size_t N>
 struct unmarshaller<T[N],Buffer,Alignment,
     std::enable_if_t<
-        is_buildtype_v<std::remove_all_extents_t<T>,Buffer> //&&
-        //is_construction_info_v<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>>
+        is_buildtype_v<std::remove_all_extents_t<T>,Buffer> &&
+        !is_construction_info_v<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>>
       >
   >
 {
     using UT = unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>;
-    using unique_ptr_type = std::unique_ptr<retype_array_type<T,UT>[],std::function<void(retype_array_type<T,UT>*)>>;
+    using unique_ptr_type = std::unique_ptr<internal::retype_array_type<T,UT>[],std::function<void(internal::retype_array_type<T,UT>*)>>;
 
     template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
     static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
-        retype_array_type<T,UT>* ptr;
-        posix_memalign((void**) &ptr, internal::alignment_reader<Alignment>::value, N*sizeof(retype_array_type<T,UT>));
+        internal::retype_array_type<T,UT>* ptr;
+        posix_memalign((void**) &ptr, internal::alignment_reader<Alignment>::value, N*sizeof(internal::retype_array_type<T,UT>));
 
-        auto ret = std::unique_ptr<retype_array_type<T,UT>[],std::function<void(retype_array_type<T,UT>*)>>{ptr, [](retype_array_type<T,UT>* p) {
+        auto ret = std::unique_ptr<internal::retype_array_type<T,UT>[],std::function<void(internal::retype_array_type<T,UT>*)>>{ptr, [](internal::retype_array_type<T,UT>* p) {
             for (std::size_t i = 0; i < N; ++i)
                 p[i].~UT();
             free(p);
@@ -218,10 +197,11 @@ struct unmarshaller<T[N],Buffer,Alignment,
     static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
         //std::cout << abi::__cxa_demangle(typeid(ret2).name(),0,0,0) << std::endl;
-        retype_array_type<T,UT>* ptr;
-        posix_memalign((void**) &ptr, internal::alignment_reader<Alignment>::value, N*sizeof(retype_array_type<T,UT>));
+        internal::retype_array_type<T,UT>* ptr;
+        constexpr std::size_t alignment = std::max(internal::alignment_reader<Alignment>::value,alignof(void*));
+        posix_memalign((void**) &ptr, alignment, N*sizeof(internal::retype_array_type<T,UT>));
 
-        auto ret = std::unique_ptr<retype_array_type<T,UT>[],std::function<void(retype_array_type<T,UT>*)>>{ptr, [](retype_array_type<T,UT>* p) {
+        auto ret = std::unique_ptr<internal::retype_array_type<T,UT>[],std::function<void(internal::retype_array_type<T,UT>*)>>{ptr, [](internal::retype_array_type<T,UT>* p) {
             for (std::size_t i = 0; i < N; ++i)
                 unmarshaller<T,Buffer,Alignment>::destruct(p[i]);
             free(p);
@@ -237,22 +217,22 @@ struct unmarshaller<T[N],Buffer,Alignment,
 template<typename Buffer, typename Alignment, typename T>
 struct unmarshaller<T[],Buffer,Alignment,
     std::enable_if_t<
-        is_buildtype_v<std::remove_all_extents_t<T>,Buffer> //&&
-        //is_construction_info_v<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>>
+        is_buildtype_v<std::remove_all_extents_t<T>,Buffer> &&
+        !is_construction_info_v<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>>
       >
   >
 {
     using UT = unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>;
-    using unique_ptr_type = std::unique_ptr<retype_array_type<T,UT>[],std::function<void(retype_array_type<T,UT>*)>>;
+    using unique_ptr_type = std::unique_ptr<internal::retype_array_type<T,UT>[],std::function<void(internal::retype_array_type<T,UT>*)>>;
 
     template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
     static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
-        retype_array_type<T,UT>* ptr;
+        internal::retype_array_type<T,UT>* ptr;
         std::size_t size = mpirpc::get<std::size_t>(b,a);
-        posix_memalign((void**) &ptr, internal::alignment_reader<Alignment>::value, size*sizeof(retype_array_type<T,UT>));
+        posix_memalign((void**) &ptr, internal::alignment_reader<Alignment>::value, size*sizeof(internal::retype_array_type<T,UT>));
 
-        unique_ptr_type ret{ptr, [=](retype_array_type<T,UT>* p) {
+        unique_ptr_type ret{ptr, [=](internal::retype_array_type<T,UT>* p) {
             for (std::size_t i = 0; i < size; ++i)
                 p[i].~UT();
             free(p);
@@ -268,10 +248,11 @@ struct unmarshaller<T[],Buffer,Alignment,
     static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
         //std::cout << abi::__cxa_demangle(typeid(ret2).name(),0,0,0) << std::endl;
-        retype_array_type<T,UT>* ptr;
+        internal::retype_array_type<T,UT>* ptr;
         std::size_t size = mpirpc::get<std::size_t>(b,a);
-        posix_memalign((void**) &ptr, internal::alignment_reader<Alignment>::value, size*sizeof(retype_array_type<T,UT>));
-        unique_ptr_type ret{ptr, [=](retype_array_type<T,UT>* p) {
+        constexpr std::size_t alignment = std::max(internal::alignment_reader<Alignment>::value,alignof(void*));
+        posix_memalign((void**) &ptr, alignment, size*sizeof(internal::retype_array_type<T,UT>));
+        unique_ptr_type ret{ptr, [=](internal::retype_array_type<T,UT>* p) {
             for (std::size_t i = 0; i < size; ++i)
                 unmarshaller<T,Buffer,Alignment>::destruct(p[i]);
             free(p);

@@ -139,6 +139,22 @@ inline constexpr auto forward_parameter(std::remove_reference_t<T>&& t) noexcept
     return static_cast<choose_reference_type<FT, T>>(t);
 }
 
+
+template<typename T, typename U>
+struct retype_array
+{
+    using type = U;
+};
+
+template<typename T, std::size_t N, typename U>
+struct retype_array<T[N],U>
+{
+    using type = typename retype_array<T,U>::type[N];
+};
+
+template<typename T, typename U>
+using retype_array_type = typename retype_array<T,U>::type;
+
 /*************************************************************************************/
 /*************************************************************************************/
 /*                                  Implementation                                   */

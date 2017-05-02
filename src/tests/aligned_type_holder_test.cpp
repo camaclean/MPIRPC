@@ -39,6 +39,17 @@ private:
     double m_b;
 };
 
+class D
+{
+public:
+    D() : m_a{} {}
+    D(float a) : m_a{a} {}
+    float a() const { return m_a; }
+    
+private:
+    float m_a;
+};
+
 namespace mpirpc
 {
 
@@ -68,6 +79,25 @@ struct marshaller<C,Buffer,Alignment>
         buf.template push<int>(v.a());
         buf.template push<double>(v.b());
         std::cout << "marshalling: C(" << v.a() << "," <<  v.b() << ")" << std::endl;
+    }
+};
+
+template<typename Buffer, typename Alignment>
+struct unmarshaller<D,Buffer,Alignment>
+{
+    template<typename Allocator>
+    static D unmarshal(Allocator&& a, Buffer& b)
+    {
+        return D(mpirpc::get<float>(b,a));
+    }
+};
+
+template<typename Buffer, typename Alignment>
+struct marshaller<D,Buffer,Alignment>
+{
+    static void marshal(Buffer& buf, const D& v)
+    {
+        buf.template push<float>(v.a());
     }
 };
 
@@ -214,8 +244,8 @@ TEST(aligned_type_holder, misc)
     std::cout << abi::__cxa_demangle(typeid(std::tuple<mpirpc::unmarshaller_type<C[5][7], mpirpc::parameter_buffer<>, std::allocator<char>>>).name(), 0, 0, 0) <<  std::endl;
     std::cout << "-----------------" << std::endl;
     std::cout << abi::__cxa_demangle(typeid(std::remove_all_extents_t<double[5][7]>).name(), 0, 0, 0) <<  std::endl;
-    std::cout << abi::__cxa_demangle(typeid(mpirpc::retype_array_type<C[5][7], mpirpc::unmarshaller_type<C, mpirpc::parameter_buffer<>, std::allocator<char>>>).name(), 0, 0, 0) <<  std::endl;
-    std::cout <<  mpirpc::array_total_elements_v<C[5][7]> <<  std::endl;
+    std::cout << abi::__cxa_demangle(typeid(mpirpc::internal::retype_array_type<C[5][7], mpirpc::unmarshaller_type<C, mpirpc::parameter_buffer<>, std::allocator<char>>>).name(), 0, 0, 0) <<  std::endl;
+    std::cout <<  mpirpc::internal::array_total_elements_v<C[5][7]> <<  std::endl;
     {
         mpirpc::parameter_buffer<> buff;
         C (*blah)[3] = new C[2][3];
@@ -262,6 +292,57 @@ TEST(aligned_type_holder, misc)
             for (std::size_t j = 0; j < 3; ++j)
             {
                 std::cout << std::get<0>(tmp[i][j].args()) << " " << std::get<1>(tmp[i][j].args()) << std::endl;
+            }
+        }
+
+    }
+    std::cout << "D array" << std::endl;
+    {
+        mpirpc::parameter_buffer<> buff;
+        D (*blah)[3] = new D[2][3];
+        for (std::size_t i = 0; i < 2; ++i)
+        {
+            for (std::size_t j = 0; j < 3; ++j)
+            {
+                blah[i][j] = D(i*3+j);
+                mpirpc::marshaller<D, mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(D)>>::marshal(buff, blah[i][j]);
+            }
+        }
+        buff.seek(0);
+        auto ret = mpirpc::unmarshaller<D[2][3], mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(D)>>::unmarshal(std::allocator<char>(), buff);
+        for (std::size_t i = 0; i < 2; ++i)
+        {
+            for (std::size_t j = 0; j < 3; ++j)
+            {
+                std::cout << ret[i][j].a() << std::endl;
+            }
+        }
+        std::cout << abi::__cxa_demangle(typeid(ret).name(), 0, 0, 0) <<  std::endl;
+    }
+    std::cout <<  "Uknown bounds with D:" <<  std::endl;
+    {
+        mpirpc::parameter_buffer<> buff;
+        D (*blah)[3] = new D[2][3];
+        buff.template push<std::size_t>((std::size_t) 2);
+        for (std::size_t i = 0; i < 2; ++i)
+        {
+            for (std::size_t j = 0; j < 3; ++j)
+            {
+                blah[i][j] = D(i*3+j);
+                mpirpc::marshaller<D, mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(D)>>::marshal(buff, blah[i][j]);
+            }
+        }
+        buff.seek(0);
+        std::cout <<  "here" <<  std::endl;
+        auto tmp =  mpirpc::unmarshaller<D[][3], mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(D)>>::unmarshal(std::allocator<char>(), buff);
+        std::cout <<  "here2" <<  std::endl;
+        //auto ret = std::move(tmp.pointer());
+        std::cout << abi::__cxa_demangle(typeid(tmp).name(), 0, 0, 0) <<  std::endl;
+        for (std::size_t i = 0; i < 2; ++i)
+        {
+            for (std::size_t j = 0; j < 3; ++j)
+            {
+                std::cout << tmp[i][j].a() << std::endl;
             }
         }
 
