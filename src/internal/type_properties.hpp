@@ -106,6 +106,18 @@ using tuple_nonreference_types = typename tuple_nonreference_storage_types_helpe
 
 constexpr static std::size_t calculate_alignment_padding(std::size_t addr, std::size_t alignment);
 
+template<typename T>
+struct array_total_elements : std::integral_constant<std::size_t,1> {};
+
+template<typename T, std::size_t N>
+struct array_total_elements<T[N]> : std::integral_constant<std::size_t, N*array_total_elements<T>::value> {};
+
+template<typename T>
+using array_total_elements_type = typename array_total_elements<T>::type;
+
+template<typename T>
+constexpr std::size_t array_total_elements_v = array_total_elements<T>::value;
+
 template<std::size_t Pos, std::size_t StartOffset, typename Buffer, bool SkipBuildTypes, bool SkipNonBuildTypes, typename T, typename AlignmentInfo>
 struct tuple_reference_storage_info;
 
