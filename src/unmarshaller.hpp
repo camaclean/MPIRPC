@@ -189,13 +189,19 @@ struct unmarshaller<T[N],Buffer,Alignment,
     template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
     static void unmarshal_into(Allocator&& a, Buffer& b, UT(&v)[N])
     {
+        std::cout << "Initializing array of " << abi::__cxa_demangle(typeid(UT).name(), 0, 0, 0) << " " << &v[0] << std::endl;
         for (std::size_t i = 0; i < N; ++i)
-            new (&v[i]) UT(mpirpc::get<T>(b,a));
+        {
+            auto val = mpirpc::get<T>(b,a);
+            std::cout << "val: " << val << ' ' << &v[i] << std::endl;
+            new (&v[i]) UT(std::move(val));
+        }
     }
 
     template<typename Allocator, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
     static void unmarshal_into(Allocator&& a, Buffer& b, UT(&v)[N])
     {
+        std::cout << "Creating inner rank: " << abi::__cxa_demangle(typeid(UT[N]).name(), 0, 0, 0) << std::endl;
         for (std::size_t i = 0; i < N; ++i)
             unmarshaller<T,Buffer,Alignment>::unmarshal_into(a,b,v);
     }
@@ -219,7 +225,11 @@ struct unmarshaller<T[N],Buffer,Alignment,
     {
         //std::cout << abi::__cxa_demangle(typeid(ret2).name(),0,0,0) << std::endl;
         retype_array_type<T,UT>* ptr;
-        posix_memalign((void**) &ptr, internal::alignment_reader<Alignment>::value, N*sizeof(retype_array_type<T,UT>));
+        //posix_memalign expects an alignment of at least alignof(void*)
+        constexpr std::size_t alignment = (internal::alignment_reader<Alignment>::value > alignof(void*)) ? internal::alignment_reader<Alignment>::value : alignof(void*);
+        int err = posix_memalign((void**) &ptr, alignment, N*sizeof(retype_array_type<T,UT>));
+        std::cout << "err: " << err << " EINVAL: " << EINVAL << std::endl;
+        std::cout << "allocating array memory: " << N << "*" << sizeof(retype_array_type<T,UT>) << "=" << N*sizeof(retype_array_type<T,UT>) << " Alignment: " << internal::alignment_reader<Alignment>::value << std::endl;
 
         auto ret = std::unique_ptr<retype_array_type<T,UT>[],std::function<void(retype_array_type<T,UT>*)>>{ptr, [](retype_array_type<T,UT>* p) {
             for (std::size_t i = 0; i < N; ++i)
@@ -228,6 +238,9 @@ struct unmarshaller<T[N],Buffer,Alignment,
             std::cout << "freed p" << std::endl;
         }};
         //std::vector<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>> ret;
+        std::cout << "ret type: " << abi::__cxa_demangle(typeid(ret).name(), 0, 0, 0) << std::endl;
+        std::cout << "ret, ptr: " << &ret[0] << " " << ptr << std::endl;
+        std::cout << "Creating inner rank: " << abi::__cxa_demangle(typeid(T).name(), 0, 0, 0) << std::endl;
         for (std::size_t i = 0; i < N; ++i)
             unmarshaller<T,Buffer,Alignment>::unmarshal_into(a,b,ret[i]);
         return make_unmarshalled_array_holder<N>(std::move(ret));
@@ -270,7 +283,9 @@ struct unmarshaller<T[],Buffer,Alignment,
         //std::cout << abi::__cxa_demangle(typeid(ret2).name(),0,0,0) << std::endl;
         retype_array_type<T,UT>* ptr;
         std::size_t size = mpirpc::get<std::size_t>(b,a);
-        posix_memalign((void**) &ptr, internal::alignment_reader<Alignment>::value, size*sizeof(retype_array_type<T,UT>));
+        //posix_memalign expects an alignment of at least alignof(void*)
+        constexpr std::size_t alignment = (internal::alignment_reader<Alignment>::value > alignof(void*)) ? internal::alignment_reader<Alignment>::value : alignof(void*);
+        posix_memalign((void**) &ptr, alignment, size*sizeof(retype_array_type<T,UT>));
         unique_ptr_type ret{ptr, [=](retype_array_type<T,UT>* p) {
             for (std::size_t i = 0; i < size; ++i)
                 unmarshaller<T,Buffer,Alignment>::destruct(p[i]);
