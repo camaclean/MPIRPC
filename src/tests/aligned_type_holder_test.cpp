@@ -418,18 +418,22 @@ using tuple_index_sequence = typename tuple_index_sequence_helper<Tuple>::type;
 template<typename T,  typename... Tags>
 class tagged_parameter_wrapper;
 
+template<typename T>
+struct is_tagged_parameter_wrapper :  std::false_type {};
+
+template<typename T,  typename... Tags>
+struct is_tagged_parameter_wrapper<tagged_parameter_wrapper<T, Tags...>> :  std::true_type {};
+
+template<typename T>
+using is_tagged_parameter_wrapper_type = typename is_tagged_parameter_wrapper<T>::type;
+
+template<typename T>
+constexpr bool is_tagged_parameter_wrapper_v = is_tagged_parameter_wrapper<T>::value;
+
 template<typename T,  typename... Tags>
 class tagged_parameter_wrapper<T&, Tags...>
 {
-public:
-    using runtime_data_tuple_type = mpirpc::internal::filter_tuple<std::integer_sequence<bool, !std::is_empty<Tags>::value...>, std::tuple<Tags...>>;
-
-    template<typename... RTD>
-    constexpr tagged_parameter_wrapper(T& t, RTD&&... rtd) noexcept : m_value(t), m_runtime_data{std::forward<RTD>(rtd)...} {}
-    template<typename... RTD>
-    constexpr tagged_parameter_wrapper(const T& t, RTD&&... rtd) noexcept : m_value(t),  m_runtime_data{std::forward<RTD>(rtd)...} {}
-    T& get() const { return m_value; }
-
+private:
     template<typename NewTag, std::size_t... Is, std::enable_if_t<std::is_empty<NewTag>::value>* = nullptr>
     tagged_parameter_wrapper<T&, Tags..., NewTag> append_tag(std::index_sequence<Is...>)
     {
@@ -441,6 +445,14 @@ public:
     {
         return {m_value, std::get<Is>(m_runtime_data)..., std::forward<NewTag>(tag)};
     }
+
+public:
+    using runtime_data_tuple_type = mpirpc::internal::filter_tuple<std::integer_sequence<bool, !std::is_empty<Tags>::value...>, std::tuple<Tags...>>;
+    using type = T&;
+
+    template<typename... RTD>
+    constexpr tagged_parameter_wrapper(T& t, RTD&&... rtd) noexcept : m_value(t), m_runtime_data{std::forward<RTD>(rtd)...} {}
+    T& get() const { return m_value; }
 
     template<typename NewTag, std::enable_if_t<std::is_empty<NewTag>::value>* = nullptr>
     tagged_parameter_wrapper<T&, Tags..., NewTag> append_tag()
@@ -462,49 +474,75 @@ private:
 template<typename T,  typename... Tags>
 class tagged_parameter_wrapper<T&&, Tags...>
 {
+private:
+    template<typename NewTag, std::size_t... Is, std::enable_if_t<std::is_empty<NewTag>::value>* = nullptr>
+    tagged_parameter_wrapper<T&&, Tags..., NewTag> append_tag(std::index_sequence<Is...>)
+    {
+        return {std::move(m_value), std::get<Is>(m_runtime_data)...};
+    }
+
+    template<typename NewTag, std::size_t... Is, std::enable_if_t<!std::is_empty<NewTag>::value>* = nullptr>
+    tagged_parameter_wrapper<T&&, Tags..., NewTag> append_tag(std::index_sequence<Is...>, NewTag&& tag)
+    {
+        return {std::move(m_value), std::get<Is>(m_runtime_data)..., std::forward<NewTag>(tag)};
+    }
+
 public:
-    constexpr tagged_parameter_wrapper(T&& t) noexcept : m_value(std::move(t)) {}
+    using runtime_data_tuple_type = mpirpc::internal::filter_tuple<std::integer_sequence<bool, !std::is_empty<Tags>::value...>, std::tuple<Tags...>>;
+    using type = T&&;
+
+    template<typename... RTD>
+    constexpr tagged_parameter_wrapper(T&& t, RTD&&... rtd) noexcept : m_value(std::move(t)), m_runtime_data{std::forward<RTD>(rtd)...} {}
     T&& get() const { return m_value; }
+
+    template<typename NewTag, std::enable_if_t<std::is_empty<NewTag>::value>* = nullptr>
+    tagged_parameter_wrapper<T&&, Tags..., NewTag> append_tag()
+    {
+        return append_tag<NewTag>(tuple_index_sequence<runtime_data_tuple_type>{});
+    }
+
+    template<typename NewTag, std::enable_if_t<!std::is_empty<NewTag>::value>* = nullptr>
+    tagged_parameter_wrapper<T&&, Tags..., NewTag> append_tag(NewTag&& tag)
+    {
+        return append_tag<NewTag>(tuple_index_sequence<runtime_data_tuple_type>{}, std::forward<NewTag>(tag));
+    }
 
 private:
     T&& m_value;
-    mpirpc::internal::filter_tuple_types<std::integer_sequence<bool, !std::is_empty<Tags>::value...>, std::tuple<Tags...>> m_runtime_data;
+    runtime_data_tuple_type m_runtime_data;
 };
 
 struct side_effects_tag_type {};
 
-template<typename T>
-auto get_return(T&& t)
+template<typename T, std::enable_if_t<!is_tagged_parameter_wrapper_v<std::remove_reference_t<T>>>* = nullptr>
+auto side_effects(T&& t)
     -> tagged_parameter_wrapper<T&&, side_effects_tag_type>
 {
     return tagged_parameter_wrapper<T&&, side_effects_tag_type>(std::forward<T>(t));
 }
 
-template<typename T, typename...Tags>
-auto get_return(tagged_parameter_wrapper<T, Tags...>&& t)
+template<typename T, std::enable_if_t<is_tagged_parameter_wrapper_v<std::remove_reference_t<T>>>* = nullptr>
+auto side_effects(T&& t)
 {
     return t.template append<side_effects_tag_type>();
 }
 
-template<typename T, typename...Tags>
-auto get_return(const tagged_parameter_wrapper<T, Tags...>& t)
-{
-    return t.template append<side_effects_tag_type>();
-}
+template<typename T>
+class array_tag_type;
 
-template<std::size_t N>
-class pointer_elements
+template<typename T, std::size_t N>
+class array_tag_type<T[N]>
 {
 public:
-    constexpr static std::size_t size() { return N; }
+    constexpr static std::size_t size() noexcept { return N; }
 };
 
-template<>
-class pointer_elements<0>
+template<typename T>
+class array_tag_type<T[]>
 {
 public:
-    pointer_elements(std::size_t n) : m_size{n} {}
-    std::size_t size() const { return m_size; }
+    constexpr array_tag_type(std::size_t n) noexcept : m_size{n} {}
+    constexpr std::size_t size() const noexcept { return m_size; }
 
 private:
     std::size_t m_size;
@@ -513,48 +551,83 @@ private:
 template<std::size_t N,  typename T, std::enable_if_t<std::is_pointer<std::remove_reference_t<T>>::value>* = nullptr>
 decltype(auto) wrap_pointer(T&& t)
 {
-    return tagged_parameter_wrapper<T&&, pointer_elements<N>>(std::forward<T>(t));
+    using tag_type = array_tag_type<std::remove_pointer_t<std::remove_reference_t<T>>[N]>;
+    return tagged_parameter_wrapper<T&&, tag_type>(std::forward<T>(t));
 };
 
 template<typename T, std::enable_if_t<std::is_pointer<std::remove_reference_t<T>>::value>* = nullptr>
 decltype(auto) wrap_pointer(T&& t, std::size_t size)
 {
-    return tagged_parameter_wrapper<T&&, pointer_elements<0>>(std::forward<T>(t), pointer_elements<0>(size));
+    using tag_type = array_tag_type<std::remove_pointer_t<std::remove_reference_t<T>>[]>;
+    return tagged_parameter_wrapper<T&&, tag_type>(std::forward<T>(t), tag_type(size));
 };
 
-template<std::size_t N,  typename T, typename...Tags>
-decltype(auto) wrap_pointer(tagged_parameter_wrapper<T, Tags...>&& t)
+template<std::size_t N,  typename T, std::enable_if_t<is_tagged_parameter_wrapper_v<std::remove_reference_t<T>>>* = nullptr>
+decltype(auto) wrap_pointer(T&& t)
 {
-    return t.template append_tag<pointer_elements<N>>();
+    using tag_type = array_tag_type<std::remove_pointer_t<std::remove_reference_t<typename T::type>>[N]>;
+    return t.template append_tag<tag_type>();
 };
 
-template<typename T, typename...Tags>
-decltype(auto) wrap_pointer(tagged_parameter_wrapper<T, Tags...>&& t, std::size_t size)
+template<typename T, std::enable_if_t<is_tagged_parameter_wrapper_v<std::remove_reference_t<T>>>* = nullptr>
+decltype(auto) wrap_pointer(T&& t, std::size_t size)
 {
-    return t.template append_tag<pointer_elements<0>>(pointer_elements<0>(size));
+    using tag_type = array_tag_type<std::remove_pointer_t<std::remove_reference_t<typename T::type>>[]>;
+    return t.template append_tag<tag_type>(tag_type(size));
 };
 
 
 TEST(aligned_type_holder, wrapper)
 {
     int i = 5;
-    auto lv = get_return(i);
+    auto lv = side_effects(i);
     std::cout << abi::__cxa_demangle(typeid(lv).name(), 0, 0, 0) <<  std::endl;
-    auto rv = get_return(6);
+    auto rv = side_effects(6);
     std::cout << abi::__cxa_demangle(typeid(rv).name(), 0, 0, 0) <<  std::endl;
+
+    const int i2 = 8;
+    auto cv = side_effects(i2);
+    std::cout << abi::__cxa_demangle(typeid(cv).name(), 0, 0, 0) <<  std::endl;
+
+
     int *t = new int(7);
-    auto test = wrap_pointer<5>(t);
+    {
+        auto test = wrap_pointer<5>(t);
+        std::cout << abi::__cxa_demangle(typeid(test).name(), 0, 0, 0) <<  std::endl;
+        tagged_parameter_wrapper<int*&> test2{t};
+        auto test3 = wrap_pointer<5>(std::move(test2));
+        std::cout << abi::__cxa_demangle(typeid(test3).name(), 0, 0, 0) <<  std::endl;
+        auto test4 = wrap_pointer(t, 5);
+        std::cout << abi::__cxa_demangle(typeid(test4).name(), 0, 0, 0) <<  std::endl;
+        auto test5 = wrap_pointer(std::move(test2), 5);
+        std::cout << abi::__cxa_demangle(typeid(test5).name(), 0, 0, 0) <<  std::endl;
+        auto test6 = wrap_pointer(side_effects(t), 5);
+        std::cout << abi::__cxa_demangle(typeid(test6).name(), 0, 0, 0) <<  std::endl;
+    }
+    {
+        auto test = wrap_pointer<5>(std::move(t));
+        std::cout << abi::__cxa_demangle(typeid(test).name(), 0, 0, 0) <<  std::endl;
+        tagged_parameter_wrapper<int*&&> test2{std::move(t)};
+        auto test3 = wrap_pointer<5>(std::move(test2));
+        std::cout << abi::__cxa_demangle(typeid(test3).name(), 0, 0, 0) <<  std::endl;
+        auto test4 = wrap_pointer(std::move(t), 5);
+        std::cout << abi::__cxa_demangle(typeid(test4).name(), 0, 0, 0) <<  std::endl;
+        auto test5 = wrap_pointer(std::move(test2), 5);
+        std::cout << abi::__cxa_demangle(typeid(test5).name(), 0, 0, 0) <<  std::endl;
+        auto test6 = wrap_pointer(side_effects(std::move(t)), 5);
+        std::cout << abi::__cxa_demangle(typeid(test6).name(), 0, 0, 0) <<  std::endl;
+    }
+
+    int (*t2)[5] = new int[3][5]();
+    auto test = wrap_pointer(t2, 3);
     std::cout << abi::__cxa_demangle(typeid(test).name(), 0, 0, 0) <<  std::endl;
-    tagged_parameter_wrapper<int*&> test2{t};
-    auto test3 = wrap_pointer<5>(std::move(test2));
-    std::cout << abi::__cxa_demangle(typeid(test3).name(), 0, 0, 0) <<  std::endl;
-    auto test4 = wrap_pointer(t, 5);
-    std::cout << abi::__cxa_demangle(typeid(test4).name(), 0, 0, 0) <<  std::endl;
-    auto test5 = wrap_pointer(std::move(test2), 5);
-    std::cout << abi::__cxa_demangle(typeid(test5).name(), 0, 0, 0) <<  std::endl;
-    auto test6 = wrap_pointer(get_return(t), 5);
-    std::cout << abi::__cxa_demangle(typeid(test6).name(), 0, 0, 0) <<  std::endl;
+
+    const int (*t3)[5] = new int[3][5]();
+    auto test2 = wrap_pointer(t3, 3);
+    std::cout << abi::__cxa_demangle(typeid(test2).name(), 0, 0, 0) <<  std::endl;
     //std::cout << abi::__cxa_demangle(typeid(tagged_parameter_wrapper<int*&, pointer_elements<0>>::runtime_data_tuple_type).name(), 0, 0, 0) <<  std::endl;
+
+    std::initializer_list<int> test3 = {1, 2, 3, 4, 5};
 }
 
 int main(int argc, char **argv) {
