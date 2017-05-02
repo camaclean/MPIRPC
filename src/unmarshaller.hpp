@@ -168,6 +168,7 @@ struct unmarshaller<T[N],Buffer,Alignment,
     template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
     static void unmarshal_into(Allocator&& a, Buffer& b, UT(&v)[N])
     {
+        std::cout << "Initializing array of " << abi::__cxa_demangle(typeid(UT).name(), 0, 0, 0) << " " << &v[0] << std::endl;
         for (std::size_t i = 0; i < N; ++i)
             new (&v[i]) UT(mpirpc::get<T>(b,a));
     }
@@ -175,6 +176,7 @@ struct unmarshaller<T[N],Buffer,Alignment,
     template<typename Allocator, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
     static void unmarshal_into(Allocator&& a, Buffer& b, UT(&v)[N])
     {
+        std::cout << "Creating inner rank: " << abi::__cxa_demangle(typeid(UT[N]).name(), 0, 0, 0) << std::endl;
         for (std::size_t i = 0; i < N; ++i)
             unmarshaller<T,Buffer,Alignment>::unmarshal_into(a,b,v);
     }
@@ -208,6 +210,9 @@ struct unmarshaller<T[N],Buffer,Alignment,
             std::cout << "freed p" << std::endl;
         }};
         //std::vector<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>> ret;
+        std::cout << "ret type: " << abi::__cxa_demangle(typeid(ret).name(), 0, 0, 0) << std::endl;
+        std::cout << "ret, ptr: " << &ret[0] << " " << ptr << std::endl;
+        std::cout << "Creating inner rank: " << abi::__cxa_demangle(typeid(T).name(), 0, 0, 0) << std::endl;
         for (std::size_t i = 0; i < N; ++i)
             unmarshaller<T,Buffer,Alignment>::unmarshal_into(a,b,ret[i]);
         return make_unmarshalled_array_holder<N>(std::move(ret));
