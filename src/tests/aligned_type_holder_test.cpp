@@ -527,20 +527,20 @@ auto side_effects(T&& t)
 }
 
 template<typename T>
-class array_tag_type;
+class decayed_array_tag_type;
 
 template<typename T, std::size_t N>
-class array_tag_type<T[N]>
+class decayed_array_tag_type<T[N]>
 {
 public:
     constexpr static std::size_t size() noexcept { return N; }
 };
 
 template<typename T>
-class array_tag_type<T[]>
+class decayed_array_tag_type<T[]>
 {
 public:
-    constexpr array_tag_type(std::size_t n) noexcept : m_size{n} {}
+    constexpr decayed_array_tag_type(std::size_t n) noexcept : m_size{n} {}
     constexpr std::size_t size() const noexcept { return m_size; }
 
 private:
@@ -548,33 +548,35 @@ private:
 };
 
 template<std::size_t N,  typename T, std::enable_if_t<std::is_pointer<std::remove_reference_t<T>>::value>* = nullptr>
-decltype(auto) wrap_pointer(T&& t)
+decltype(auto) decayed_array(T&& t)
 {
-    using tag_type = array_tag_type<std::remove_pointer_t<std::remove_reference_t<T>>[N]>;
+    using tag_type = decayed_array_tag_type<std::remove_pointer_t<std::remove_reference_t<T>>[N]>;
     return tagged_parameter_wrapper<T&&, tag_type>(std::forward<T>(t));
 };
 
+// template<typename T, std::enable_if_t<false>* = nullptr>
+// decltype(auto) decayed_array(T&&t, std::size_t size);
+
 template<typename T, std::enable_if_t<std::is_pointer<std::remove_reference_t<T>>::value>* = nullptr>
-decltype(auto) wrap_pointer(T&& t, std::size_t size)
+decltype(auto) decayed_array(T&& t, std::size_t size)
 {
-    using tag_type = array_tag_type<std::remove_pointer_t<std::remove_reference_t<T>>[]>;
+    using tag_type = decayed_array_tag_type<std::remove_pointer_t<std::remove_reference_t<T>>[]>;
     return tagged_parameter_wrapper<T&&, tag_type>(std::forward<T>(t), tag_type(size));
 };
 
 template<std::size_t N,  typename T, std::enable_if_t<is_tagged_parameter_wrapper_v<std::remove_reference_t<T>>>* = nullptr>
-decltype(auto) wrap_pointer(T&& t)
+decltype(auto) decayed_array(T&& t)
 {
-    using tag_type = array_tag_type<std::remove_pointer_t<std::remove_reference_t<typename T::type>>[N]>;
+    using tag_type = decayed_array_tag_type<std::remove_pointer_t<std::remove_reference_t<typename T::type>>[N]>;
     return t.template append_tag<tag_type>();
 };
 
 template<typename T, std::enable_if_t<is_tagged_parameter_wrapper_v<std::remove_reference_t<T>>>* = nullptr>
-decltype(auto) wrap_pointer(T&& t, std::size_t size)
+decltype(auto) decayed_array(T&& t, std::size_t size)
 {
-    using tag_type = array_tag_type<std::remove_pointer_t<std::remove_reference_t<typename T::type>>[]>;
+    using tag_type = decayed_array_tag_type<std::remove_pointer_t<std::remove_reference_t<typename T::type>>[]>;
     return t.template append_tag<tag_type>(tag_type(size));
 };
-
 
 TEST(aligned_type_holder, wrapper)
 {
@@ -591,38 +593,38 @@ TEST(aligned_type_holder, wrapper)
 
     int *t = new int(7);
     {
-        auto test = wrap_pointer<5>(t);
+        auto test = decayed_array<5>(t);
         std::cout << abi::__cxa_demangle(typeid(test).name(), 0, 0, 0) <<  std::endl;
         tagged_parameter_wrapper<int*&> test2{t};
-        auto test3 = wrap_pointer<5>(std::move(test2));
+        auto test3 = decayed_array<5>(std::move(test2));
         std::cout << abi::__cxa_demangle(typeid(test3).name(), 0, 0, 0) <<  std::endl;
-        auto test4 = wrap_pointer(t, 5);
+        auto test4 = decayed_array(t, 5);
         std::cout << abi::__cxa_demangle(typeid(test4).name(), 0, 0, 0) <<  std::endl;
-        auto test5 = wrap_pointer(std::move(test2), 5);
+        auto test5 = decayed_array(std::move(test2), 5);
         std::cout << abi::__cxa_demangle(typeid(test5).name(), 0, 0, 0) <<  std::endl;
-        auto test6 = wrap_pointer(side_effects(t), 5);
+        auto test6 = decayed_array(side_effects(t), 5);
         std::cout << abi::__cxa_demangle(typeid(test6).name(), 0, 0, 0) <<  std::endl;
     }
     {
-        auto test = wrap_pointer<5>(std::move(t));
+        auto test = decayed_array<5>(std::move(t));
         std::cout << abi::__cxa_demangle(typeid(test).name(), 0, 0, 0) <<  std::endl;
         tagged_parameter_wrapper<int*&&> test2{std::move(t)};
-        auto test3 = wrap_pointer<5>(std::move(test2));
+        auto test3 = decayed_array<5>(std::move(test2));
         std::cout << abi::__cxa_demangle(typeid(test3).name(), 0, 0, 0) <<  std::endl;
-        auto test4 = wrap_pointer(std::move(t), 5);
+        auto test4 = decayed_array(std::move(t), 5);
         std::cout << abi::__cxa_demangle(typeid(test4).name(), 0, 0, 0) <<  std::endl;
-        auto test5 = wrap_pointer(std::move(test2), 5);
+        auto test5 = decayed_array(std::move(test2), 5);
         std::cout << abi::__cxa_demangle(typeid(test5).name(), 0, 0, 0) <<  std::endl;
-        auto test6 = wrap_pointer(side_effects(std::move(t)), 5);
+        auto test6 = decayed_array(side_effects(std::move(t)), 5);
         std::cout << abi::__cxa_demangle(typeid(test6).name(), 0, 0, 0) <<  std::endl;
     }
 
     int (*t2)[5] = new int[3][5]();
-    auto test = wrap_pointer(t2, 3);
+    auto test = decayed_array(t2, 3);
     std::cout << abi::__cxa_demangle(typeid(test).name(), 0, 0, 0) <<  std::endl;
 
     const int (*t3)[5] = new int[3][5]();
-    auto test2 = wrap_pointer(t3, 3);
+    auto test2 = decayed_array(t3, 3);
     std::cout << abi::__cxa_demangle(typeid(test2).name(), 0, 0, 0) <<  std::endl;
     //std::cout << abi::__cxa_demangle(typeid(tagged_parameter_wrapper<int*&, pointer_elements<0>>::runtime_data_tuple_type).name(), 0, 0, 0) <<  std::endl;
 
