@@ -183,8 +183,8 @@ private:
 namespace mpirpc
 {
 
-template<typename Buffer, typename Alignment>
-struct unmarshaller<B,Buffer,Alignment>
+template<typename Buffer, typename Alignment, typename Options>
+struct unmarshaller<B,Buffer,Alignment,Options>
 {
     using type = mpirpc::construction_info<B,
         std::tuple<int>,
@@ -198,8 +198,8 @@ struct unmarshaller<B,Buffer,Alignment>
     }
 };
 
-template<typename Buffer, typename Alignment>
-struct marshaller<B,Buffer,Alignment>
+template<typename Buffer, typename Alignment, typename Options>
+struct marshaller<B,Buffer,Alignment,Options>
 {
     static void marshal(Buffer& buf, const B& b)
     {
@@ -236,8 +236,8 @@ struct marshaller<A,Buffer,Alignment>
     }
 };
 
-template<typename Buffer, typename Alignment>
-struct unmarshaller<A,Buffer,Alignment>
+template<typename Buffer, typename Alignment, typename Options>
+struct unmarshaller<A,Buffer,Alignment,Options>
 {
     using type = mpirpc::construction_info<A,
         std::tuple<const double, int, const float&, bool&, long, const long long, const B&>,

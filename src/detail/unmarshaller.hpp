@@ -34,7 +34,7 @@ struct has_unmarshaller_helper : std::false_type {};
 
 template<typename T, typename Buffer, typename Allocator>
 struct has_unmarshaller_helper<T,Buffer,Allocator,
-    std::void_t<decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>>::unmarshal(std::declval<Allocator&&>(),std::declval<Buffer&>()))>>
+    std::void_t<decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>,void>::unmarshal(std::declval<Allocator&&>(),std::declval<Buffer&>()))>>
     : std::true_type
 {};
 
@@ -42,13 +42,13 @@ template<typename T, typename Buffer, typename Allocator, typename=void>
 struct unmarshaller_type_helper
 {
     static_assert(std::is_same<void,T>::value, "ERROR: mpirpc::unmarshaller<T,Buffer,Alignment> not defined for this type");
-    using type = decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>>::unmarshal(std::declval<Allocator&&>(),std::declval<Buffer&>()));
+    using type = decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>,void>::unmarshal(std::declval<Allocator&&>(),std::declval<Buffer&>()));
 };
 
 template<typename T, typename Buffer, typename Allocator>
 struct unmarshaller_type_helper<T,Buffer,Allocator,std::enable_if_t<has_unmarshaller_helper<T,Buffer,Allocator>::value>>
 {
-    using type = decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>>::unmarshal(std::declval<Allocator>(),std::declval<Buffer&>()));
+    using type = decltype(mpirpc::unmarshaller<T,Buffer,default_alignment_type<T>,void>::unmarshal(std::declval<Allocator>(),std::declval<Buffer&>()));
 };
 
 }

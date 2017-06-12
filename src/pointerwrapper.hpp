@@ -160,8 +160,8 @@ struct marshaller<mpirpc::pointer_wrapper<T>, Buffer, Alignment>
     }
 };
 
-template<typename T, typename Buffer, typename Alignment>
-struct unmarshaller<mpirpc::pointer_wrapper<T>,Buffer,Alignment>
+template<typename T, typename Buffer, typename Alignment, typename Options>
+struct unmarshaller<mpirpc::pointer_wrapper<T>,Buffer,Alignment, Options>
 {
     template<typename Allocator>
     static std::tuple<std::piecewise_construct_t,T*,std::size_t,bool,bool> unmarshal(Allocator& a, Buffer &b)

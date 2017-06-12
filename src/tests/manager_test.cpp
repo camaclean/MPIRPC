@@ -484,8 +484,8 @@ private:
 namespace mpirpc
 {
 
-template<typename Buffer, typename Alignment>
-struct unmarshaller<B,Buffer,Alignment>
+template<typename Buffer, typename Alignment, typename Options>
+struct unmarshaller<B,Buffer,Alignment,Options>
 {
     using type = mpirpc::construction_info<B,
         std::tuple<int>,
@@ -537,8 +537,8 @@ struct marshaller<A,Buffer,Alignment>
     }
 };
 
-template<typename Buffer, typename Alignment>
-struct unmarshaller<A,Buffer,Alignment>
+template<typename Buffer, typename Alignment, typename Options>
+struct unmarshaller<A,Buffer,Alignment,Options>
 {
     using type = mpirpc::construction_info<A,
         std::tuple<const double, int, const float&, bool&, long, const long long, const B&>,
@@ -693,15 +693,15 @@ TEST(Test,test)
     >
     test5;
 
-    
-    
+
+
     std::tuple<int[5]> ttest;
     std::get<0>(ttest)[0] = 0;
     std::get<0>(ttest)[1] = 1;
     std::get<0>(ttest)[2] = 2;
     std::get<0>(ttest)[3] = 3;
     std::get<0>(ttest)[4] = 4;
-    
+
     mpirpc::internal::reconstruction::construction_info_to_aligned_type_holder_type<
         mpirpc::construction_info<
             std::tuple<int[5]>,

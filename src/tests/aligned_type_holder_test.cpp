@@ -25,18 +25,22 @@
 #include "../internal/reconstruction/aligned_type_holder.hpp"
 #include "../parameter_buffer.hpp"
 
+double b_global = 5.4;
+
 class C
 {
 public:
-    C() : m_a{}, m_b{} {}
-    C (int a, double b) : m_a{a}, m_b{b} {}
+    C () : m_a{}, m_b{b_global} {}
+    C (int a, double& b) : m_a{a}, m_b{b} {}
+
+    C& operator = (C&& c) { m_a = c.a();  m_b = c.m_b; }
 
     int a() const { return m_a; }
     double b() const { return m_b; }
 
 private:
     int m_a;
-    double m_b;
+    double& m_b;
 };
 
 class D
@@ -53,13 +57,13 @@ private:
 namespace mpirpc
 {
 
-template<typename Buffer, typename Alignment>
-struct unmarshaller<C,Buffer,Alignment>
+template<typename Buffer, typename Alignment, typename Options>
+struct unmarshaller<C,Buffer,Alignment,Options>
 {
     using type = mpirpc::construction_info<C,
-        std::tuple<int, double>,
-        std::tuple<int, double>,
-        std::tuple<std::false_type, std::false_type>
+        std::tuple<int, double&>,
+        std::tuple<int, double&>,
+        std::tuple<std::false_type, std::true_type>
     >;
     template<typename Allocator>
     static type unmarshal(Allocator&& a, Buffer& b)
@@ -71,8 +75,8 @@ struct unmarshaller<C,Buffer,Alignment>
     }
 };
 
-template<typename Buffer, typename Alignment>
-struct marshaller<C,Buffer,Alignment>
+template<typename Buffer, typename Alignment, typename Options>
+struct marshaller<C,Buffer,Alignment,Options>
 {
     static void marshal(Buffer& buf, const C& v)
     {
@@ -82,8 +86,8 @@ struct marshaller<C,Buffer,Alignment>
     }
 };
 
-template<typename Buffer, typename Alignment>
-struct unmarshaller<D, Buffer, Alignment>
+template<typename Buffer, typename Alignment, typename Options>
+struct unmarshaller<D, Buffer, Alignment,Options>
 {
     template<typename Allocator>
     static D unmarshal(Allocator&& a, Buffer& b)
@@ -92,8 +96,8 @@ struct unmarshaller<D, Buffer, Alignment>
     }
 };
 
-template<typename Buffer, typename Alignment>
-struct marshaller<D,Buffer,Alignment>
+template<typename Buffer, typename Alignment, typename Options>
+struct marshaller<D,Buffer,Alignment,Options>
 {
     static void marshal(Buffer& buf, const D& v)
     {
@@ -274,6 +278,7 @@ TEST(aligned_type_holder, misc)
     std::cout << abi::__cxa_demangle(typeid(std::remove_all_extents_t<double[5][7]>).name(), 0, 0, 0) <<  std::endl;
     std::cout << abi::__cxa_demangle(typeid(mpirpc::internal::retype_array_type<C[5][7], mpirpc::unmarshaller_type<C, mpirpc::parameter_buffer<>, std::allocator<char>>>).name(), 0, 0, 0) <<  std::endl;
     std::cout <<  mpirpc::internal::array_total_elements_v<C[5][7]> <<  std::endl;
+    std::cout << "blah: " <<  (mpirpc::is_construction_info_v<mpirpc::unmarshaller_type<std::remove_all_extents_t<C[5][7]>,mpirpc::parameter_buffer<>,std::integral_constant<std::size_t, alignof(C)>>>) << std::endl;
     {
         mpirpc::parameter_buffer<> buff;
         C (*blah)[3] = new C[2][3];
@@ -281,17 +286,17 @@ TEST(aligned_type_holder, misc)
         {
             for (std::size_t j = 0; j < 3; ++j)
             {
-                blah[i][j] = C(i, j);
+                blah[i][j] = C(i, b_global);
                 mpirpc::marshaller<C, mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(C)>>::marshal(buff, blah[i][j]);
             }
         }
         buff.seek(0);
-        auto ret = mpirpc::unmarshaller<C[2][3], mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(C)>>::unmarshal(std::allocator<char>(), buff);
+        auto ret = mpirpc::unmarshaller<C[2][3], mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(C)>, void>::unmarshal(std::allocator<char>(), buff);
         for (std::size_t i = 0; i < 2; ++i)
         {
             for (std::size_t j = 0; j < 3; ++j)
             {
-                std::cout << std::get<0>(ret.pointer()[i][j].args()) << " " << std::get<1>(ret.pointer()[i][j].args()) << std::endl;
+                std::cout << ret.pointer()[i][j].a() << " " << ret.pointer()[i][j].b() << std::endl;
             }
         }
         std::cout << abi::__cxa_demangle(typeid(ret).name(), 0, 0, 0) <<  std::endl;
@@ -305,13 +310,13 @@ TEST(aligned_type_holder, misc)
         {
             for (std::size_t j = 0; j < 3; ++j)
             {
-                blah[i][j] = C(i, j);
+                blah[i][j] = C(i, b_global);
                 mpirpc::marshaller<C, mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(C)>>::marshal(buff, blah[i][j]);
             }
         }
         buff.seek(0);
         std::cout <<  "here" <<  std::endl;
-        auto tmp =  mpirpc::unmarshaller<C[][3], mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(C)>>::unmarshal(std::allocator<char>(), buff);
+        auto tmp =  mpirpc::unmarshaller<C[][3], mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(C)>, void>::unmarshal(std::allocator<char>(), buff);
         std::cout <<  "here2" <<  std::endl;
         //auto ret = std::move(tmp.pointer());
         std::cout << abi::__cxa_demangle(typeid(tmp).name(), 0, 0, 0) <<  std::endl;
@@ -319,7 +324,7 @@ TEST(aligned_type_holder, misc)
         {
             for (std::size_t j = 0; j < 3; ++j)
             {
-                std::cout << std::get<0>(tmp[i][j].args()) << " " << std::get<1>(tmp[i][j].args()) << std::endl;
+                std::cout << tmp[i][j].a() << " " << tmp[i][j].b() << std::endl;
             }
         }
 
@@ -337,7 +342,7 @@ TEST(aligned_type_holder, misc)
             }
         }
         buff.seek(0);
-        auto ret = mpirpc::unmarshaller<D[2][3], mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(D)>>::unmarshal(std::allocator<char>(), buff);
+        auto ret = mpirpc::unmarshaller<D[2][3], mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(D)>,void>::unmarshal(std::allocator<char>(), buff);
         for (std::size_t i = 0; i < 2; ++i)
         {
             for (std::size_t j = 0; j < 3; ++j)
@@ -362,7 +367,7 @@ TEST(aligned_type_holder, misc)
         }
         buff.seek(0);
         std::cout <<  "here" <<  std::endl;
-        auto tmp =  mpirpc::unmarshaller<D[][3], mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(D)>>::unmarshal(std::allocator<char>(), buff);
+        auto tmp =  mpirpc::unmarshaller<D[][3], mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(D)>,void>::unmarshal(std::allocator<char>(), buff);
         std::cout <<  "here2" <<  std::endl;
         //auto ret = std::move(tmp.pointer());
         std::cout << abi::__cxa_demangle(typeid(tmp).name(), 0, 0, 0) <<  std::endl;
@@ -623,13 +628,15 @@ TEST(aligned_type_holder, wrapper)
     auto test = decayed_array(t2, 3);
     std::cout << abi::__cxa_demangle(typeid(test).name(), 0, 0, 0) <<  std::endl;
 
+    auto test3 = decayed_array<3>(t2);
+    std::cout << abi::__cxa_demangle(typeid(test3).name(), 0, 0, 0) <<  std::endl;
+
     const int (*t3)[5] = new int[3][5]();
     auto test2 = decayed_array(t3, 3);
     std::cout << abi::__cxa_demangle(typeid(test2).name(), 0, 0, 0) <<  std::endl;
     //std::cout << abi::__cxa_demangle(typeid(tagged_parameter_wrapper<int*&, pointer_elements<0>>::runtime_data_tuple_type).name(), 0, 0, 0) <<  std::endl;
-
-    std::initializer_list<int> test3 = {1, 2, 3, 4, 5};
 }
+
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);

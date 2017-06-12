@@ -726,7 +726,7 @@ template<typename Allocator, typename Buffer, typename... Ts, std::size_t... Is>
 std::tuple<mpirpc::internal::storage_type<Ts>...> unmarshal_into_tuple_impl(Allocator &a, Buffer &s, std::index_sequence<Is...>)
 {
    using R = std::tuple<mpirpc::internal::storage_type<Ts>...>;
-   R ret{make_from_tuple<mpirpc::internal::storage_type<Ts>>(mpirpc::unmarshaller<mpirpc::internal::storage_type<Ts>,Buffer,std::integral_constant<std::size_t,alignof(Ts)>>::unmarshal(a,s))...};
+   R ret{make_from_tuple<mpirpc::internal::storage_type<Ts>>(mpirpc::unmarshaller<mpirpc::internal::storage_type<Ts>,Buffer,std::integral_constant<std::size_t,alignof(Ts)>, void>::unmarshal(a,s))...};
    return ret;
 }
 
@@ -1069,8 +1069,8 @@ struct marshaller<B,Buffer,Alignment>
     }
 };
 
-template<typename Buffer, typename Alignment>
-struct unmarshaller<B,Buffer,Alignment>
+template<typename Buffer, typename Alignment, typename Options>
+struct unmarshaller<B,Buffer,Alignment,Options>
 {
     template<typename Allocator>
     static decltype(auto) unmarshal(Allocator& alloc, Buffer& buff)

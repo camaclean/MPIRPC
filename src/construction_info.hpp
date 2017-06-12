@@ -55,6 +55,7 @@ public:
     using constructor_argument_types_tuple = std::tuple<ConstructorArgumentTypes...>;
     using arguments_tuple = std::tuple<ArgumentTypes...>;
     using stored_arguments_tuple = std::tuple<StoredArguments...>;
+    using type = T;
 
     template<typename AlignmentsTuple>
     using aligned_type_holder = internal::reconstruction::construction_info_to_aligned_type_holder_type<construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<ArgumentTypes...>,std::tuple<StoredArguments...>>,AlignmentsTuple>;

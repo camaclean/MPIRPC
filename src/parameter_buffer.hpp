@@ -106,12 +106,12 @@ public:
         realign<std::tuple_element_t<0,Alignment>::value>();
     }
 
-    template<typename T, typename Alloc, typename Alignment = type_default_alignment<T,alignof(T)>>
+    template<typename T, typename Options = void, typename Alloc, typename Alignment = type_default_alignment<T,alignof(T)>>
     decltype(auto) pop(Alloc&& a)
     {
         // realign<Alignment>();
         using U = mpirpc::internal::storage_type<T>;
-        return mpirpc::unmarshaller<U,parameter_buffer<Allocator>,Alignment>::unmarshal(std::forward<Alloc>(a),*this);
+        return mpirpc::unmarshaller<U,parameter_buffer<Allocator>,Alignment, Options>::unmarshal(std::forward<Alloc>(a),*this);
     }
 
     template<typename T, typename Alignment = type_default_alignment<T,alignof(T)>, typename U>

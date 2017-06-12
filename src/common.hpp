@@ -89,7 +89,7 @@ struct marshaller;
  *                                                                     std::tuple<std::false_type,std::true_type,std::true_type>>,
  *                             std::tuple<std::false_type,std::true_type,std::true_type,std::false_type>>
  */
-template<typename T, typename Buffer, typename Alignment, typename = void>
+template<typename T, typename Buffer, typename Alignment, typename Options, typename = void>
 struct unmarshaller;
 
 using FnHandle = unsigned long long;
