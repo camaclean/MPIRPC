@@ -79,6 +79,40 @@ template<typename T, typename Buffer, typename Alignment,typename=void>
 struct marshaller;
 
 /**
+ * Constructor: References are kept valid for the duration of the object's constructor.
+ *      The object is expected to either copy the reference or not need further use of the
+ *      reference.
+ *
+ * function: References are kept valid for the duration of the function execution.
+ *
+ * function_group_shared: When constructing an array or container type, one instance of the
+ *      reference is used for the construction of all members of the array or container.
+ *      The array and any references it contains are valid for the duration of the function
+ *      execution.
+ *
+ * manager: Reference storage is registered with the manager class. The reference is valid
+ *      until deleted by the user through the manager instance.
+ *
+ * manager_group_shared: Like function_group_shared, one object is passed as a reference
+ *      to the constructors of all members of the array or container. The array or container
+ *      is valid until deleted by the user through the manager instance.
+ */
+enum class storage_duration_tag : int
+{
+    constructor,
+    function,
+    function_group_shared,
+    manager,
+    manager_group_shared
+};
+
+using constructor_storage_duration_tag_type = std::integral_constant<int,(int) storage_duration_tag::constructor>;
+using function_storage_duration_tag_type = std::integral_constant<int,(int) storage_duration_tag::function>;
+using function_group_shared_storage_duration_tag_type = std::integral_constant<int,(int) storage_duration_tag::function_group_shared>;
+using manager_storage_duration_tag_type = std::integral_constant<int,(int) storage_duration_tag::manager>;
+using manager_group_shared_storage_duration_tag_type = std::integral_constant<int,(int) storage_duration_tag::manager_group_shared>;
+
+/**
  * unmarshaller should define a unmarshaller<T,Buffer,Alignment,void>::unmarshal<Allocator,Buffer>(Allocator,Buffer)
  * function which returns one of two types: T or construction_info<T,std::tuple<ConstructorArgumentTypes...>,std::tuple<Arguments...>,std::tuple<StoredArguments...>>
  *

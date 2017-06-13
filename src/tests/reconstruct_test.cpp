@@ -24,6 +24,7 @@
 #include "../construction_info.hpp"
 #include "../internal/reconstruction/parameter_container.hpp"
 #include "../unmarshaller.hpp"
+#include "../common.hpp"
 
 TEST(reconstruct_types, is_construction_info)
 {
@@ -189,7 +190,7 @@ struct unmarshaller<B,Buffer,Alignment,Options>
     using type = mpirpc::construction_info<B,
         std::tuple<int>,
         std::tuple<int>,
-        std::tuple<std::false_type>
+        std::tuple<mpirpc::constructor_storage_duration_tag_type>
     >;
     template<typename Allocator>
     static type unmarshal(Allocator&& a, Buffer& b)
@@ -242,7 +243,15 @@ struct unmarshaller<A,Buffer,Alignment,Options>
     using type = mpirpc::construction_info<A,
         std::tuple<const double, int, const float&, bool&, long, const long long, const B&>,
         std::tuple<const double, int, const float&, bool&, long, const long long, mpirpc::unmarshaller_type<B,mpirpc::parameter_buffer<>,std::allocator<char>>>,
-        std::tuple<std::false_type, std::false_type, std::false_type, std::true_type, std::false_type, std::false_type, std::false_type>
+        std::tuple<
+            mpirpc::constructor_storage_duration_tag_type,
+            mpirpc::constructor_storage_duration_tag_type,
+            mpirpc::constructor_storage_duration_tag_type,
+            mpirpc::function_storage_duration_tag_type,
+            mpirpc::constructor_storage_duration_tag_type,
+            mpirpc::constructor_storage_duration_tag_type,
+            mpirpc::constructor_storage_duration_tag_type
+        >
     >;
     template<typename Allocator>
     static type unmarshal(Allocator&& a, Buffer& b)

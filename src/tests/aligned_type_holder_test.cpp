@@ -583,6 +583,8 @@ decltype(auto) decayed_array(T&& t, std::size_t size)
     return t.template append_tag<tag_type>(tag_type(size));
 };
 
+
+
 TEST(aligned_type_holder, wrapper)
 {
     int i = 5;

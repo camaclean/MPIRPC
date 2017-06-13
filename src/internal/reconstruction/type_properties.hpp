@@ -21,6 +21,7 @@
 #define MPIRPC__INTERNAL__RECONSTRUCTION__TYPE_PROPERTIES_HPP
 
 #include <type_traits>
+#include "../common.hpp"
 //#include "../type_properties.hpp"
 
 namespace mpirpc
@@ -59,32 +60,49 @@ template<typename T>
 constexpr bool is_aligned_type_holder_v = is_aligned_type_holder<T>::value;
 
 template<typename T, typename Store, typename Alignment, typename = void>
-struct is_stored;
+struct storage_duration;
 
 template<typename T, typename Store, typename Alignment>
-using is_stored_type = typename is_stored<T,Store,Alignment>::type;
+using storage_duration_type = typename storage_duration<T,Store,Alignment>::type;
 
 template<typename T, typename Store, typename Alignment>
-constexpr bool is_stored_v = is_stored<T,Store,Alignment>::value;
+constexpr bool is_constructor_storage_duration_v = (storage_duration<T,Store,Alignment>::value == (int) mpirpc::storage_duration_tag::constructor);
+
+template<typename T, typename Store, typename Alignment>
+constexpr bool is_function_storage_duration_v =
+    (storage_duration<T,Store,Alignment>::value == (int) mpirpc::storage_duration_tag::function ||
+     storage_duration<T,Store,Alignment>::value == (int) mpirpc::storage_duration_tag::function_group_shared);
+
+template<typename T, typename Store, typename Alignment>
+constexpr bool is_function_individual_storage_duration_v = (storage_duration<T,Store,Alignment>::value == (int) mpirpc::storage_duration_tag::function);
+
+template<typename T, typename Store, typename Alignment>
+constexpr bool is_function_group_shared_storage_duration_v = (storage_duration<T,Store,Alignment>::value == (int) mpirpc::storage_duration_tag::function_group_shared);
+
+template<typename T, typename Store, typename Alignment>
+constexpr bool is_manager_storage_duration_v =
+    (storage_duration<T,Store,Alignment>::value == (int) mpirpc::storage_duration_tag::manager ||
+     storage_duration<T,Store,Alignment>::value == (int) mpirpc::storage_duration_tag::manager_group_shared);
+
+template<typename T, typename Store, typename Alignment>
+constexpr bool is_manager_individual_storage_duration_v = (storage_duration<T,Store,Alignment>::value == (int) mpirpc::storage_duration_tag::manager);
+
+template<typename T, typename Store, typename Alignment>
+constexpr bool is_manager_group_shared_storage_duration_v = (storage_duration<T,Store,Alignment>::value == (int) mpirpc::storage_duration_tag::manager_group_shared);
 
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple>
 struct is_construction_info<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>> : std::true_type {};
 
 template<typename T, typename Store, typename Alignment, typename>
-struct is_stored : std::false_type {};
+struct storage_duration : Store::type {};
 
 template<typename T, typename Store, typename Alignment>
-struct is_stored<T,Store,Alignment,
-                      std::enable_if_t<
-                          Store::value ||
-                          is_construction_info<T>::value ||
-                          (
-                              std::is_reference<T>::value &&
-                              mpirpc::internal::is_overaligned_type_v<T,Alignment>
-                          )
-                      >
-                     >
-        : std::true_type {};
+struct storage_duration<T,Store,Alignment,std::enable_if_t<std::is_reference<T>::value && mpirpc::internal::is_overaligned_type_v<T,Alignment>>>
+        : mpirpc::function_storage_duration_tag_type {};
+
+template<typename T, typename Store, typename Alignment>
+struct storage_duration<T,Store,Alignment,std::enable_if_t<is_construction_info<T>::value>>
+        : mpirpc::function_storage_duration_tag_type {};
 
 template<typename T>
 struct is_aligned_type_holder : std::false_type {};

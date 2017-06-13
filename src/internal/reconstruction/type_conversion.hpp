@@ -23,6 +23,7 @@
 #include <tuple>
 #include "alignment.hpp"
 #include "type_properties.hpp"
+#include "../../common.hpp"
 
 namespace mpirpc
 {
@@ -35,7 +36,7 @@ namespace internal
 
 namespace reconstruction
 {
-    
+
 template<typename ConstructionInfo, typename AlignmentsTuple>
 struct construction_info_to_aligned_type_holder;
 
@@ -102,6 +103,22 @@ struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumen
 };
 
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename Alignment, typename... Alignments>
+struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,mpirpc::function_storage_duration_tag_type,std::tuple<Alignment, Alignments...>>
+    : reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>, std::true_type, std::tuple<Alignment, Alignments...>> {};
+
+template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename Alignment, typename... Alignments>
+struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,mpirpc::function_group_shared_storage_duration_tag_type,std::tuple<Alignment, Alignments...>>
+    : reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>, std::true_type, std::tuple<Alignment, Alignments...>> {};
+
+template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename Alignment, typename... Alignments>
+struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,mpirpc::manager_storage_duration_tag_type,std::tuple<Alignment, Alignments...>>
+    : reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>, std::true_type, std::tuple<Alignment, Alignments...>> {};
+
+template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename Alignment, typename... Alignments>
+struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,mpirpc::manager_group_shared_storage_duration_tag_type,std::tuple<Alignment, Alignments...>>
+    : reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>, std::true_type, std::tuple<Alignment, Alignments...>> {};
+
+template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename Alignment, typename... Alignments>
 struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,std::false_type,std::tuple<Alignment,Alignments...>>
 {
     using type = std::remove_reference_t<T>;
@@ -109,6 +126,10 @@ struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumen
     using constructor_type = aligned_type_holder<std::remove_reference_t<T>,Alignment,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple,std::tuple<Alignments...>>;
     using aligned_storage_type = typename std::aligned_storage<sizeof(type),Alignment::value>::type;
 };
+
+template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename Alignment, typename...Alignments>
+struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,mpirpc::constructor_storage_duration_tag_type,std::tuple<Alignment, Alignments...>>
+    : reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>, std::false_type, std::tuple<Alignment, Alignments...>> {};
 
 template<typename T, typename ConstructorArgumentTypesTuple, typename ArgumentsTuple, typename StoredArgumentsTuple, typename Stored, std::size_t Alignment>
 struct reconstruction_storage_type_helper<construction_info<T,ConstructorArgumentTypesTuple,ArgumentsTuple,StoredArgumentsTuple>,Stored,std::integral_constant<std::size_t, Alignment>>

@@ -55,14 +55,41 @@ public:
     using construction_info_type = construction_info<T,constructor_argument_types_tuple_type,arguments_tuple_type,stored_arguments_tuple_type>;
 
     using type_storage = typename std::aligned_storage<sizeof(std::remove_reference_t<T>),Alignment::value>::type;
-    using stored = std::integer_sequence<bool, is_stored_v<ArgumentTypes,StoredArguments,Alignments>...>;
+
+    using stored = std::integer_sequence<bool, is_function_storage_duration_v<ArgumentTypes,StoredArguments,Alignments>...>;
     using stored_types = filter_tuple<stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
-    static constexpr std::size_t stored_count = std::tuple_size<stored_types>::value;
     using aligned_storage_tuple_type = filter_tuple<stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using stored_indexes = filtered_sequence_indexes_type<stored>;
+
+    using shared_stored = std::integer_sequence<bool, is_function_group_shared_storage_duration_v<ArgumentTypes, StoredArguments, Alignments>...>;
+    using shared_stored_types = filter_tuple<shared_stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using shared_aligned_storage_tuple_type = filter_tuple<shared_stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using shared_stored_indexes = filtered_sequence_indexes<shared_stored>;
+
+    using individual_stored = std::integer_sequence<bool, is_function_individual_storage_duration_v<ArgumentTypes, StoredArguments, Alignments>...>;
+    using individual_stored_types = filter_tuple<individual_stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using individual_aligned_storage_tuple_type = filter_tuple<individual_stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using individual_stored_indexes = filtered_sequence_indexes<individual_stored>;
+
+    using manager_stored = std::integer_sequence<bool, is_manager_storage_duration_v<ArgumentTypes, StoredArguments, Alignments>...>;
+    using manager_stored_types = filter_tuple<manager_stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using manager_aligned_storage_tuple_type = filter_tuple<manager_stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using manager_stored_indexes = filtered_sequence_indexes<manager_stored>;
+
+    using manager_shared_stored = std::integer_sequence<bool, is_manager_storage_duration_v<ArgumentTypes, StoredArguments, Alignments>...>;
+    using manager_shared_stored_types = filter_tuple<manager_shared_stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using manager_shared_aligned_storage_tuple_type = filter_tuple<manager_shared_stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using manager_shared_stored_indexes = filtered_sequence_indexes<manager_shared_stored>;
+
+    using manager_individual_stored = std::integer_sequence<bool, is_manager_storage_duration_v<ArgumentTypes, StoredArguments, Alignments>...>;
+    using manager_individual_stored_types = filter_tuple<manager_individual_stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using manager_individual_aligned_storage_tuple_type = filter_tuple<manager_individual_stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
+    using manager_individual_stored_indexes = filtered_sequence_indexes<manager_individual_stored>;
+
+    static constexpr std::size_t stored_count = std::tuple_size<stored_types>::value;
     using storage_types = std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>;
     using storage_construction_types = std::tuple<reconstruction_storage_constructor_type<ArgumentTypes,StoredArguments,Alignments>...>;
     using proxy_types = std::tuple<ConstructorArgumentTypes&&...>;
-    using stored_indexes = filtered_sequence_indexes_type<stored>;
 
     template<std::size_t I>
     using argument_at_index = std::tuple_element_t<I,arguments_tuple_type>;
