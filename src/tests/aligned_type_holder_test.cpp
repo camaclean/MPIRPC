@@ -31,7 +31,7 @@ class C
 {
 public:
     C () : m_a{}, m_b{b_global} {}
-    C (int a, double& b) : m_a{a}, m_b{b} {}
+    C (int a, double& b) : m_a{a}, m_b{b} { b += 3.4;}
 
     C& operator = (C&& c) { m_a = c.a();  m_b = c.m_b; }
 
@@ -62,8 +62,8 @@ struct unmarshaller<C,Buffer,Alignment,Options>
 {
     using type = mpirpc::construction_info<C,
         std::tuple<int, double&>,
-        std::tuple<int, double&>,
-        std::tuple<std::false_type, std::true_type>
+        std::tuple<int, double>,
+        std::tuple<mpirpc::constructor_storage_duration_tag_type, mpirpc::function_group_shared_storage_duration_tag_type>
     >;
     template<typename Allocator>
     static type unmarshal(Allocator&& a, Buffer& b)
@@ -143,7 +143,7 @@ TEST(aligned_type_holder, basic_from_basic)
       , std::integral_constant<std::size_t, alignof(double)>
       , std::tuple<double>
       , std::tuple<double>
-      , std::tuple<std::false_type>
+      , std::tuple<mpirpc::constructor_storage_duration_tag_type>
       , std::tuple<std::integral_constant<std::size_t, alignof(double)>>
       > test(test_args);
     ASSERT_EQ(5.4, test.value());
@@ -157,7 +157,7 @@ TEST(aligned_type_holder, const_basic_from_basic)
       , std::integral_constant<std::size_t, alignof(double)>
       , std::tuple<double>
       , std::tuple<double>
-      , std::tuple<std::false_type>
+      , std::tuple<mpirpc::constructor_storage_duration_tag_type>
       , std::tuple<std::integral_constant<std::size_t, alignof(double)>>
       > test(test_args);
     ASSERT_EQ(5.4, test.value());
@@ -172,7 +172,7 @@ TEST(aligned_type_holder, basic_from_const_basic)
       , std::integral_constant<std::size_t, alignof(double)>
       , std::tuple<const double>
       , std::tuple<const double>
-      , std::tuple<std::false_type>
+      , std::tuple<mpirpc::constructor_storage_duration_tag_type>
       , std::tuple<std::integral_constant<std::size_t, alignof(double)>>
       > test(test_args);
     ASSERT_EQ(5.4, test.value());
@@ -187,7 +187,7 @@ TEST(aligned_type_holder, const_basic_from_const_basic)
       , std::integral_constant<std::size_t, alignof(const double)>
       , std::tuple<const double>
       , std::tuple<const double>
-      , std::tuple<std::false_type>
+      , std::tuple<mpirpc::constructor_storage_duration_tag_type>
       , std::tuple<std::integral_constant<std::size_t, alignof(const double)>>
       > test(test_args);
     ASSERT_EQ(5.4, test.value());
@@ -201,7 +201,7 @@ TEST(aligned_type_holder, basic_ref_from_basic)
       , std::integral_constant<std::size_t, alignof(double)>
       , std::tuple<double>
       , std::tuple<double>
-      , std::tuple<std::true_type>
+      , std::tuple<mpirpc::function_storage_duration_tag_type>
       , std::tuple<std::integral_constant<std::size_t, alignof(double)>>
       > test(test_args);
     ASSERT_EQ(5.4, test.value());
@@ -216,7 +216,7 @@ TEST(aligned_type_holder, misc)
           , std::integral_constant<std::size_t, alignof(double[5])>
           , std::tuple<double(&)[5]>
           , std::tuple<double(&)[5]>
-          , std::tuple<std::true_type>
+          , std::tuple<mpirpc::function_storage_duration_tag_type>
           , std::tuple<std::integral_constant<std::size_t, alignof(double[5])>>
       >::base_type_holder).name(), 0, 0, 0)
       <<  std::endl;
@@ -226,7 +226,7 @@ TEST(aligned_type_holder, misc)
           , std::integral_constant<std::size_t, alignof(double[5])>
           , std::tuple<double(&)[5]>
           , std::tuple<double(&)[5]>
-          , std::tuple<std::true_type>
+          , std::tuple<mpirpc::function_storage_duration_tag_type>
           , std::tuple<std::integral_constant<std::size_t, alignof(double[5])>>
       >::aligned_storage_tuple_type).name(), 0, 0, 0)
       <<  std::endl;
@@ -236,7 +236,7 @@ TEST(aligned_type_holder, misc)
           , std::integral_constant<std::size_t, alignof(double[5])>
           , std::tuple<double(&)[5]>
           , std::tuple<double(&)[5]>
-          , std::tuple<std::true_type>
+          , std::tuple<mpirpc::function_storage_duration_tag_type>
           , std::tuple<std::integral_constant<std::size_t, alignof(double[5])>>
       >::type_storage).name(), 0, 0, 0)
       <<  std::endl;
@@ -246,7 +246,7 @@ TEST(aligned_type_holder, misc)
           , std::integral_constant<std::size_t, alignof(double[5][7])>
           , std::tuple<double(&)[5][7]>
           , std::tuple<double(&)[5][7]>
-          , std::tuple<std::true_type>
+          , std::tuple<mpirpc::function_storage_duration_tag_type>
           , std::tuple<std::integral_constant<std::size_t, alignof(double[5][7])>>
       >::base_type_holder).name(), 0, 0, 0)
       <<  std::endl;
@@ -256,7 +256,7 @@ TEST(aligned_type_holder, misc)
           , std::integral_constant<std::size_t, alignof(double[5][7])>
           , std::tuple<double(&)[5][7]>
           , std::tuple<double(&)[5][7]>
-          , std::tuple<std::true_type>
+          , std::tuple<mpirpc::function_storage_duration_tag_type>
           , std::tuple<std::integral_constant<std::size_t, alignof(double[5][7])>>
       >::aligned_storage_tuple_type).name(), 0, 0, 0)
       <<  std::endl;
@@ -266,10 +266,27 @@ TEST(aligned_type_holder, misc)
           , std::integral_constant<std::size_t, alignof(double[5][7])>
           , std::tuple<double(&)[5][7]>
           , std::tuple<double(&)[5][7]>
-          , std::tuple<std::true_type>
+          , std::tuple<mpirpc::function_storage_duration_tag_type>
           , std::tuple<std::integral_constant<std::size_t, alignof(double[5][7])>>
       >::type_storage).name(), 0, 0, 0)
       <<  std::endl;
+
+    /*C c(1, b_global);
+    mpirpc::parameter_buffer<> buff;
+    mpirpc::marshaller<C, mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(C)>>::marshal(buff, c);
+    buff.seek(0);
+    using UT = mpirpc::unmarshaller_type<C,mpirpc::parameter_buffer<>,std::integral_constant<std::size_t, alignof(C)>>;
+    using ATH = typename UT::template aligned_type_holder<std::integral_constant<std::size_t, alignof(C)>>;
+    using IASTT = typename ATH::individual_aligned_storage_tuple_type;
+    using SASTT = typename ATH::shared_aligned_storage_tuple_type;
+    IASTT id;
+    SASTT sd;
+    std::allocator<char> a;
+    std::aligned_storage<sizeof(C), alignof(C)>  cs;
+    C* cp = (C*) &cs;
+    ATH::template construct<true>(cp, id, sd, mpirpc::unmarshaller<C, mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(C)>, void>::unmarshal(std::allocator<char>(), buff).args());
+    std::cout << cp->a() <<  " " << cp->b() <<  std::endl;
+    */
 
     std::cout << abi::__cxa_demangle(typeid(std::tuple<mpirpc::unmarshaller_type<double[5][7], mpirpc::parameter_buffer<>, std::allocator<char>>>).name(), 0, 0, 0) <<  std::endl;
     std::cout << "-----------------" << std::endl;
@@ -286,7 +303,7 @@ TEST(aligned_type_holder, misc)
         {
             for (std::size_t j = 0; j < 3; ++j)
             {
-                blah[i][j] = C(i, b_global);
+                blah[i][j] = C(i+10, b_global);
                 mpirpc::marshaller<C, mpirpc::parameter_buffer<>, std::integral_constant<std::size_t, alignof(C)>>::marshal(buff, blah[i][j]);
             }
         }

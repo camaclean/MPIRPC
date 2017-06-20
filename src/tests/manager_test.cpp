@@ -490,7 +490,7 @@ struct unmarshaller<B,Buffer,Alignment,Options>
     using type = mpirpc::construction_info<B,
         std::tuple<int>,
         std::tuple<int>,
-        std::tuple<std::false_type>
+        std::tuple<mpirpc::constructor_storage_duration_tag_type>
     >;
     template<typename Allocator>
     static type unmarshal(Allocator&& a, Buffer& b)
@@ -543,7 +543,7 @@ struct unmarshaller<A,Buffer,Alignment,Options>
     using type = mpirpc::construction_info<A,
         std::tuple<const double, int, const float&, bool&, long, const long long, const B&>,
         std::tuple<const double, int, const float&, bool&, long, const long long, mpirpc::unmarshaller_type<B,mpirpc::parameter_buffer<>,std::allocator<char>>>,
-        std::tuple<std::false_type, std::false_type, std::false_type, std::true_type, std::false_type, std::false_type, std::false_type>
+        std::tuple<mpirpc::constructor_storage_duration_tag_type, mpirpc::constructor_storage_duration_tag_type, mpirpc::constructor_storage_duration_tag_type, mpirpc::function_storage_duration_tag_type, mpirpc::constructor_storage_duration_tag_type, mpirpc::constructor_storage_duration_tag_type, mpirpc::constructor_storage_duration_tag_type>
     >;
     template<typename Allocator>
     static type unmarshal(Allocator&& a, Buffer& b)
@@ -622,12 +622,12 @@ TEST(Test,test)
     using b_type = mpirpc::construction_info<B,
                   std::tuple<int>,
                   std::tuple<int>,
-                  std::tuple<std::false_type>
+                  std::tuple<mpirpc::constructor_storage_duration_tag_type>
                 >;
     using stored_arguments_test_type = mpirpc::internal::reconstruction::aligned_type_holder<A,std::integral_constant<std::size_t, alignof(A)>,
             std::tuple<const double, int, float&, bool&, long, const long long&, const B&>,
             std::tuple<const double, int, float, bool, long, const long long, b_type>,
-            std::tuple<std::false_type,std::false_type,std::true_type,std::true_type,std::false_type,std::true_type, std::true_type>,
+            std::tuple<mpirpc::constructor_storage_duration_tag_type,mpirpc::constructor_storage_duration_tag_type,mpirpc::function_storage_duration_tag_type,mpirpc::function_storage_duration_tag_type,mpirpc::constructor_storage_duration_tag_type,mpirpc::function_storage_duration_tag_type, mpirpc::function_storage_duration_tag_type>,
             std::tuple<
                 std::integral_constant<std::size_t, alignof(double)>,
                 std::integral_constant<std::size_t, alignof(int)>,
@@ -674,14 +674,14 @@ TEST(Test,test)
     //std::cout << "Test filtering indexes input: " << abi::__cxa_demangle(typeid(mpirpc::internal::filtered_indexes<true,true,true,false>::input_tuple).name(),0,0,0) << std::endl;
     //std::cout << "Test filtering indexes size: " << mpirpc::internal::filtered_indexes<true,true,true,false>::size << std::endl;
     //std::cout << "Test filtering indexes: " << abi::__cxa_demangle(typeid(mpirpc::internal::filtered_indexes<true,true,true,false>::type).name(),0,0,0) << std::endl;
-    std::cout << "Alignment test: " << alignof(mpirpc::internal::reconstruction::aligned_type_holder<A, std::integral_constant<bool, true>, std::tuple<double const, int, float const&, bool&, long, long long const, B const&>, std::tuple<double const, int, float const&, bool&, long, long long const, mpirpc::construction_info<B, std::tuple<int>, std::tuple<int>, std::tuple<std::integral_constant<bool, false> > > >, std::tuple<std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, true>, std::integral_constant<bool, false>, std::integral_constant<bool, false>, std::integral_constant<bool, false> >, std::tuple<std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 4ul>, std::integral_constant<unsigned long, 4ul>, std::integral_constant<unsigned long, 1ul>, std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 4ul> > >) << std::endl;
+    std::cout << "Alignment test: " << alignof(mpirpc::internal::reconstruction::aligned_type_holder<A, std::integral_constant<bool, true>, std::tuple<double const, int, float const&, bool&, long, long long const, B const&>, std::tuple<double const, int, float const&, bool&, long, long long const, mpirpc::construction_info<B, std::tuple<int>, std::tuple<int>, std::tuple<std::integral_constant<bool, false> > > >, std::tuple< mpirpc::constructor_storage_duration_tag_type, mpirpc::constructor_storage_duration_tag_type, mpirpc::constructor_storage_duration_tag_type, mpirpc::function_storage_duration_tag_type, mpirpc::constructor_storage_duration_tag_type, mpirpc::constructor_storage_duration_tag_type, mpirpc::constructor_storage_duration_tag_type >, std::tuple<std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 4ul>, std::integral_constant<unsigned long, 4ul>, std::integral_constant<unsigned long, 1ul>, std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 8ul>, std::integral_constant<unsigned long, 4ul> > >) << std::endl;
 
     mpirpc::internal::reconstruction::construction_info_to_aligned_type_holder<
         mpirpc::construction_info<
             B,
             std::tuple<int>,
             std::tuple<int>,
-            std::tuple<std::integral_constant<bool, false>>
+            std::tuple<mpirpc::constructor_storage_duration_tag_type>
         >,
         std::integral_constant<long unsigned int, 4ul>
     > test6;
@@ -707,7 +707,7 @@ TEST(Test,test)
             std::tuple<int[5]>,
             std::tuple<int[5]>,
             std::tuple<int[5]>,
-            std::tuple<std::integral_constant<bool, false>>
+            std::tuple<mpirpc::constructor_storage_duration_tag_type>
         >,
         std::integral_constant<long unsigned int, 4ul>
     > test7(ttest);
@@ -735,17 +735,17 @@ TEST(Test,test)
                     B,
                     std::tuple<int>,
                     std::tuple<int>,
-                    std::tuple<std::integral_constant<bool, false>>
+                    std::tuple<mpirpc::constructor_storage_duration_tag_type>
                 >
             >,
             std::tuple<
-                std::integral_constant<bool, false>,
-                std::integral_constant<bool, true>,
-                std::integral_constant<bool, false>,
-                std::integral_constant<bool, true>,
-                std::integral_constant<bool, false>,
-                std::integral_constant<bool, false>,
-                std::integral_constant<bool, false>
+                mpirpc::constructor_storage_duration_tag_type,
+                mpirpc::function_storage_duration_tag_type,
+                mpirpc::constructor_storage_duration_tag_type,
+                mpirpc::function_storage_duration_tag_type,
+                mpirpc::constructor_storage_duration_tag_type,
+                mpirpc::constructor_storage_duration_tag_type,
+                mpirpc::constructor_storage_duration_tag_type
             >
         >,
         std::integral_constant<long unsigned int, 8ul>

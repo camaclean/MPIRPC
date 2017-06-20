@@ -64,27 +64,27 @@ public:
     using shared_stored = std::integer_sequence<bool, is_function_group_shared_storage_duration_v<ArgumentTypes, StoredArguments, Alignments>...>;
     using shared_stored_types = filter_tuple<shared_stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
     using shared_aligned_storage_tuple_type = filter_tuple<shared_stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
-    using shared_stored_indexes = filtered_sequence_indexes<shared_stored>;
+    using shared_stored_indexes = filtered_sequence_indexes_type<shared_stored>;
 
     using individual_stored = std::integer_sequence<bool, is_function_individual_storage_duration_v<ArgumentTypes, StoredArguments, Alignments>...>;
     using individual_stored_types = filter_tuple<individual_stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
     using individual_aligned_storage_tuple_type = filter_tuple<individual_stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
-    using individual_stored_indexes = filtered_sequence_indexes<individual_stored>;
+    using individual_stored_indexes = filtered_sequence_indexes_type<individual_stored>;
 
     using manager_stored = std::integer_sequence<bool, is_manager_storage_duration_v<ArgumentTypes, StoredArguments, Alignments>...>;
     using manager_stored_types = filter_tuple<manager_stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
     using manager_aligned_storage_tuple_type = filter_tuple<manager_stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
-    using manager_stored_indexes = filtered_sequence_indexes<manager_stored>;
+    using manager_stored_indexes = filtered_sequence_indexes_type<manager_stored>;
 
     using manager_shared_stored = std::integer_sequence<bool, is_manager_storage_duration_v<ArgumentTypes, StoredArguments, Alignments>...>;
     using manager_shared_stored_types = filter_tuple<manager_shared_stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
     using manager_shared_aligned_storage_tuple_type = filter_tuple<manager_shared_stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
-    using manager_shared_stored_indexes = filtered_sequence_indexes<manager_shared_stored>;
+    using manager_shared_stored_indexes = filtered_sequence_indexes_type<manager_shared_stored>;
 
     using manager_individual_stored = std::integer_sequence<bool, is_manager_storage_duration_v<ArgumentTypes, StoredArguments, Alignments>...>;
     using manager_individual_stored_types = filter_tuple<manager_individual_stored, std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
     using manager_individual_aligned_storage_tuple_type = filter_tuple<manager_individual_stored, std::tuple<reconstruction_storage_aligned_storage_type<ArgumentTypes,StoredArguments,Alignments>...>>;
-    using manager_individual_stored_indexes = filtered_sequence_indexes<manager_individual_stored>;
+    using manager_individual_stored_indexes = filtered_sequence_indexes_type<manager_individual_stored>;
 
     static constexpr std::size_t stored_count = std::tuple_size<stored_types>::value;
     using storage_types = std::tuple<reconstruction_storage_type<ArgumentTypes,StoredArguments,Alignments>...>;
@@ -110,12 +110,56 @@ public:
     using index_to_storage_index = std::tuple_element_t<I,stored_indexes>;
 
     template<std::size_t I>
+    using index_to_individual_storage_index = std::tuple_element_t<I, individual_stored_indexes>;
+
+    template<std::size_t I>
     static constexpr std::size_t index_to_storage_index_v = index_to_storage_index<I>::value;
 
     template<std::size_t I>
     static constexpr bool is_stored_v = integer_sequence_element_v<I,stored>;
 
+    template<std::size_t I>
+    static constexpr bool index_to_individual_storage_index_v = index_to_individual_storage_index<I>::value;
+
+    template<std::size_t I>
+    static constexpr bool is_individual_stored_v = integer_sequence_element_v<I,individual_stored>;
+
+    template<std::size_t I>
+    static constexpr bool index_to_shared_storage_index_v = std::tuple_element_t<I, shared_stored_indexes>::value;
+
+    template<std::size_t I>
+    static constexpr bool is_shared_stored_v = integer_sequence_element_v<I, shared_stored>;
+
 protected:
+
+    template<std::size_t I,
+             std::enable_if_t<
+                is_individual_stored_v<I> && is_construction_info_v<argument_at_index<I>>
+              >* = nullptr>
+    static proxy_type<I> construct(individual_aligned_storage_tuple_type& stored_args, shared_aligned_storage_tuple_type&, arguments_tuple_type& args)
+    {
+        using arg_type = argument_at_index<I>;
+        using con_type = storage_constructor_type_at_index<I>;
+        constexpr std::size_t SI = index_to_individual_storage_index_v<I>;
+        con_type *storage = reinterpret_cast<con_type*>(&std::get<SI>(stored_args));
+        new (storage) con_type{std::get<I>(args)};
+        return static_cast<proxy_type<I>>(storage->value());
+    }
+
+    template<std::size_t I,
+             std::enable_if_t<
+                is_shared_stored_v<I> && is_construction_info_v<argument_at_index<I>>
+              >* = nullptr>
+    static proxy_type<I> construct(individual_aligned_storage_tuple_type&, shared_aligned_storage_tuple_type& stored_args, arguments_tuple_type& args)
+    {
+        using arg_type = argument_at_index<I>;
+        using con_type = storage_constructor_type_at_index<I>;
+        constexpr std::size_t SI = index_to_shared_storage_index_v<I>;
+        con_type *storage = reinterpret_cast<con_type*>(&std::get<SI>(stored_args));
+        new (storage) con_type{std::get<I>(args)};
+        return static_cast<proxy_type<I>>(storage->value());
+    }
+
     template<std::size_t I,
              std::enable_if_t<
                 is_stored_v<I> && is_construction_info_v<argument_at_index<I>>
@@ -125,12 +169,58 @@ protected:
         using arg_type = argument_at_index<I>;
         using con_type = storage_constructor_type_at_index<I>;
         constexpr std::size_t SI = index_to_storage_index_v<I>;
-        std::cout << "Constructing using construction_info (saved)" << abi::__cxa_demangle(typeid(con_type).name(),0,0,0) << " " << abi::__cxa_demangle(typeid(std::tuple<proxy_type<I>>).name(),0,0,0) << std::endl;
-
         con_type *storage = reinterpret_cast<con_type*>(&std::get<SI>(stored_args));
         new (storage) con_type{std::get<I>(args)};
-        //type_constructor<con_type>::construct(storage, std::get<I>(args));
         return static_cast<proxy_type<I>>(storage->value());
+    }
+
+
+
+
+    template<std::size_t I, bool Initial,
+             std::enable_if_t<
+                is_individual_stored_v<I> && !is_construction_info_v<argument_at_index<I>>
+              >* = nullptr>
+    static proxy_type<I> construct(individual_aligned_storage_tuple_type& stored_args, shared_aligned_storage_tuple_type&, arguments_tuple_type& args)
+    {
+        constexpr std::size_t SI = index_to_individual_storage_index_v<I>;
+        using arg_type = argument_at_index<I>;
+        auto arg = std::get<I>(args);
+        std::cout << "arg: " <<  arg << std::endl;
+        std::remove_cv_t<std::remove_reference_t<arg_type>>* tmp = reinterpret_cast<std::remove_cv_t<std::remove_reference_t<arg_type>>*>(&std::get<SI>(stored_args));
+        std::cout <<  abi::__cxa_demangle(typeid(std::tuple<decltype(tmp)>).name(),0,0,0) <<  std::endl;
+        (void)type_constructor<std::remove_cv_t<std::remove_reference_t<arg_type>>>{reinterpret_cast<std::remove_cv_t<std::remove_reference_t<arg_type>>*>(&std::get<SI>(stored_args)), arg};
+        std::cout << I <<  " " << abi::__cxa_demangle(typeid(std::tuple<arg_type>).name(),0,0,0) <<  " " << abi::__cxa_demangle(typeid(std::tuple<proxy_type<I>>).name(),0,0,0) <<  " " << abi::__cxa_demangle(typeid(std::tuple<std::remove_cv_t<std::remove_reference_t<arg_type>>>).name(),0,0,0) << std::endl;
+
+        std::cout << *tmp <<  std::endl;
+        return static_cast<proxy_type<I>>(*tmp);
+    }
+
+    template<std::size_t I, bool Initial,
+             std::enable_if_t<
+                is_shared_stored_v<I> && !is_construction_info_v<argument_at_index<I>>
+              >* = nullptr,
+              std::enable_if_t<Initial>* = nullptr>
+    static proxy_type<I> construct(individual_aligned_storage_tuple_type&, shared_aligned_storage_tuple_type& stored_args, arguments_tuple_type& args)
+    {
+        constexpr std::size_t SI = index_to_shared_storage_index_v<I>;
+        using arg_type = argument_at_index<I>;
+        (void)type_constructor<std::remove_cv_t<std::remove_reference_t<arg_type>>>{reinterpret_cast<std::remove_cv_t<std::remove_reference_t<arg_type>>*>(&std::get<SI>(stored_args)), std::get<I>(args)};
+        std::cout << "Initial: " << I <<  " " << abi::__cxa_demangle(typeid(std::tuple<arg_type>).name(),0,0,0) <<  " " << abi::__cxa_demangle(typeid(std::tuple<proxy_type<I>>).name(),0,0,0) << std::endl;
+        return reinterpret_cast<proxy_type<I>>(std::get<SI>(stored_args));
+    }
+
+    template<std::size_t I, bool Initial,
+             std::enable_if_t<
+                is_shared_stored_v<I> && !is_construction_info_v<argument_at_index<I>>
+              >* = nullptr,
+              std::enable_if_t<!Initial>* = nullptr>
+    static proxy_type<I> construct(individual_aligned_storage_tuple_type&, shared_aligned_storage_tuple_type& stored_args, arguments_tuple_type& args)
+    {
+        constexpr std::size_t SI = index_to_shared_storage_index_v<I>;
+        using arg_type = argument_at_index<I>;
+        std::cout << "Not initial: " << I <<  " " << abi::__cxa_demangle(typeid(std::tuple<arg_type>).name(),0,0,0) <<  " " << abi::__cxa_demangle(typeid(std::tuple<proxy_type<I>>).name(),0,0,0) << std::endl;
+        return reinterpret_cast<proxy_type<I>>(std::get<SI>(stored_args));
     }
 
     template<std::size_t I,
@@ -141,37 +231,56 @@ protected:
     {
         constexpr std::size_t SI = index_to_storage_index_v<I>;;
         using arg_type = argument_at_index<I>;
-        type_constructor<std::remove_cv_t<std::remove_reference_t<arg_type>>>::construct(reinterpret_cast<std::remove_cv_t<std::remove_reference_t<arg_type>>*>(&std::get<SI>(stored_args)), std::get<I>(args));
-        std::cout << "Copy constructing: " << abi::__cxa_demangle(typeid(arg_type).name(),0,0,0) << std::endl;
+        (void)type_constructor<std::remove_cv_t<std::remove_reference_t<arg_type>>>{reinterpret_cast<std::remove_cv_t<std::remove_reference_t<arg_type>>*>(&std::get<SI>(stored_args)), std::get<I>(args)};
+        std::cout << I <<  " " << abi::__cxa_demangle(typeid(std::tuple<arg_type>).name(),0,0,0) <<  " " << abi::__cxa_demangle(typeid(std::tuple<proxy_type<I>>).name(),0,0,0) << std::endl;
         return reinterpret_cast<proxy_type<I>>(std::get<SI>(stored_args));
     }
 
+
+
+
+    template<std::size_t I, bool Initial, typename IAST, typename SAST, std::enable_if_t<!is_stored_v<I>>* = nullptr>
+    static proxy_type<I> construct(IAST&&, SAST&&, arguments_tuple_type& args)
+    {
+        construct<I>(nullptr, args);
+    }
+
     //do not store and is_construction_info true
-    template<std::size_t I,
+    template<std::size_t I, typename AST,
              std::enable_if_t<
                 !is_stored_v<I> && is_construction_info_v<argument_at_index<I>>
                >* = nullptr>
-    static stored_type<index_to_storage_index<I>::value> construct(aligned_storage_tuple_type& stored_args, arguments_tuple_type& args)
+    static decltype(auto) construct(AST&&, arguments_tuple_type& args)
     {
-        using arg_type = stored_type<index_to_storage_index_v<I>>;//std::remove_cv_t<std::remove_reference_t<std::tuple_element_t<I,proxy_tuple_type>>>;
+        //std::remove_cv_t<std::remove_reference_t<std::tuple_element_t<I,proxy_tuple_type>>>;
+        //using arg_type = stored_type<index_to_storage_index_v<I>>;
         using con_type = storage_constructor_type_at_index<I>;
-        std::cout << "Constructing using construction_info (non-saved): " << abi::__cxa_demangle(typeid(std::tuple<proxy_type<I>>).name(),0,0,0) << " | " << abi::__cxa_demangle(typeid(con_type).name(),0,0,0) << std::endl;
+        std::cout << abi::__cxa_demangle(typeid(con_type).name(),0,0,0) << std::endl;
         return con_type::construct(std::get<I>(args));//tuple_construct<arg_type>(std::get<I>(args).args());
     }
 
-    template<std::size_t I,
+    template<std::size_t I, typename AST,
              std::enable_if_t<
                 !is_stored_v<I> && !is_construction_info_v<argument_at_index<I>>
               >* = nullptr>
-    static proxy_type<I> construct(aligned_storage_tuple_type&, arguments_tuple_type& args)
+    static proxy_type<I> construct(AST&&, arguments_tuple_type& args)
     {
+        using con_type = storage_constructor_type_at_index<I>;
+        std::cout << I <<  " " << abi::__cxa_demangle(typeid(std::tuple<proxy_type<I>>).name(),0,0,0) << std::endl;
         return reinterpret_cast<proxy_type<I>>(std::get<I>(args));
     }
 
     template<std::size_t... Is>
     static void construct(std::remove_cv_t<std::remove_reference_t<T>> *val, aligned_storage_tuple_type &stored_args, arguments_tuple_type& t, std::index_sequence<Is...>)
     {
-        type_constructor<std::remove_cv_t<std::remove_reference_t<T>>>::construct(reinterpret_cast<std::remove_cv_t<std::remove_reference_t<T>>*>(val),aligned_type_holder::construct<Is>(stored_args, t)...);
+        type_constructor<std::remove_cv_t<std::remove_reference_t<T>>>{reinterpret_cast<std::remove_cv_t<std::remove_reference_t<T>>*>(val),aligned_type_holder::construct<Is>(stored_args, t)...};
+    }
+
+    template<bool B, std::size_t... Is>
+    static void construct(std::remove_cv_t<std::remove_reference_t<T>> *val, individual_aligned_storage_tuple_type& individual_stored_args, shared_aligned_storage_tuple_type &shared_stored_args, arguments_tuple_type& t, std::index_sequence<Is...>)
+    {
+        type_constructor<std::remove_cv_t<std::remove_reference_t<T>>> a{reinterpret_cast<std::remove_cv_t<std::remove_reference_t<T>>*>(val),aligned_type_holder::construct<Is, B>(individual_stored_args, shared_stored_args, t)...};
+        std::cout << (void*) val <<  " " << val->a() << " " << val->b() << std::endl;
     }
 
     /*template<typename U, typename... Args, std::size_t... Is>
@@ -195,10 +304,28 @@ protected:
         argument<I>(storage_tuple).~storage_type();
     }
 
+    template<typename U>
+    static void destruct(U& t)
+    {
+        t.~U();
+    }
+
     template<std::size_t... Is>
     static void destruct_stored_args(aligned_storage_tuple_type& storage_tuple, std::index_sequence<Is...>)
     {
         (void)swallow{(destruct_stored_arg<Is>(storage_tuple), 0)...};
+    }
+
+    template<std::size_t... Is>
+    static void destruct_shared_stored_args(shared_aligned_storage_tuple_type& storage_tuple, std::index_sequence<Is...>)
+    {
+        (void)swallow{(destruct(reinterpret_cast<std::tuple_element_t<Is, shared_stored_types>&>(std::get<Is>(storage_tuple))), 0)...};
+    }
+
+    template<std::size_t... Is>
+    static void destruct_individual_stored_args(individual_aligned_storage_tuple_type& storage_tuple, std::index_sequence<Is...>)
+    {
+        (void)swallow{(destruct(reinterpret_cast<std::tuple_element_t<Is, individual_stored_types>&>(std::get<Is>(storage_tuple))), 0)...};
     }
 
 public:
@@ -215,10 +342,25 @@ public:
         destruct_stored_args(storage_tuple, std::make_index_sequence<stored_count>{});
     }
 
-    template<std::size_t... Is>
+    static void destruct_shared_stored_args(shared_aligned_storage_tuple_type& storage_tuple)
+    {
+        destruct_shared_stored_args(storage_tuple, std::make_index_sequence<std::tuple_size<shared_aligned_storage_tuple_type>::value>{});
+    }
+
+    static void destruct_individual_stored_args(individual_aligned_storage_tuple_type& storage_tuple)
+    {
+        destruct_individual_stored_args(storage_tuple, std::make_index_sequence<std::tuple_size<individual_aligned_storage_tuple_type>::value>{});
+    }
+
     static void construct(std::remove_cv_t<std::remove_reference_t<T>> *val, aligned_storage_tuple_type &stored_args, arguments_tuple_type& t)
     {
         construct(val, stored_args, t, std::make_index_sequence<std::tuple_size<arguments_tuple_type>::value>());
+    }
+
+    template<bool B>
+    static void construct(std::remove_cv_t<std::remove_reference_t<T>> *val, individual_aligned_storage_tuple_type& individual_stored_args, shared_aligned_storage_tuple_type &shared_stored_args, arguments_tuple_type& t)
+    {
+        construct<B>(val, individual_stored_args, shared_stored_args, t, std::make_index_sequence<std::tuple_size<arguments_tuple_type>::value>{});
     }
 
     aligned_type_holder(arguments_tuple_type& t)
@@ -347,56 +489,85 @@ struct unmarshaller<T[N],Buffer,Alignment,Options,
     using RT = typename ATH::type;
 
     // aligned storage tuple type
-    using ASTT = typename ATH::aligned_storage_tuple_type;
+    using IASTT = typename ATH::individual_aligned_storage_tuple_type;
+    using SASTT = typename ATH::shared_aligned_storage_tuple_type;
 
     // unique_ptr for the actual type data
     using unique_ptr_type = std::unique_ptr<internal::retype_array_type<T, RT>[], std::function<void(internal::retype_array_type<T, RT>*)>>;
 
     // unique_ptr for the stored arguments data
-    using stored_data_unique_ptr_type = std::unique_ptr<internal::retype_array_type<T, ASTT>, std::function<void(internal::retype_array_type<T, ASTT>*)>>;
+    //using individual_stored_data_unique_ptr_type = std::unique_ptr<internal::retype_array_type<T, IASTT>, std::function<void(internal::retype_array_type<T, IASTT>*)>>;
 
     template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
     static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
-        internal::retype_array_type<T, RT>* ptr;
-        internal::retype_array_type<T, ASTT>* sd_ptr;
-        constexpr std::size_t alignment = std::max(internal::alignment_reader<Alignment>::value,alignof(void*));
-        constexpr std::size_t alignment2 = std::max(alignof(ASTT),alignof(void*));
-        posix_memalign((void**) &ptr , alignment, N*sizeof(internal::retype_array_type<T,RT>));
-        posix_memalign((void**) &sd_ptr, alignment2, N*sizeof(internal::retype_array_type<T, ASTT>));
+        internal::retype_array_type<T, RT>* ad_ptr;
+        internal::retype_array_type<T, IASTT>* id_ptr;
+        SASTT* sd_ptr;
+        constexpr std::size_t a_alignment = std::max(internal::alignment_reader<Alignment>::value,alignof(void*));
+        constexpr std::size_t i_alignment = alignof(IASTT);
+        constexpr std::size_t s_alignment = alignof(SASTT);
+        constexpr std::size_t buffer_alignment = std::max(a_alignment, std::max(s_alignment, i_alignment));
+        constexpr std::size_t a_size = N*sizeof(internal::retype_array_type<T, RT>);
+        constexpr std::size_t i_size = N*sizeof(internal::retype_array_type<T, IASTT>);
+        constexpr std::size_t s_size = sizeof(SASTT);
+        constexpr std::size_t buffer_size = a_size + i_size + s_size + sizeof(internal::retype_array_type<T, IASTT>) + sizeof(SASTT);
+        void *buffer;
+        size_t sz = buffer_size;
 
-        auto type_array = std::unique_ptr<internal::retype_array_type<T,RT>[],std::function<void(internal::retype_array_type<T,RT>*)>>{ptr, [](internal::retype_array_type<T,RT>* p) {
+        posix_memalign((void**) &buffer , buffer_alignment, buffer_size);
+        ad_ptr = reinterpret_cast<internal::retype_array_type<T, RT>*>(buffer);
+        sz -= a_size;
+        id_ptr = reinterpret_cast<internal::retype_array_type<T, IASTT>*>(ad_ptr+N);
+        std::align(i_alignment, i_size, id_ptr, sz);
+        sz -= i_size;
+        sd_ptr = static_cast<SASTT*>(id_ptr+N);
+        std::align(s_alignment, s_size, sd_ptr, sz);
+
+
+        auto type_array = std::unique_ptr<internal::retype_array_type<T,RT>[],std::function<void(internal::retype_array_type<T,RT>*)>>{ad_ptr, [=](internal::retype_array_type<T,RT>* p) {
             for (std::size_t i = 0; i < N; ++i)
                 p[i].~RT();
+            ATH::destruct_shared_stored_args(*sd_ptr);
+            for (std::size_t i = 0; i < N; ++i)
+                ATH::destruct_individual_stored_args(id_ptr[N]);
+
             free(p);
             std::cout << "freed p" << std::endl;
         }};
 
-        auto storage_array = std::unique_ptr<internal::retype_array_type<T,ASTT>[],std::function<void(internal::retype_array_type<T,ASTT>*)>>{sd_ptr, [](internal::retype_array_type<T,ASTT>* sp) {
-            for (std::size_t i = 0; i < N; ++i)
-                ATH::destruct_stored_args(sp[i]);
-            free(sp);
-            std::cout << "freed sp" << std::endl;
-        }};
-
-
-        for (std::size_t i = 0; i < N; ++i)
-            ASTT::construct(&type_array[i], storage_array[i], unmarshaller<T,Buffer,Alignment,Options>::unmarshall(a,b).args());
-        return make_unmarshalled_array_holder<N>(std::move(type_array), std::move(storage_array));
+        ATH::template construct<true>(&type_array[0], id_ptr[0], *sd_ptr, unmarshaller<T,Buffer,Alignment,Options>::unmarshall(a,b).args());
+        for (std::size_t i = 1; i < N; ++i)
+            ATH::template construct<false>(&type_array[i], id_ptr[i], *sd_ptr, unmarshaller<T,Buffer,Alignment,Options>::unmarshall(a,b).args());
+        return make_unmarshalled_array_holder<N>(std::move(type_array));
     }
 
-    template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
-    static void unmarshal_into(Allocator&& a, Buffer& b, RT(&v)[N], ASTT(&s)[N])
+    template<bool First, typename Allocator, typename U = T,
+             std::enable_if_t<std::rank<U>::value == 0>* = nullptr,
+             std::enable_if_t<First>* = nullptr>
+    static void unmarshal_into(Allocator&& a, Buffer& b, RT(&v)[N], IASTT(&i)[N],  SASTT& s)
     {
-        for (std::size_t i = 0; i < N; ++i)
-            ATH::construct(&v[i], s[i], mpirpc::get<T>(b,a).args());
+        ATH::template construct<true>(&v[0], i[0], s, mpirpc::get<T>(b,a).args());
+        for (std::size_t j = 1; j < N; ++j)
+            ATH::template construct<false>(&v[j], i[j], s, mpirpc::get<T>(b,a).args());
     }
 
-    template<typename Allocator, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
-    static void unmarshal_into(Allocator&& a, Buffer& b, UT(&v)[N], ASTT(&s)[N])
+    template<bool First, typename Allocator, typename U = T,
+             std::enable_if_t<std::rank<U>::value == 0>* = nullptr,
+             std::enable_if_t<!First>* = nullptr>
+    static void unmarshal_into(Allocator&& a, Buffer& b, RT(&v)[N], IASTT(&i)[N],  SASTT& s)
     {
-        for (std::size_t i = 0; i < N; ++i)
-            unmarshaller<T,Buffer,Alignment,Options>::unmarshal_into(a,b,v,s);
+        for (std::size_t j = 0; j < N; ++j) {
+            std::cout <<  (void*) &i[j] << " " << (void*) &s << std::endl;
+            ATH::template construct<false>(&v[j], i[j], s, mpirpc::get<T>(b,a).args());
+        }
+    }
+
+    template<bool First, typename Allocator, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
+    static void unmarshal_into(Allocator&& a, Buffer& b, RT(&v)[N], IASTT(&i)[N], SASTT& s)
+    {
+        for (std::size_t j = 0; j < N; ++j)
+            unmarshaller<T,Buffer,Alignment,Options>::template unmarshal_into<First>(a,b,v,i[j],s);
     }
 
     template<typename U, std::size_t M, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
@@ -417,7 +588,7 @@ struct unmarshaller<T[N],Buffer,Alignment,Options,
     static void destruct_stored_args(U(&v)[M])
     {
         for (std::size_t i = 0; i < M; ++i)
-            ATH::destruct_stored_args(v[i]);
+            ATH::destruct_individual_stored_args(v[i]);
     }
 
     template<typename U, std::size_t M, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
@@ -427,34 +598,68 @@ struct unmarshaller<T[N],Buffer,Alignment,Options,
             unmarshaller<T,Buffer,Alignment,Options>::destruct_stored_args(v[i]);
     }
 
+    template<typename S, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
+    static void destruct_shared_stored_args(S&& s)
+    {
+        unmarshaller<U,Buffer,Alignment,Options>::destruct_shared_stored_args(s);
+    }
+
+    template<typename S, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
+    static void destruct_shared_stored_args(S&& s)
+    {
+        ATH::destruct_shared_stored_args(s);
+    }
+
     template<typename Allocator, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
     static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
-        internal::retype_array_type<T, RT>* ptr;
-        internal::retype_array_type<T, ASTT>* sd_ptr;
-        constexpr std::size_t alignment = std::max(internal::alignment_reader<Alignment>::value,alignof(void*));
-        constexpr std::size_t alignment2 = std::max(alignof(ASTT),alignof(void*));
-        posix_memalign((void**) &ptr , alignment, N*sizeof(internal::retype_array_type<T,RT>));
-        posix_memalign((void**) &sd_ptr, alignment2, N*sizeof(internal::retype_array_type<T, ASTT>));
+        internal::retype_array_type<T, RT>* ad_ptr;
+        internal::retype_array_type<T, IASTT>* id_ptr;
+        SASTT* sd_ptr;
+        constexpr std::size_t a_alignment = std::max(internal::alignment_reader<Alignment>::value,alignof(void*));
+        constexpr std::size_t i_alignment = alignof(IASTT);
+        constexpr std::size_t s_alignment = alignof(SASTT);
+        constexpr std::size_t buffer_alignment = std::max(a_alignment, std::max(s_alignment, i_alignment));
+        constexpr std::size_t a_size = N*sizeof(internal::retype_array_type<T, RT>);
+        constexpr std::size_t i_size = N*sizeof(internal::retype_array_type<T, IASTT>);
+        constexpr std::size_t s_size = sizeof(SASTT);
+        constexpr std::size_t buffer_size = a_size + i_size + s_size + sizeof(internal::retype_array_type<T, IASTT>) + sizeof(SASTT);
+        void *buffer;
+        size_t sz = buffer_size;
 
-        auto type_array = std::unique_ptr<internal::retype_array_type<T,RT>[],std::function<void(internal::retype_array_type<T,RT>*)>>{ptr, [](internal::retype_array_type<T,RT>* p) {
-            for (std::size_t i = 0; i < N; ++i)
-                unmarshaller<T,Buffer,Alignment,Options>::destruct(p[i]);
+        posix_memalign((void**) &buffer , buffer_alignment, buffer_size);
+        ad_ptr = static_cast<internal::retype_array_type<T, RT>*>(buffer);
+        sz -= a_size;
+        void* id_ptr_voidp = reinterpret_cast<void*>(&ad_ptr[N]);
+        if (!std::align(i_alignment, i_size, id_ptr_voidp, sz))
+            std::cout << "error 1" << std::endl;
+        id_ptr = reinterpret_cast<internal::retype_array_type<T, IASTT>*>(id_ptr_voidp);
+        sz -= i_size;
+        void* sd_ptr_voidp = reinterpret_cast<void*>(&id_ptr[N]);
+        if (!std::align(s_alignment, s_size, sd_ptr_voidp, sz))
+            std::cout << "error 2" << std::endl;
+        sd_ptr = reinterpret_cast<SASTT*>(sd_ptr_voidp);
+        //id_ptr = new internal::retype_array_type<T, IASTT>[N];
+        //sd_ptr = new SASTT();
+        std::cout <<  buffer <<  " " << ad_ptr <<  " " << id_ptr << " " << sd_ptr <<  std::endl;
+
+        auto type_array = std::unique_ptr<internal::retype_array_type<T,RT>[],std::function<void(internal::retype_array_type<T,RT>*)>>{ad_ptr, [=](internal::retype_array_type<T,RT>* p) {
+
+            //for (std::size_t i = 0; i < N; ++i)
+            //    unmarshaller<T,Buffer,Alignment,Options>::destruct(p[i]);
+            //unmarshaller<T, Buffer, Alignment,Options>::destruct_shared_stored_args(*sd_ptr);
+            //for (std::size_t i = 0; i < N; ++i)
+            //    unmarshaller<T, Buffer, Alignment,Options>::destruct_stored_args(id_ptr[i]);
+            std::cout <<  buffer <<  " " << ad_ptr <<  " " << id_ptr << " " << sd_ptr <<  std::endl;
             free(p);
             std::cout << "freed p" << std::endl;
         }};
 
-        auto storage_array = std::unique_ptr<internal::retype_array_type<T,ASTT>[],std::function<void(internal::retype_array_type<T,ASTT>*)>>{sd_ptr, [](internal::retype_array_type<T,ASTT>* sp) {
-            for (std::size_t i = 0; i < N; ++i)
-                unmarshaller<T, Buffer, Alignment,Options>::destruct_stored_args(sp[i]);
-            free(sp);
-            std::cout << "freed sp" << std::endl;
-        }};
-
-        //std::vector<unmarshaller_type<std::remove_all_extents_t<T>,Buffer,Alignment>> ret;
-        for (std::size_t i = 0; i < N; ++i)
-            unmarshaller<T,Buffer,Alignment,Options>::unmarshal_into(a,b,type_array[i],storage_array[i]);
-        return make_unmarshalled_array_holder<N>(std::move(type_array), std::move(storage_array));
+        unmarshaller<T,Buffer,Alignment,Options>::template unmarshal_into<true>(a,b,ad_ptr[0],id_ptr[0], *sd_ptr);
+        //unmarshaller<T,Buffer,Alignment,Options>::template unmarshal_into<false>(a,b,ad_ptr[0],id_ptr[0], *sd_ptr);
+        for (std::size_t i = 1; i < N; ++i)
+            unmarshaller<T,Buffer,Alignment,Options>::template unmarshal_into<false>(a,b,ad_ptr[i],id_ptr[i], *sd_ptr);
+        return make_unmarshalled_array_holder<N>(std::move(type_array));
     }
 };
 
@@ -476,74 +681,101 @@ struct unmarshaller<T[],Buffer,Alignment,Options,
     using RT = typename ATH::type;
 
     // aligned storage tuple type
-    using ASTT = typename ATH::aligned_storage_tuple_type;
-
-    // unique_ptr for the actual type data
-    using unique_ptr_type = std::unique_ptr<internal::retype_array_type<T, RT>[], std::function<void(internal::retype_array_type<T, RT>*)>>;
-
-    // unique_ptr for the stored arguments data
-    using stored_data_unique_ptr_type = std::unique_ptr<internal::retype_array_type<T, ASTT>, std::function<void(internal::retype_array_type<T, ASTT>*)>>;
+    using IASTT = typename ATH::individual_aligned_storage_tuple_type;
+    using SASTT = typename ATH::shared_aligned_storage_tuple_type;
 
     template<typename Allocator, typename U = T, std::enable_if_t<std::rank<U>::value == 0>* = nullptr>
     static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
-        internal::retype_array_type<T, RT>* ptr;
-        internal::retype_array_type<T, ASTT>* sd_ptr;
         std::size_t size = mpirpc::get<std::size_t>(b,a);
-        constexpr std::size_t alignment = std::max(internal::alignment_reader<Alignment>::value,alignof(void*));
-        constexpr std::size_t alignment2 = std::max(alignof(ASTT),alignof(void*));
-        posix_memalign((void**) &ptr , alignment, size*sizeof(internal::retype_array_type<T,RT>));
-        posix_memalign((void**) &sd_ptr, alignment2, size*sizeof(internal::retype_array_type<T, ASTT>));
+        internal::retype_array_type<T, RT>* ad_ptr;
+        internal::retype_array_type<T, IASTT>* id_ptr;
+        SASTT* sd_ptr;
+        constexpr std::size_t a_alignment = std::max(internal::alignment_reader<Alignment>::value,alignof(void*));
+        constexpr std::size_t i_alignment = alignof(IASTT);
+        constexpr std::size_t s_alignment = alignof(SASTT);
+        constexpr std::size_t buffer_alignment = std::max(a_alignment, std::max(s_alignment, i_alignment));
+        std::size_t a_size = size*sizeof(internal::retype_array_type<T, RT>);
+        std::size_t i_size = size*sizeof(internal::retype_array_type<T, IASTT>);
+        std::size_t s_size = sizeof(SASTT);
+        std::size_t buffer_size = a_size + i_size + s_size + sizeof(internal::retype_array_type<T, IASTT>) + sizeof(SASTT);
+        void *buffer;
+        size_t sz = buffer_size;
 
-        auto type_array = std::unique_ptr<internal::retype_array_type<T,RT>[],std::function<void(internal::retype_array_type<T,RT>*)>>{ptr, [=](internal::retype_array_type<T,RT>* p) {
+        posix_memalign((void**) &buffer , buffer_alignment, buffer_size);
+        ad_ptr = static_cast<internal::retype_array_type<T, RT>*>(buffer);
+        sz -= a_size;
+        void* id_ptr_voidp = reinterpret_cast<void*>(ad_ptr+size);
+        std::align(i_alignment, i_size, id_ptr_voidp, sz);
+        id_ptr = reinterpret_cast<internal::retype_array_type<T, IASTT>*>(id_ptr_voidp);
+        sz -= i_size;
+        void* sd_ptr_voidp = reinterpret_cast<void*>(id_ptr+size);
+        std::align(s_alignment, s_size, sd_ptr_voidp, sz);
+        sd_ptr = reinterpret_cast<SASTT*>(sd_ptr_voidp);
+        std::cout <<  "here1" <<  std::endl;
+
+        auto type_array = std::unique_ptr<internal::retype_array_type<T,RT>[],std::function<void(internal::retype_array_type<T,RT>*)>>{ad_ptr, [=](internal::retype_array_type<T,RT>* p) {
+            unmarshaller<T, Buffer, Alignment,Options>::destruct_shared_stored_args(*sd_ptr);
             for (std::size_t i = 0; i < size; ++i)
-                p[i].~RT();
+                unmarshaller<T,Buffer,Alignment,Options>::destruct(p[i]);
+            for (std::size_t i = 0; i < size; ++i)
+                unmarshaller<T, Buffer, Alignment,Options>::destruct_stored_args(id_ptr[i]);
+
             free(p);
             std::cout << "freed p" << std::endl;
         }};
 
-        auto storage_array = std::unique_ptr<internal::retype_array_type<T,ASTT>[],std::function<void(internal::retype_array_type<T,ASTT>*)>>{sd_ptr, [=](internal::retype_array_type<T,ASTT>* sp) {
-            for (std::size_t i = 0; i < size; ++i)
-                ATH::destruct_stored_args(sp[i]);
-            free(sp);
-            std::cout << "freed sp" << std::endl;
-        }};
-
-        for (std::size_t i = 0; i < size; ++i)
-            ASTT::construct(&type_array[i], storage_array[i], unmarshaller<T,Buffer,Alignment,Options>::unmarshall(a,b).args());
-        return make_unmarshalled_array_holder(size, std::move(type_array), std::move(storage_array));
+        ATH::template construct<true>(&type_array[0], id_ptr[0], *sd_ptr, unmarshaller<T,Buffer,Alignment,Options>::unmarshall(a,b).args());
+        for (std::size_t i = 1; i < size; ++i)
+            ATH::template construct<false>(&type_array[i], id_ptr[i], *sd_ptr, unmarshaller<T,Buffer,Alignment,Options>::unmarshall(a,b).args());
+        return make_unmarshalled_array_holder(size, std::move(type_array));
     }
 
     template<typename Allocator, typename U = T, std::enable_if_t<(std::rank<U>::value > 0)>* = nullptr>
     static decltype(auto) unmarshal(Allocator&& a, Buffer& b)
     {
-        //std::cout << abi::__cxa_demangle(typeid(ret2).name(),0,0,0) << std::endl;
-        internal::retype_array_type<T, RT>* ptr;
-        internal::retype_array_type<T, ASTT>* sd_ptr;
         std::size_t size = mpirpc::get<std::size_t>(b,a);
-        constexpr std::size_t alignment = std::max(internal::alignment_reader<Alignment>::value,alignof(void*));
-        constexpr std::size_t alignment2 = std::max(alignof(ASTT),alignof(void*));
-        posix_memalign((void**) &ptr , alignment, size*sizeof(internal::retype_array_type<T,RT>));
-        posix_memalign((void**) &sd_ptr, alignment2, size*sizeof(internal::retype_array_type<T, ASTT>));
-        std::cout <<  "Unmarshalling array of unknown bounds" << std::endl;
+        internal::retype_array_type<T, RT>* ad_ptr;
+        internal::retype_array_type<T, IASTT>* id_ptr;
+        SASTT* sd_ptr;
+        constexpr std::size_t a_alignment = std::max(internal::alignment_reader<Alignment>::value,alignof(void*));
+        constexpr std::size_t i_alignment = alignof(IASTT);
+        constexpr std::size_t s_alignment = alignof(SASTT);
+        constexpr std::size_t buffer_alignment = std::max(a_alignment, std::max(s_alignment, i_alignment));
+        std::size_t a_size = size*sizeof(internal::retype_array_type<T, RT>);
+        std::size_t i_size = size*sizeof(internal::retype_array_type<T, IASTT>);
+        std::size_t s_size = sizeof(SASTT);
+        std::size_t buffer_size = a_size + i_size + s_size + sizeof(internal::retype_array_type<T, IASTT>) + sizeof(SASTT);
+        void *buffer;
+        size_t sz = buffer_size;
 
-        auto type_array = std::unique_ptr<internal::retype_array_type<T,RT>[],std::function<void(internal::retype_array_type<T,RT>*)>>{ptr, [=](internal::retype_array_type<T,RT>* p) {
+        posix_memalign((void**) &buffer , buffer_alignment, buffer_size);
+        ad_ptr = static_cast<internal::retype_array_type<T, RT>*>(buffer);
+        sz -= a_size;
+        void* id_ptr_voidp = reinterpret_cast<void*>(ad_ptr+size);
+        std::align(i_alignment, i_size, id_ptr_voidp, sz);
+        id_ptr = reinterpret_cast<internal::retype_array_type<T, IASTT>*>(id_ptr_voidp);
+        sz -= i_size;
+        void* sd_ptr_voidp = reinterpret_cast<void*>(id_ptr+size);
+        std::align(s_alignment, s_size, sd_ptr_voidp, sz);
+        sd_ptr = reinterpret_cast<SASTT*>(sd_ptr_voidp);
+        std::cout <<  "here2" <<  std::endl;
+
+        auto type_array = std::unique_ptr<internal::retype_array_type<T,RT>[],std::function<void(internal::retype_array_type<T,RT>*)>>{ad_ptr, [=](internal::retype_array_type<T,RT>* p) {
+            unmarshaller<T, Buffer, Alignment,Options>::destruct_shared_stored_args(*sd_ptr);
             for (std::size_t i = 0; i < size; ++i)
                 unmarshaller<T,Buffer,Alignment,Options>::destruct(p[i]);
+            for (std::size_t i = 0; i < size; ++i)
+                unmarshaller<T, Buffer, Alignment,Options>::destruct_stored_args(id_ptr[i]);
+
             free(p);
             std::cout << "freed p" << std::endl;
         }};
 
-        auto storage_array = std::unique_ptr<internal::retype_array_type<T,ASTT>[],std::function<void(internal::retype_array_type<T,ASTT>*)>>{sd_ptr, [=](internal::retype_array_type<T,ASTT>* sp) {
-            for (std::size_t i = 0; i < size; ++i)
-                unmarshaller<T, Buffer, Alignment,Options>::destruct_stored_args(sp[i]);
-            free(sp);
-            std::cout << "freed sp" << std::endl;
-        }};
-
-        for (std::size_t i = 0; i < size; ++i)
-            unmarshaller<T,Buffer,Alignment,Options>::unmarshal_into(a,b,type_array[i],storage_array[i]);
-        return make_unmarshalled_array_holder(size, std::move(type_array), std::move(storage_array));
+        unmarshaller<T,Buffer,Alignment,Options>::template unmarshal_into<true>(a,b,type_array[0],id_ptr[0], *sd_ptr);
+        for (std::size_t i = 1; i < size; ++i)
+            unmarshaller<T,Buffer,Alignment,Options>::template unmarshal_into<false>(a,b,type_array[i],id_ptr[i], *sd_ptr);
+        return make_unmarshalled_array_holder(size, std::move(type_array));
     }
 };
 

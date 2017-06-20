@@ -28,8 +28,8 @@
 
 TEST(reconstruct_types, is_construction_info)
 {
-    using CI1 = mpirpc::construction_info<std::tuple<int>,std::tuple<int>,std::tuple<int>,std::tuple<std::false_type>>;
-    using CI2 = mpirpc::construction_info<std::tuple<int,std::vector<double>>,std::tuple<int,std::vector<double>>,std::tuple<int,const std::vector<double>&>,std::tuple<std::false_type,std::false_type>>;
+    using CI1 = mpirpc::construction_info<std::tuple<int>,std::tuple<int>,std::tuple<int>,std::tuple<mpirpc::constructor_storage_duration_tag_type>>;
+    using CI2 = mpirpc::construction_info<std::tuple<int,std::vector<double>>,std::tuple<int,std::vector<double>>,std::tuple<int,const std::vector<double>&>,std::tuple<mpirpc::constructor_storage_duration_tag_type,mpirpc::constructor_storage_duration_tag_type>>;
     ASSERT_EQ(false, mpirpc::internal::reconstruction::is_construction_info_v<void>);
     ASSERT_EQ(false, mpirpc::internal::reconstruction::is_construction_info_v<double>);
     ASSERT_EQ(false, mpirpc::internal::reconstruction::is_construction_info_v<std::vector<double>>);
@@ -39,8 +39,8 @@ TEST(reconstruct_types, is_construction_info)
 
 TEST(reconstruct_types, is_aligned_type_holder)
 {
-    using CI1 = mpirpc::construction_info<std::tuple<int>,std::tuple<int>,std::tuple<int>,std::tuple<std::false_type>>;
-    using CI2 = mpirpc::construction_info<std::tuple<int,std::vector<double>>,std::tuple<int,std::vector<double>>,std::tuple<int,const std::vector<double>&>,std::tuple<std::false_type,std::false_type>>;
+    using CI1 = mpirpc::construction_info<std::tuple<int>,std::tuple<int>,std::tuple<int>,std::tuple<mpirpc::constructor_storage_duration_tag_type>>;
+    using CI2 = mpirpc::construction_info<std::tuple<int,std::vector<double>>,std::tuple<int,std::vector<double>>,std::tuple<int,const std::vector<double>&>,std::tuple<mpirpc::constructor_storage_duration_tag_type,mpirpc::constructor_storage_duration_tag_type>>;
     ASSERT_EQ(false, mpirpc::internal::reconstruction::is_aligned_type_holder_v<void>);
     ASSERT_EQ(false, mpirpc::internal::reconstruction::is_aligned_type_holder_v<double>);
     ASSERT_EQ(false, mpirpc::internal::reconstruction::is_aligned_type_holder_v<std::vector<double>>);

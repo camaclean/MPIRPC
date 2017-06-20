@@ -97,7 +97,7 @@ struct marshaller;
  *      to the constructors of all members of the array or container. The array or container
  *      is valid until deleted by the user through the manager instance.
  */
-enum class storage_duration_tag : int
+enum class storage_duration_tag
 {
     constructor,
     function,
@@ -106,11 +106,11 @@ enum class storage_duration_tag : int
     manager_group_shared
 };
 
-using constructor_storage_duration_tag_type = std::integral_constant<int,(int) storage_duration_tag::constructor>;
-using function_storage_duration_tag_type = std::integral_constant<int,(int) storage_duration_tag::function>;
-using function_group_shared_storage_duration_tag_type = std::integral_constant<int,(int) storage_duration_tag::function_group_shared>;
-using manager_storage_duration_tag_type = std::integral_constant<int,(int) storage_duration_tag::manager>;
-using manager_group_shared_storage_duration_tag_type = std::integral_constant<int,(int) storage_duration_tag::manager_group_shared>;
+using constructor_storage_duration_tag_type = std::integral_constant<storage_duration_tag, storage_duration_tag::constructor>;
+using function_storage_duration_tag_type = std::integral_constant<storage_duration_tag, storage_duration_tag::function>;
+using function_group_shared_storage_duration_tag_type = std::integral_constant<storage_duration_tag, storage_duration_tag::function_group_shared>;
+using manager_storage_duration_tag_type = std::integral_constant<storage_duration_tag, storage_duration_tag::manager>;
+using manager_group_shared_storage_duration_tag_type = std::integral_constant<storage_duration_tag, storage_duration_tag::manager_group_shared>;
 
 /**
  * unmarshaller should define a unmarshaller<T,Buffer,Alignment,void>::unmarshal<Allocator,Buffer>(Allocator,Buffer)

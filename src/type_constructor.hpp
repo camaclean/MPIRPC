@@ -29,7 +29,7 @@ template<typename T,typename=void>
 struct type_constructor
 {
     template<typename... Args>
-    static void construct(T *t, Args&&... args)
+    type_constructor(T *t, Args&&... args)
     {
         new (t) T(std::forward<Args>(args)...);
     }
@@ -106,7 +106,7 @@ struct type_constructor<std::tuple<Ts...>,
     }
 
     template<typename... Args>
-    static void construct(std::tuple<Ts...> *t, Args&&... args)
+    type_constructor(std::tuple<Ts...> *t, Args&&... args)
     {
         new (t) std::tuple<Ts...>();
         assign(*t, std::index_sequence_for<Args...>(), std::forward<Args>(args)...);
