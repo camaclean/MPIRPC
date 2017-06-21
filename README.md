@@ -88,18 +88,8 @@ int main(int argc, char* argv[]) {
     manager->registerType<std::vector<int>>()
     manager->registerObject(&vec);
     manager->registerFunction(&std::vector::push_back);
-    /**
-        * MPI_Issend() in Manager::registerObject does not necessarily notify other processes 
-        * that a send is ready before the barrier. Therefore, we must loop until the sends and 
-        * recieves are complete.
-        */
-    while (manager->getObjectsOfType<std::vector<int>>().size() < manager->numProcs() 
-            || manager->queueSize() > 0)
-    {
-        manager->checkMessages();
-        std::this_thread::sleep_for(sleepTime);
-    }
-    manager.barrier();
+    
+    manager.sync();
     for (int i = 0; i < 100; ++i) {
         processStep();
         manager->checkMessages();
